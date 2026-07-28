@@ -1,0 +1,392 @@
+id: ramps14
+name: RAMPS 1.4
+mcu: atmega2560
+serial:
+    baud: 250000
+diagram:
+    image: images/ramps14.png
+    image_type: raster
+    width: 858
+    height: 498
+    viewBox: 0 0 858 498
+    hotspots:
+        - id: mosfet_d10
+          slot_ids:
+            - heater_hotend
+          label: D10 Hotend
+          shape: rect
+          accepts:
+            - heater
+            - fan
+            - relay
+          x: 21.099924087524414
+          "y": 51.87342834472656
+          width: 140.9000759124756
+          height: 76.12657165527344
+        - id: mosfet_d9
+          slot_ids:
+            - fan_part
+          label: D9 Part Fan
+          shape: rect
+          accepts:
+            - fan
+            - heater
+            - relay
+          x: 19.893566131591797
+          "y": 126.66767883300781
+          width: 142.1064338684082
+          height: 81.33232116699219
+        - id: mosfet_d8
+          slot_ids:
+            - heater_bed
+          label: D8 Bed Heater
+          shape: rect
+          accepts:
+            - heater
+            - fan
+            - relay
+          x: 19.893566131591797
+          "y": 208
+          width: 141.14398574829102
+          height: 87.55792236328125
+        - id: driver_e0
+          slot_ids:
+            - stepper_e0
+          label: E0 Stepper
+          shape: rect
+          accepts:
+            - stepper
+          x: 323.55487060546875
+          "y": 32.8884162902832
+          width: 85.99258422851562
+          height: 43.112186431884766
+        - id: driver_e1
+          slot_ids:
+            - stepper_e1
+          label: E1 Stepper
+          shape: rect
+          accepts:
+            - stepper
+          x: 485.65087890625
+          "y": 37.7138557434082
+          width: 85
+          height: 40
+        - id: driver_x
+          slot_ids:
+            - stepper_x
+          label: X Stepper
+          shape: rect
+          accepts:
+            - stepper
+          x: 348.8578186035156
+          "y": 219.55731201171875
+          width: 87.22955322265625
+          height: 36.95140075683594
+        - id: driver_y
+          slot_ids:
+            - stepper_y
+          label: Y Stepper
+          shape: rect
+          accepts:
+            - stepper
+          x: 489.52490234375
+          "y": 224.3827362060547
+          width: 88.91278076171875
+          height: 37.39714050292969
+        - id: driver_z
+          slot_ids:
+            - stepper_z
+          label: Z Stepper
+          shape: rect
+          accepts:
+            - stepper
+          x: 633.8110656738281
+          "y": 221.9700164794922
+          width: 85.77059936523438
+          height: 34.5386962890625
+        - id: temp_t0
+          slot_ids:
+            - thermistor_t0
+          label: T0 Hotend
+          shape: rect
+          accepts:
+            - thermistor
+          x: 634.1595458984375
+          "y": 162.85842895507812
+          width: 40
+          height: 52.95079040527344
+        - id: temp_t1
+          slot_ids:
+            - thermistor_t1
+          label: T1 Bed
+          shape: rect
+          accepts:
+            - thermistor
+          x: 675.0169067382812
+          "y": 164.06480407714844
+          width: 40
+          height: 52.95079040527344
+        - id: temp_t2
+          slot_ids:
+            - thermistor_t2
+          label: T2
+          shape: rect
+          accepts:
+            - thermistor
+          x: 718.048583984375
+          "y": 164.06478881835938
+          width: 40
+          height: 53
+        - id: endstop_x
+          slot_ids:
+            - endstop_x_min
+          label: X-MIN
+          shape: rect
+          accepts:
+            - endstop
+          x: 609.5872802734375
+          "y": 48
+          width: 20
+          height: 62
+        - id: endstop_x_max
+          slot_ids:
+            - endstop_x_max
+          label: X-MAX
+          shape: rect
+          accepts:
+            - endstop
+          x: 630.9682006835938
+          "y": 46.79364013671875
+          width: 20
+          height: 62
+        - id: endstop_y
+          slot_ids:
+            - endstop_y_min
+          label: Y-MIN
+          shape: rect
+          accepts:
+            - endstop
+          x: 651.1427612304688
+          "y": 48
+          width: 20
+          height: 62
+        - id: endstop_y_max
+          slot_ids:
+            - endstop_y_max
+          label: Y-MAX
+          shape: rect
+          accepts:
+            - endstop
+          x: 671.3173828125
+          "y": 48
+          width: 20
+          height: 62
+        - id: endstop_z
+          slot_ids:
+            - endstop_z_min
+          label: Z-MIN
+          shape: rect
+          accepts:
+            - endstop
+          x: 691.4918823242188
+          "y": 48
+          width: 20
+          height: 62
+        - id: endstop_z_max
+          slot_ids:
+            - endstop_z_max
+          label: Z-MAX
+          shape: rect
+          accepts:
+            - endstop
+          x: 711.6664428710938
+          "y": 46.79364776611328
+          width: 20
+          height: 62
+        - id: servo_d11
+          slot_ids:
+            - servo_0
+          label: Servo D11
+          shape: rect
+          accepts:
+            - servo
+          x: 353
+          "y": 410
+          width: 20
+          height: 80
+        - id: servo_d6
+          slot_ids:
+            - servo_1
+          label: Servo D6
+          shape: rect
+          accepts:
+            - servo
+          x: 372.20635986328125
+          "y": 410
+          width: 20
+          height: 80
+        - id: servo_d5
+          slot_ids:
+            - servo_2
+          label: Servo D5
+          shape: rect
+          accepts:
+            - servo
+          x: 392.6190490722656
+          "y": 410
+          width: 20
+          height: 80
+        - id: servo_d4
+          slot_ids:
+            - servo_3
+          label: Servo D4
+          shape: rect
+          accepts:
+            - servo
+          x: 414.2381591796875
+          "y": 408.79364013671875
+          width: 20
+          height: 80
+slots:
+    endstop_x_max:
+        type: endstop
+        group: endstops
+        label: X-MAX
+        pins:
+            pin: ^ar2
+    endstop_x_min:
+        type: endstop
+        group: endstops
+        label: X-MIN
+        pins:
+            pin: ^ar3
+    endstop_y_max:
+        type: endstop
+        group: endstops
+        label: Y-MAX
+        pins:
+            pin: ^ar15
+    endstop_y_min:
+        type: endstop
+        group: endstops
+        label: Y-MIN
+        pins:
+            pin: ^ar14
+    endstop_z_max:
+        type: endstop
+        group: endstops
+        label: Z-MAX
+        pins:
+            pin: ^ar19
+    endstop_z_min:
+        type: endstop
+        group: endstops
+        label: Z-MIN
+        pins:
+            pin: ^ar18
+    fan_part:
+        type: fan
+        group: outputs
+        label: D9 Part Fan
+        pins:
+            pin: ar9
+    heater_bed:
+        type: heater
+        group: outputs
+        label: D8 Bed Heater
+        pins:
+            pin: ar8
+    heater_hotend:
+        type: heater
+        group: outputs
+        label: D10 Hotend
+        pins:
+            pin: ar10
+    servo_0:
+        type: servo
+        group: servos
+        label: Servo D11
+        pins:
+            pin: ar11
+    servo_1:
+        type: servo
+        group: servos
+        label: Servo D6
+        pins:
+            pin: ar6
+    servo_2:
+        type: servo
+        group: servos
+        label: Servo D5
+        pins:
+            pin: ar5
+    servo_3:
+        type: servo
+        group: servos
+        label: Servo D4
+        pins:
+            pin: ar4
+    stepper_e0:
+        type: stepper
+        group: steppers
+        label: E0 Stepper
+        pins:
+            dir: ar28
+            enable: '!ar24'
+            step: ar26
+    stepper_e1:
+        type: stepper
+        group: steppers
+        label: E1 Stepper
+        pins:
+            dir: ar34
+            enable: '!ar30'
+            step: ar36
+    stepper_x:
+        type: stepper
+        group: steppers
+        label: X Stepper
+        pins:
+            dir: ar55
+            enable: '!ar38'
+            step: ar54
+    stepper_y:
+        type: stepper
+        group: steppers
+        label: Y Stepper
+        pins:
+            dir: ar61
+            enable: '!ar56'
+            step: ar60
+    stepper_z:
+        type: stepper
+        group: steppers
+        label: Z Stepper
+        pins:
+            dir: ar48
+            enable: '!ar62'
+            step: ar46
+    thermistor_t0:
+        type: thermistor
+        group: thermistors
+        label: T0 Hotend
+        pins:
+            sensor: analog13
+        defaults:
+            sensor_type: NTC 100K beta 3950
+    thermistor_t1:
+        type: thermistor
+        group: thermistors
+        label: T1 Bed
+        pins:
+            sensor: analog15
+        defaults:
+            sensor_type: NTC 100K beta 3950
+    thermistor_t2:
+        type: thermistor
+        group: thermistors
+        label: T2
+        pins:
+            sensor: analog12
+        defaults:
+            sensor_type: NTC 100K beta 3950

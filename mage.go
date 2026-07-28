@@ -48,6 +48,13 @@ func TestBackend() error {
 	return sh.RunV("go", "-C", "backend", "test", "./...")
 }
 
+// McuProbe runs the MCU identify CLI against --port (pass args after mage target).
+func McuProbe() error {
+	args := os.Args[2:]
+	cmd := append([]string{"run", "./cmd/mcu-probe"}, args...)
+	return sh.RunV("go", append([]string{"-C", "backend"}, cmd...)...)
+}
+
 // BuildFrontend installs dependencies and builds the Vite app.
 func BuildFrontend() error {
 	fmt.Println("Building frontend...")

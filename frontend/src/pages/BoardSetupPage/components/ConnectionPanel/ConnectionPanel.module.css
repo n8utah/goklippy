@@ -1,0 +1,129 @@
+.panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  background: #f8fafc;
+  min-height: 320px;
+}
+
+.heading {
+  margin: 0 0 8px;
+  color: #0f172a;
+}
+
+.meta {
+  margin: 0 0 6px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.label {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #334155;
+  font-size: 13px;
+}
+
+.input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+.pinBlock {
+  margin-top: 12px;
+}
+
+.pinList {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.linkButton {
+  margin-top: 16px;
+  border: none;
+  background: none;
+  color: #0284c7;
+  cursor: pointer;
+  padding: 0;
+  font-weight: 600;
+}
+
+.liveBlock {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #bae6fd;
+}
+
+.liveLabel {
+  margin: 0 0 8px;
+  font-weight: 700;
+  color: #0369a1;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.liveValue {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.liveHint {
+  margin-top: 12px;
+  color: #0369a1;
+  font-size: 13px;
+}
+
+.segmentRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.speedRow {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.speedRow .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.stepBtn {
+  flex: 0 0 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.stepBtn:hover {
+  background: #f1f5f9;
+}
+
+.range {
+  width: 100%;
+}

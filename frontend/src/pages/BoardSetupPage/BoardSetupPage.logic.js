@@ -1,0 +1,318 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import {
+  deleteKlipperSection,
+  getBoardDiagram,
+  getBoardProfile,
+  getKlipperWorkspace,
+  listKlipperConfigFiles,
+  loadKlipperConfig,
+  saveKlipperConfig,
+  updateKlipperRaw,
+  updateKlipperSection,
+} from '../../helpers/api';
+import {
+  configOptionsForSlot,
+  configSectionName,
+  findSectionForSlot,
+  slotStatesFromWorkspace,
+} from '../../helpers/boardSlotConfig';
+import { useMCUSession } from '../../context/MCUSessionContext';
+
+const PROFILE_ID = 'ramps14';
+
+export function useBoardSetupPageLogic() {
+  const [tab, setTab] = useState('visual');
+  const [profile, setProfile] = useState(null);
+  const [diagram, setDiagram] = useState(null);
+  const [slotStates, setSlotStates] = useState({});
+  const [selectedHotspot, setSelectedHotspot] = useState(null);
+
+  const [configFiles, setConfigFiles] = useState([]);
+  const [workspace, setWorkspace] = useState(null);
+  const [rawText, setRawText] = useState('');
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState('');
+
+  const {
+    session,
+    connected,
+    connecting,
+    error: sessionError,
+    connect,
+    disconnect,
+    objectsBySlot,
+    readingForSlot,
+    setDigitalOut,
+    setServo,
+    jogStepper,
+    stopStepper,
+  } = useMCUSession();
+
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const [p, d] = await Promise.all([getBoardProfile(PROFILE_ID), getBoardDiagram(PROFILE_ID)]);
+        setProfile(p);
+        setDiagram({
+          ...d,
+          hotspots: d.hotspots || [],
+        });
+      } catch (err) {
+        setConfigError(err.message);
+      }
+    }
+    loadProfile();
+  }, []);
+
+  const syncWorkspaceState = useCallback(
+    (ws) => {
+      setWorkspace(ws);
+      setRawText(ws.raw || '');
+      if (profile) {
+        setSlotStates(slotStatesFromWorkspace(profile, ws.merged_sections || []));
+      }
+    },
+    [profile],
+  );
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+    async function loadWorkspace() {
+      try {
+        const ws = await getKlipperWorkspace();
+        syncWorkspaceState(ws);
+      } catch {
+        try {
+          const ws = await loadKlipperConfig('stepper-x-only.cfg');
+          syncWorkspaceState(ws);
+        } catch {
+          // no config loaded yet
+        }
+      }
+    }
+    loadWorkspace();
+  }, [profile, syncWorkspaceState]);
+
+  // Enrich connected slots with live MCU metadata without overriding cleared slots.
+  useEffect(() => {
+    if (!connected || !profile?.slots) {
+      return;
+    }
+    setSlotStates((prev) => {
+      const next = { ...prev };
+      for (const [slotId, obj] of Object.entries(objectsBySlot)) {
+        if (!next[slotId]?.connected) {
+          continue;
+        }
+        const slot = profile.slots[slotId] || {};
+        next[slotId] = {
+          ...next[slotId],
+          connected: true,
+          label: next[slotId].label || obj.label || slot.label || slotId,
+          oid: obj.oid,
+          kind: obj.kind,
+          section: obj.section,
+          type: slot.type,
+        };
+      }
+      return next;
+    });
+  }, [connected, objectsBySlot, profile]);
+
+  const loadConfigMeta = useCallback(async () => {
+    try {
+      const files = await listKlipperConfigFiles();
+      setConfigFiles(files.files || []);
+      try {
+        const ws = await getKlipperWorkspace();
+        syncWorkspaceState(ws);
+      } catch {
+        // no workspace loaded yet
+      }
+    } catch (err) {
+      setConfigError(err.message);
+    }
+  }, [syncWorkspaceState]);
+
+  useEffect(() => {
+    if (tab === 'config') {
+      loadConfigMeta();
+    }
+  }, [tab, loadConfigMeta]);
+
+  const selectHotspot = useCallback((hotspot) => {
+    setSelectedHotspot(hotspot);
+  }, []);
+
+  const updateSlot = useCallback(
+    async (slotId, patch) => {
+      const slot = profile?.slots?.[slotId];
+      if (!slot) {
+        return;
+      }
+
+      if (patch.localOnly) {
+        setSlotStates((prev) => ({
+          ...prev,
+          [slotId]: {
+            connected: prev[slotId]?.connected ?? false,
+            label: slot.label || slotId,
+            type: slot.type,
+            ...prev[slotId],
+            ...patch,
+          },
+        }));
+        return;
+      }
+
+      setConfigError('');
+      try {
+        const sectionName = configSectionName(slotId, slot);
+        const options = configOptionsForSlot(slotId, slot, patch);
+        const ws = await updateKlipperSection(sectionName, options);
+        syncWorkspaceState(ws);
+        setSlotStates((prev) => ({
+          ...prev,
+          [slotId]: {
+            connected: true,
+            label: patch.label || prev[slotId]?.label || slot.label || slotId,
+            type: slot.type,
+            section: sectionName,
+          },
+        }));
+      } catch (err) {
+        setConfigError(err.message);
+      }
+    },
+    [profile, syncWorkspaceState],
+  );
+
+  const clearSlot = useCallback(
+    async (slotId) => {
+      const slot = profile?.slots?.[slotId];
+      if (!slot) {
+        return;
+      }
+
+      setConfigError('');
+      try {
+        const merged = workspace?.merged_sections || [];
+        const section = findSectionForSlot(slotId, slot, merged);
+        if (section?.name) {
+          const ws = await deleteKlipperSection(section.name);
+          syncWorkspaceState(ws);
+        } else {
+          setSlotStates((prev) => {
+            const next = { ...prev };
+            delete next[slotId];
+            return next;
+          });
+        }
+      } catch (err) {
+        setConfigError(err.message);
+      }
+    },
+    [profile, workspace, syncWorkspaceState],
+  );
+
+  const loadConfigFile = async (path) => {
+    setConfigLoading(true);
+    setConfigError('');
+    try {
+      const ws = await loadKlipperConfig(path);
+      syncWorkspaceState(ws);
+    } catch (err) {
+      setConfigError(err.message);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const saveConfig = async () => {
+    setConfigLoading(true);
+    setConfigError('');
+    try {
+      const ws = await saveKlipperConfig();
+      syncWorkspaceState(ws);
+      return ws;
+    } catch (err) {
+      setConfigError(err.message);
+      throw err;
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const applyRawConfig = async () => {
+    setConfigLoading(true);
+    setConfigError('');
+    try {
+      const ws = await updateKlipperRaw(rawText);
+      syncWorkspaceState(ws);
+    } catch (err) {
+      setConfigError(err.message);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const handleConnect = async (port) => {
+    setConfigError('');
+    if (workspace?.dirty) {
+      const shouldSave = window.confirm(
+        'You have unsaved wiring changes. Save to the config file before connecting?',
+      );
+      if (!shouldSave) {
+        return;
+      }
+      try {
+        await saveConfig();
+      } catch {
+        return;
+      }
+    }
+    try {
+      await connect(port, { useWorkspace: true, profileId: PROFILE_ID });
+    } catch (err) {
+      setConfigError(err.message);
+    }
+  };
+
+  const selectedHotspotMemo = useMemo(() => selectedHotspot, [selectedHotspot]);
+
+  return {
+    tab,
+    setTab,
+    profile,
+    diagram,
+    slotStates,
+    selectedHotspot: selectedHotspotMemo,
+    selectHotspot,
+    updateSlot,
+    clearSlot,
+    configFiles,
+    workspace,
+    configError,
+    configLoading,
+    rawText,
+    setRawText,
+    loadConfigFile,
+    saveConfig,
+    applyRawConfig,
+    session,
+    connected,
+    connecting,
+    sessionError,
+    handleConnect,
+    disconnect,
+    objectsBySlot,
+    readingForSlot,
+    setDigitalOut,
+    setServo,
+    jogStepper,
+    stopStepper,
+  };
+}

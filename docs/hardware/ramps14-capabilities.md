@@ -95,6 +95,8 @@ Additional digital outputs available for relay boards:
 |------------|--------|-----|-------|
 | `servo_0` | SERVO0 | D11 | Standard RAMPS servo header |
 | `servo_1` | SERVO1 | D6 | Secondary (shared with E1 enable on some boards — verify wiring) |
+| `servo_2` | SERVO2 | D5 | Aux servo / shared with some fan headers — verify wiring |
+| `servo_3` | SERVO3 | D4 | Aux servo / shared with some fan headers — verify wiring |
 
 **Setup options:** connected (yes/no), user label, min/max angle.
 

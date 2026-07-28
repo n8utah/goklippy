@@ -14,6 +14,18 @@ type Config struct {
 	JWT         JWTConfig         `yaml:"jwt"`
 	InitialUser InitialUserConfig `yaml:"initial_user"`
 	Frontend    FrontendConfig    `yaml:"frontend"`
+	MCU         MCUConfig         `yaml:"mcu"`
+	Klipper     KlipperConfig     `yaml:"klipper"`
+}
+
+type MCUConfig struct {
+	DefaultBaud   int `yaml:"default_baud"`
+	ScanTimeoutMs int `yaml:"scan_timeout_ms"`
+}
+
+type KlipperConfig struct {
+	ConfigRoot   string `yaml:"config_root"`
+	ProfilesDir  string `yaml:"profiles_dir"`
 }
 
 type DatabaseConfig struct {
@@ -105,6 +117,16 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Frontend.DistDir == "" {
 		cfg.Frontend.DistDir = "../frontend/dist"
+	}
+
+	if cfg.MCU.DefaultBaud == 0 {
+		cfg.MCU.DefaultBaud = 250000
+	}
+	if cfg.MCU.ScanTimeoutMs == 0 {
+		cfg.MCU.ScanTimeoutMs = 5000
+	}
+	if cfg.Klipper.ProfilesDir == "" {
+		cfg.Klipper.ProfilesDir = "profiles"
 	}
 }
 

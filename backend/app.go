@@ -10,8 +10,10 @@ import (
 
 	"goklippy/backend/config"
 	"goklippy/backend/logic"
+	"goklippy/backend/logic/klipperconfig"
 	"goklippy/backend/models"
 	"goklippy/backend/routes"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 )
@@ -65,6 +67,18 @@ func main() {
 		RefreshTokenTTL: time.Duration(cfg.JWT.RefreshTTLHour) * time.Hour,
 	})
 	routes.InitAuthService(authService)
+
+	if cfg.Klipper.ConfigRoot != "" {
+		cfgSvc, err := klipperconfig.NewService(cfg.Klipper.ConfigRoot)
+		if err != nil {
+			slog.Error("failed to init klipper config service", "error", err)
+			return
+		}
+		routes.InitKlipperConfigService(cfgSvc)
+		slog.Info("klipper config root", "path", cfg.Klipper.ConfigRoot)
+	}
+	routes.InitBoardProfilesDir(filepath.Clean(cfg.Klipper.ProfilesDir))
+	routes.InitMCUConfig(cfg.MCU)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
