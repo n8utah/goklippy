@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"goklippy/backend/logic/klipperconfig"
 	"goklippy/backend/models"
 	"goklippy/backend/routes"
-	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 )
@@ -75,24 +75,32 @@ func main() {
 			return
 		}
 		routes.InitKlipperConfigService(cfgSvc)
+		if err := cfgSvc.EnsureDefault(); err != nil {
+			slog.Warn("no default klipper config loaded", "error", err)
+		} else if ws, err := cfgSvc.Current(); err == nil {
+			slog.Info("klipper config loaded", "path", ws.Path())
+		}
 		slog.Info("klipper config root", "path", cfg.Klipper.ConfigRoot)
 	}
 	routes.InitBoardProfilesDir(filepath.Clean(cfg.Klipper.ProfilesDir))
 	routes.InitMCUConfig(cfg.MCU)
 
 	r := gin.New()
-	r.Use(gin.Recovery())
+	r.Use(routes.SlogRecovery())
 	r.Use(routes.RequestContextMiddleware())
 	r.Use(routes.SlogRequestLogger())
 	r.Use(routes.CORSMiddleware())
 	registerRoutes(r, cfg)
 
+	// MCU connect/configure can take 20–60s (serial boot wait + config + retry).
+	const serverWriteTimeout = 120 * time.Second
+
 	srv := &http.Server{
 		Addr:         ":" + strconv.Itoa(cfg.Port),
 		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  30 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: serverWriteTimeout,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	slog.Info("backend listening", "port", cfg.Port)

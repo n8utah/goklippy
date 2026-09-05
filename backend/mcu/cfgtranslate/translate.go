@@ -220,12 +220,14 @@ func (b *Builder) addServo(name string, sec klipperconfig.Section) error {
 		return fmt.Errorf("%s: pin is required", name)
 	}
 	oid := b.allocOID()
-	// Servo PWM period is 20ms (50Hz).
+	// RAMPS D11 (ar11/PB5) uses AVR Timer1, which Klipper reserves — hardware
+	// config_pwm_out triggers shutdown. Use software PWM via digital_out instead
+	// (same approach as Klipper's pwm_tool when hardware PWM is unavailable).
 	b.lines = append(b.lines, fmt.Sprintf(
-		"config_pwm_out oid=%d pin=%s cycle_ticks=%d value=0 default_value=0 max_duration=0",
-		oid, pin, b.cycleTicks(0.020),
+		"config_digital_out oid=%d pin=%s value=0 default_value=0 max_duration=0",
+		oid, pin,
 	))
-	b.addObject(name, oid, KindPWMOut, map[string]string{"pin": pin, "device": "servo"})
+	b.addObject(name, oid, KindPWMOut, map[string]string{"pin": pin, "device": "servo", "pwm": "software"})
 	return nil
 }
 
@@ -266,6 +268,13 @@ func (b *Builder) buildInitCommands() []string {
 				"endstop_home oid=%d clock=0 sample_ticks=0 sample_count=0 rest_ticks=0 pin_value=0 trsync_oid=0 trigger_reason=0",
 				obj.OID,
 			))
+		case KindPWMOut:
+			if obj.Meta["device"] == "servo" {
+				init = append(init, fmt.Sprintf(
+					"set_digital_out_pwm_cycle oid=%d cycle_ticks=%d",
+					obj.OID, b.cycleTicks(0.020),
+				))
+			}
 		}
 	}
 	return init

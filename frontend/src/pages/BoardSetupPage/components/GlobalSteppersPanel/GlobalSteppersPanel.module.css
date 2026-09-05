@@ -1,0 +1,335 @@
+.panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  background: #f8fafc;
+  min-height: 320px;
+}
+
+.heading {
+  margin: 0 0 4px;
+  color: #0f172a;
+}
+
+.subtitle {
+  margin: 0 0 14px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #334155;
+  font-size: 13px;
+}
+
+.input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  margin-bottom: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.speedRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.speedBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 8px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #334155;
+}
+
+.speedBtn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.speedBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.speedHint {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.listBlock {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.listLabel {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.listItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.listItem:last-child {
+  border-bottom: none;
+}
+
+.listName {
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.listMeta {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.footerMeta {
+  margin: 16px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.connectHint {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 13px;
+}
+
+.groupsBlock {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.groupsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.linkBtn {
+  border: none;
+  background: none;
+  color: #0284c7;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 0;
+}
+
+.linkBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.linkBtnDanger {
+  border: none;
+  background: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 0;
+}
+
+.groupEditor {
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+}
+
+.groupEditor .input {
+  margin-bottom: 10px;
+}
+
+.memberGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.memberRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.memberCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.memberSpeedInput {
+  width: 88px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.memberSpeedInput:disabled {
+  opacity: 0.45;
+  background: #f1f5f9;
+}
+
+.editorActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.groupList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.groupCard {
+  padding: 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+.groupCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.groupName {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.groupCardTools {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.groupMembers {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.groupWarn {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: #b45309;
+}
+
+.groupActions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.groupActions button {
+  font-size: 12px;
+  padding: 6px 4px;
+}
+
+.groupSpeedRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.groupSpeedRow .speedBtn {
+  padding: 8px 6px;
+  font-size: 12px;
+}
+
+.servoRowControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.stepBtnInline {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #334155;
+  flex-shrink: 0;
+}
+
+.stepBtnInline:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.stepBtnInline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.servoRange {
+  width: 100%;
+  margin: 8px 0;
+}

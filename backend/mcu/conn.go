@@ -3,6 +3,8 @@ package mcu
 import (
 	"fmt"
 	"io"
+	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,11 +20,14 @@ const defaultIdentifyChunk = 40
 type Conn struct {
 	mu               sync.Mutex
 	port             serial.Port
+	logPort          string // serial port name (debug logging only)
 	parser           *msgproto.MessageParser
 	pinResolver      *pins.Resolver
 	seq              int
 	readBuf          []int
 	timeout          time.Duration
+	identifyMaxWait  time.Duration // when >0, caps identify wait (baud scan)
+	skipConfigSend   bool          // set when MCU already has matching config CRC
 	sawIncomingBytes bool
 	clockBase        uint64
 	clockBaseAt      time.Time
@@ -30,6 +35,34 @@ type Conn struct {
 
 // OpenConn opens a serial port and prepares for Klipper protocol communication.
 func OpenConn(portName string, baud int, timeout time.Duration) (*Conn, error) {
+	return openConnWithRetry(portName, baud, timeout, false)
+}
+
+func openConnWithRetry(portName string, baud int, timeout time.Duration, hardReset bool) (*Conn, error) {
+	var lastErr error
+	for attempt := 0; attempt < 4; attempt++ {
+		conn, err := openConn(portName, baud, timeout, hardReset)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+		if !isPortBusyErr(err) || attempt == 3 {
+			return nil, err
+		}
+		time.Sleep(time.Duration(attempt+1) * 400 * time.Millisecond)
+	}
+	return nil, lastErr
+}
+
+func isPortBusyErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "in use") || strings.Contains(msg, "busy")
+}
+
+func openConn(portName string, baud int, timeout time.Duration, hardReset bool) (*Conn, error) {
 	if baud == 0 {
 		baud = 250000
 	}
@@ -46,7 +79,7 @@ func OpenConn(portName string, baud int, timeout time.Duration) (*Conn, error) {
 
 	port, err := serial.Open(portName, mode)
 	if err != nil {
-		return nil, fmt.Errorf("open serial port %s: %w", portName, err)
+		return nil, friendlyOpenError(portName, err)
 	}
 
 	if err := port.SetReadTimeout(100 * time.Millisecond); err != nil {
@@ -54,19 +87,69 @@ func OpenConn(portName string, baud int, timeout time.Duration) (*Conn, error) {
 		return nil, fmt.Errorf("set read timeout: %w", err)
 	}
 
-	waitForBoot()
+	if hardReset {
+		pulseDTRReset(port)
+	}
+
+	waitForBoot(hardReset)
+	// Only drain stale bytes after an explicit reset; draining on every open was
+	// discarding data and the shorter boot wait caused identify timeouts.
+	if hardReset {
+		drainSerialPort(port)
+	}
 
 	return &Conn{
 		port:    port,
+		logPort: portName,
 		parser:  msgproto.NewMessageParser("mcu: "),
 		seq:     0,
 		timeout: timeout,
 	}, nil
 }
 
+// pulseDTRReset toggles DTR to reset Arduino-class boards (RAMPS/ATmega2560).
+func pulseDTRReset(port serial.Port) {
+	_ = port.SetDTR(false)
+	time.Sleep(100 * time.Millisecond)
+	_ = port.SetDTR(true)
+	time.Sleep(100 * time.Millisecond)
+	_ = port.SetDTR(false)
+	time.Sleep(100 * time.Millisecond)
+}
+
 // waitForBoot pauses after port open so the MCU can finish resetting and boot Klipper.
-func waitForBoot() {
+func waitForBoot(afterReset bool) {
+	if afterReset {
+		time.Sleep(4 * time.Second)
+		return
+	}
+	// Opening the serial port often toggles DTR and resets Arduino-class boards.
 	time.Sleep(2 * time.Second)
+}
+
+func drainSerialPort(port serial.Port) {
+	buf := make([]byte, 256)
+	deadline := time.Now().Add(300 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		n, err := port.Read(buf)
+		if err != nil || n == 0 {
+			time.Sleep(15 * time.Millisecond)
+		}
+	}
+}
+
+func friendlyOpenError(portName string, err error) error {
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "access is denied") ||
+		strings.Contains(msg, "being used") ||
+		strings.Contains(msg, "busy") ||
+		strings.Contains(msg, "permission") {
+		return fmt.Errorf(
+			"port %s is in use — disconnect in goklippy, close other apps (Cura, Printrun, serial monitor), or press reset on the board: %w",
+			portName, err,
+		)
+	}
+	return fmt.Errorf("open serial port %s: %w", portName, err)
 }
 
 // Close closes the serial port.
@@ -105,23 +188,55 @@ func (c *Conn) SyncClock() error {
 
 // Identify fetches the MCU data dictionary and initializes the message parser.
 func (c *Conn) Identify() error {
+	slog.Info("mcu identify starting",
+		"port", c.logPort,
+		"timeout", c.timeout,
+		"identify_wait", c.effectiveIdentifyWait(),
+	)
+	start := time.Now()
 	data, err := c.fetchIdentifyData()
 	if err != nil {
+		slog.Warn("mcu identify failed",
+			"port", c.logPort,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"saw_bytes", c.sawIncomingBytes,
+			"error", err,
+		)
 		return err
 	}
 	c.parser.Process_identify(data, true)
 	c.pinResolver = pins.NewArduinoMegaResolver()
+	slog.Info("mcu identify complete",
+		"port", c.logPort,
+		"dictionary_bytes", len(data),
+		"duration_ms", time.Since(start).Milliseconds(),
+	)
 	return nil
 }
 
 func (c *Conn) fetchIdentifyData() ([]byte, error) {
 	identifyData := make([]byte, 0, 4096)
-	deadline := time.Now().Add(c.timeout * 4)
+	wait := c.effectiveIdentifyWait()
+	deadline := time.Now().Add(wait)
+	lastProgress := time.Now()
 
 	for time.Now().Before(deadline) {
+		if time.Since(lastProgress) >= 3*time.Second {
+			slog.Info("mcu identify waiting",
+				"port", c.logPort,
+				"bytes_received", len(identifyData),
+				"saw_incoming", c.sawIncomingBytes,
+				"remaining_ms", time.Until(deadline).Milliseconds(),
+			)
+			lastProgress = time.Now()
+		}
+
 		msg := fmt.Sprintf("identify offset=%d count=%d", len(identifyData), defaultIdentifyChunk)
-		params, err := c.sendWithResponse(msg, "identify_response")
+		params, err := c.sendWithResponseUntil(msg, "identify_response", deadline)
 		if err != nil {
+			if isTimeoutErr(err) {
+				continue
+			}
 			return nil, err
 		}
 
@@ -151,10 +266,69 @@ func (c *Conn) fetchIdentifyData() ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("identify timed out after %s", c.timeout*4)
+	if c.sawIncomingBytes && len(c.readBuf) > 0 {
+		logIdentifyDebug(c.readBuf)
+		return nil, fmt.Errorf(
+			"identify timed out after %s — data on serial but no Klipper identify_response (wrong baud, Marlin instead of Klipper firmware, or noisy USB — verify Klipper is flashed at 250000 or 115200)",
+			wait,
+		)
+	}
+	if c.sawIncomingBytes {
+		return nil, fmt.Errorf(
+			"identify timed out after %s — serial activity detected but no valid Klipper frames (try pressing reset on the board)",
+			wait,
+		)
+	}
+	return nil, fmt.Errorf("identify timed out after %s — no response on serial port (check USB cable, COM port, and that Klipper firmware is flashed)", wait)
+}
+
+func (c *Conn) effectiveIdentifyWait() time.Duration {
+	wait := identifyWait(c.timeout)
+	if c.identifyMaxWait > 0 && c.identifyMaxWait < wait {
+		return c.identifyMaxWait
+	}
+	return wait
+}
+
+func identifyWait(opTimeout time.Duration) time.Duration {
+	if opTimeout <= 0 {
+		opTimeout = 5 * time.Second
+	}
+	wait := opTimeout * 4
+	if wait < 8*time.Second {
+		return 8 * time.Second
+	}
+	if wait > 20*time.Second {
+		return 20 * time.Second
+	}
+	return wait
+}
+
+func logIdentifyDebug(buf []int) {
+	const max = 48
+	n := len(buf)
+	if n > max {
+		n = max
+	}
+	parts := make([]string, n)
+	for i := 0; i < n; i++ {
+		parts[i] = fmt.Sprintf("%02x", buf[i]&0xff)
+	}
+	slog.Warn("identify failed with serial data but no valid Klipper frames",
+		"bytes_buffered", len(buf),
+		"sample_hex", strings.Join(parts, " "),
+	)
+}
+
+func isTimeoutErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "timeout waiting for")
 }
 
 func (c *Conn) sendWithResponse(command, responseName string) (map[string]interface{}, error) {
+	return c.sendWithResponseUntil(command, responseName, time.Now().Add(c.timeout))
+}
+
+func (c *Conn) sendWithResponseUntil(command, responseName string, deadline time.Time) (map[string]interface{}, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -172,7 +346,6 @@ func (c *Conn) sendWithResponse(command, responseName string) (map[string]interf
 		return nil, err
 	}
 
-	deadline := time.Now().Add(c.timeout)
 	for time.Now().Before(deadline) {
 		params, err := c.readMessageLocked()
 		if err != nil {

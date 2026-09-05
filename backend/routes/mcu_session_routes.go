@@ -2,6 +2,7 @@ package routes
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -41,19 +42,38 @@ type stepperJogRequest struct {
 
 // ConnectMCU POST /mcu/connect
 func ConnectMCU(c *gin.Context) {
+	start := time.Now()
+	requestID := c.GetString("request_id")
+
 	var req mcuConnectRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.Port == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "port is required"})
 		return
 	}
 
+	slog.Info("mcu connect request received",
+		"request_id", requestID,
+		"port", req.Port,
+		"baud", req.Baud,
+		"use_workspace", req.UseWorkspace,
+		"config_path", req.ConfigPath,
+		"profile_id", req.ProfileID,
+	)
+
 	if existing, ok := mcu.DefaultManager().GetByPort(req.Port); ok {
+		slog.Info("mcu connect reusing existing session",
+			"request_id", requestID,
+			"port", req.Port,
+			"session_id", existing.ID,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
 		c.JSON(http.StatusOK, sessionResponse(existing))
 		return
 	}
 
 	f, err := loadConfigForConnect(req)
 	if err != nil {
+		slog.Warn("mcu connect config load failed", "request_id", requestID, "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -71,6 +91,7 @@ func ConnectMCU(c *gin.Context) {
 
 	build, err := cfgtranslate.Build(f)
 	if err != nil {
+		slog.Warn("mcu connect config build failed", "request_id", requestID, "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -79,9 +100,24 @@ func ConnectMCU(c *gin.Context) {
 		cfgtranslate.MapObjectsToSlots(build.Objects, profile, f)
 	}
 
+	slog.Info("mcu connect config ready",
+		"request_id", requestID,
+		"port", req.Port,
+		"sections", len(f.Sections),
+		"objects", len(build.Objects),
+		"commands", len(build.Commands),
+	)
+
 	baud := req.Baud
 	if baud == 0 {
-		baud = mcuSettings.DefaultBaud
+		baud = klipperconfig.MCUBaud(f)
+		if baud != 0 {
+			slog.Info("mcu connect using baud from config",
+				"request_id", requestID,
+				"port", req.Port,
+				"baud", baud,
+			)
+		}
 	}
 	timeout := time.Duration(mcuSettings.ScanTimeoutMs) * time.Millisecond
 	if timeout == 0 {
@@ -90,9 +126,26 @@ func ConnectMCU(c *gin.Context) {
 
 	session, err := mcu.DefaultManager().Connect(req.Port, baud, timeout, build)
 	if err != nil {
+		slog.Warn("mcu connect failed",
+			"request_id", requestID,
+			"port", req.Port,
+			"baud", baud,
+			"objects", len(build.Objects),
+			"duration_ms", time.Since(start).Milliseconds(),
+			"error", err,
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	slog.Info("mcu connected",
+		"request_id", requestID,
+		"port", req.Port,
+		"baud", session.Baud,
+		"session_id", session.ID,
+		"objects", len(session.Objects),
+		"duration_ms", time.Since(start).Milliseconds(),
+	)
 
 	c.JSON(http.StatusOK, sessionResponse(session))
 }

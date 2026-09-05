@@ -1,24 +1,82 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
+/** MCU connect can take 30–120s (serial boot, identify, baud scan). */
+export const MCU_CONNECT_TIMEOUT_MS = 130_000;
+
+const MCU_DEBUG = import.meta.env.DEV;
+
+export function logMCU(phase, detail = {}) {
+  if (!MCU_DEBUG) {
+    return;
+  }
+  const elapsed =
+    detail.elapsedMs != null ? `${detail.elapsedMs}ms` : undefined;
+  // eslint-disable-next-line no-console
+  console.info('[goklippy mcu]', phase, elapsed ?? '', detail);
+}
+
 async function parseJSON(response) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body.error || 'Request failed');
+    const message =
+      body.error ||
+      (response.status >= 500
+        ? `Server error (${response.status}) — check backend logs`
+        : 'Request failed');
+    throw new Error(message);
   }
   return body;
 }
 
-export async function postJSON(path, payload, accessToken) {
+export async function postJSON(path, payload, accessToken, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  });
-  return parseJSON(response);
+  const { timeoutMs, label } = options;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer =
+    controller &&
+    setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+  const started = performance.now();
+  if (label) {
+    logMCU(`${label} → request`, { path, payload });
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller?.signal,
+    });
+    const body = await parseJSON(response);
+    if (label) {
+      logMCU(`${label} ← ok`, { elapsedMs: Math.round(performance.now() - started) });
+    }
+    return body;
+  } catch (err) {
+    if (label) {
+      logMCU(`${label} ← failed`, {
+        elapsedMs: Math.round(performance.now() - started),
+        error: err.message,
+        aborted: err.name === 'AbortError',
+      });
+    }
+    if (err.name === 'AbortError') {
+      throw new Error(
+        `Connect timed out after ${Math.round(timeoutMs / 1000)}s — check backend terminal for serial progress`,
+      );
+    }
+    throw err;
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 export async function putJSON(path, payload, accessToken) {
@@ -64,7 +122,10 @@ export function scanMCUPorts() {
 }
 
 export function connectMCU(payload) {
-  return postJSON('/api/v1/mcu/connect', payload);
+  return postJSON('/api/v1/mcu/connect', payload, undefined, {
+    timeoutMs: MCU_CONNECT_TIMEOUT_MS,
+    label: 'connect',
+  });
 }
 
 export function disconnectMCU(sessionId) {
@@ -95,8 +156,13 @@ function wsBaseUrl() {
 
 /** Open a WebSocket for live MCU session telemetry. */
 export function openMCUSessionWS(sessionId, { onOpen, onSession, onReadings, onError, onClose } = {}) {
-  const ws = new WebSocket(`${wsBaseUrl()}/api/v1/mcu/sessions/${sessionId}/ws`);
-  ws.onopen = () => onOpen?.();
+  const url = `${wsBaseUrl()}/api/v1/mcu/sessions/${sessionId}/ws`;
+  logMCU('websocket opening', { sessionId, url });
+  const ws = new WebSocket(url);
+  ws.onopen = () => {
+    logMCU('websocket open', { sessionId });
+    onOpen?.();
+  };
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
@@ -110,8 +176,14 @@ export function openMCUSessionWS(sessionId, { onOpen, onSession, onReadings, onE
       // ignore malformed frames
     }
   };
-  ws.onerror = () => onError?.();
-  ws.onclose = (event) => onClose?.(event);
+  ws.onerror = () => {
+    logMCU('websocket error', { sessionId });
+    onError?.();
+  };
+  ws.onclose = (event) => {
+    logMCU('websocket closed', { sessionId, code: event.code, reason: event.reason });
+    onClose?.(event);
+  };
   return ws;
 }
 

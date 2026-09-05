@@ -60,6 +60,10 @@ func SlogRequestLogger() gin.HandlerFunc {
 			slog.Error("http request completed", attrs...)
 			return
 		}
+		if c.Writer.Status() >= http.StatusBadRequest && path == "/api/v1/mcu/connect" {
+			slog.Warn("http request completed", attrs...)
+			return
+		}
 		slog.Info("http request completed", attrs...)
 	}
 }

@@ -367,65 +367,79 @@ function DigitalOutControl({ oid, onSetDigitalOut, label }) {
 
 
 function ServoControl({ oid, onSetServo }) {
-
-  const [angle, setAngle] = useState(90);
-
+  const { servoAngles } = useMCUSession();
+  const [angle, setAngle] = useState(servoAngles[oid] ?? 90);
   const [busy, setBusy] = useState(false);
 
-
-
-  const apply = async () => {
-
-    setBusy(true);
-
-    try {
-
-      await onSetServo(oid, angle);
-
-    } finally {
-
-      setBusy(false);
-
+  useEffect(() => {
+    if (servoAngles[oid] != null) {
+      setAngle(servoAngles[oid]);
     }
+  }, [servoAngles, oid]);
 
+  const clampAngle = (value) => Math.min(180, Math.max(0, Math.round(value) || 0));
+
+  const apply = async (nextAngle = angle) => {
+    setBusy(true);
+    try {
+      const applied = await onSetServo(oid, nextAngle);
+      if (applied != null) {
+        setAngle(applied);
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
-
-
   return (
-
     <div className={styles.liveBlock}>
-
       <p className={styles.liveLabel}>Servo position</p>
-
+      <div className={styles.speedRow}>
+        <button
+          type="button"
+          className={styles.stepBtn}
+          aria-label="Decrease angle by 5"
+          disabled={busy}
+          onClick={() => setAngle((prev) => clampAngle(prev - 5))}
+        >
+          ▼
+        </button>
+        <input
+          type="number"
+          min="0"
+          max="180"
+          className={styles.input}
+          value={angle}
+          disabled={busy}
+          onChange={(e) => setAngle(clampAngle(Number(e.target.value)))}
+        />
+        <button
+          type="button"
+          className={styles.stepBtn}
+          aria-label="Increase angle by 5"
+          disabled={busy}
+          onClick={() => setAngle((prev) => clampAngle(prev + 5))}
+        >
+          ▲
+        </button>
+      </div>
       <input
-
         type="range"
-
         min="0"
-
         max="180"
-
         value={angle}
-
+        disabled={busy}
         onChange={(e) => setAngle(Number(e.target.value))}
-
+        onMouseUp={() => apply()}
+        onTouchEnd={() => apply()}
         className={styles.range}
-
       />
-
       <p className={styles.meta}>{angle}°</p>
-
-      <button type="button" className={appStyles.button} disabled={busy} onClick={apply}>
-
+      <button type="button" className={appStyles.button} disabled={busy} onClick={() => apply()}>
         Set angle
-
       </button>
-
     </div>
-
   );
-
 }
 
 

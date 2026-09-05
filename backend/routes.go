@@ -20,8 +20,8 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	klipper.GET("/files", routes.ListKlipperConfigFiles)
 	klipper.POST("/load", routes.LoadKlipperConfig)
 	klipper.GET("/workspace", routes.GetKlipperConfigWorkspace)
-	klipper.PUT("/sections/:name", routes.UpdateKlipperConfigSection)
-	klipper.DELETE("/sections/:name", routes.DeleteKlipperConfigSection)
+	klipper.PUT("/sections/*name", routes.UpdateKlipperConfigSection)
+	klipper.DELETE("/sections/*name", routes.DeleteKlipperConfigSection)
 	klipper.PUT("/raw", routes.UpdateKlipperConfigRaw)
 	klipper.POST("/save", routes.SaveKlipperConfig)
 

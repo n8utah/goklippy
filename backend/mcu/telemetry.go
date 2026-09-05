@@ -36,9 +36,15 @@ func (s *Session) UnsubscribeTelemetry(ch chan map[string]Reading) {
 
 func (s *Session) telemetryLoop() {
 	ticker := time.NewTicker(500 * time.Millisecond)
+	defer func() {
+		s.telemMu.Lock()
+		s.telemRunning = false
+		s.telemMu.Unlock()
+	}()
 	defer ticker.Stop()
 	for {
 		<-ticker.C
+
 		s.telemMu.Lock()
 		if len(s.telemSubs) == 0 {
 			s.telemRunning = false
@@ -53,22 +59,33 @@ func (s *Session) telemetryLoop() {
 
 		s.RefreshStepperReadings()
 		readings := s.Poll(150 * time.Millisecond)
+
+		s.telemMu.Lock()
 		for _, ch := range subs {
+			if _, active := s.telemSubs[ch]; !active {
+				continue
+			}
 			select {
 			case ch <- readings:
 			default:
 			}
 		}
+		if len(s.telemSubs) == 0 {
+			s.telemRunning = false
+		}
+		s.telemMu.Unlock()
 	}
 }
 
 // StopTelemetry ends all subscribers (called on session close).
 func (s *Session) StopTelemetry() {
 	s.telemMu.Lock()
-	defer s.telemMu.Unlock()
-	for ch := range s.telemSubs {
-		close(ch)
-	}
+	subs := s.telemSubs
 	s.telemSubs = nil
 	s.telemRunning = false
+	s.telemMu.Unlock()
+
+	for ch := range subs {
+		close(ch)
+	}
 }

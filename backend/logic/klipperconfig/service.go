@@ -97,6 +97,22 @@ func (s *Service) Current() (*Workspace, error) {
 	return s.ws, nil
 }
 
+// EnsureDefault loads a bundled config when no workspace is active yet.
+func (s *Service) EnsureDefault() error {
+	if s.root == "" {
+		return fmt.Errorf("klipper config_root is not configured")
+	}
+	if _, err := s.Current(); err == nil {
+		return nil
+	}
+	for _, name := range []string{"stepper-x-only.cfg", "ramps-all-steppers.cfg", "sample-ramps-minimal.cfg"} {
+		if _, err := s.Load(name); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("no default config found in %s", s.root)
+}
+
 // Save writes the active workspace file to disk.
 func (s *Service) Save() error {
 	ws, err := s.Current()

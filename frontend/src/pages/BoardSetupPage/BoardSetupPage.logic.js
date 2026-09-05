@@ -38,6 +38,8 @@ export function useBoardSetupPageLogic() {
     session,
     connected,
     connecting,
+    connectStatus,
+    wsConnected,
     error: sessionError,
     connect,
     disconnect,
@@ -84,12 +86,17 @@ export function useBoardSetupPageLogic() {
       try {
         const ws = await getKlipperWorkspace();
         syncWorkspaceState(ws);
+        return;
       } catch {
+        // fall through to load a bundled default
+      }
+      for (const path of ['stepper-x-only.cfg', 'ramps-all-steppers.cfg', 'sample-ramps-minimal.cfg']) {
         try {
-          const ws = await loadKlipperConfig('stepper-x-only.cfg');
+          const ws = await loadKlipperConfig(path);
           syncWorkspaceState(ws);
+          return;
         } catch {
-          // no config loaded yet
+          // try next default
         }
       }
     }
@@ -263,15 +270,14 @@ export function useBoardSetupPageLogic() {
     setConfigError('');
     if (workspace?.dirty) {
       const shouldSave = window.confirm(
-        'You have unsaved wiring changes. Save to the config file before connecting?',
+        'You have unsaved wiring changes.\n\nOK — save to disk, then connect.\nCancel — connect using current in-memory wiring (without saving).',
       );
-      if (!shouldSave) {
-        return;
-      }
-      try {
-        await saveConfig();
-      } catch {
-        return;
+      if (shouldSave) {
+        try {
+          await saveConfig();
+        } catch {
+          return;
+        }
       }
     }
     try {
@@ -305,6 +311,8 @@ export function useBoardSetupPageLogic() {
     session,
     connected,
     connecting,
+    connectStatus,
+    wsConnected,
     sessionError,
     handleConnect,
     disconnect,

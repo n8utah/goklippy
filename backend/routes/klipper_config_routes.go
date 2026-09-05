@@ -79,14 +79,25 @@ func GetKlipperConfigWorkspace(c *gin.Context) {
 	}
 	ws, err := klipperConfigService.Current()
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
+		if loadErr := klipperConfigService.EnsureDefault(); loadErr != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		ws, err = klipperConfigService.Current()
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
 	}
 	c.JSON(http.StatusOK, workspaceResponse(ws))
 }
 
-// UpdateKlipperConfigSection PUT /klipper-config/sections/:name
+// UpdateKlipperConfigSection PUT /klipper-config/sections/*name
 func UpdateKlipperConfigSection(c *gin.Context) {
+	if klipperConfigService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "config service not configured"})
+		return
+	}
 	ws, err := klipperConfigService.Current()
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -97,18 +108,32 @@ func UpdateKlipperConfigSection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
-	ws.UpdateSection(c.Param("name"), req.Options)
+	name := strings.TrimPrefix(c.Param("name"), "/")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "section name is required"})
+		return
+	}
+	ws.UpdateSection(name, req.Options)
 	c.JSON(http.StatusOK, workspaceResponse(ws))
 }
 
-// DeleteKlipperConfigSection DELETE /klipper-config/sections/:name
+// DeleteKlipperConfigSection DELETE /klipper-config/sections/*name
 func DeleteKlipperConfigSection(c *gin.Context) {
+	if klipperConfigService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "config service not configured"})
+		return
+	}
 	ws, err := klipperConfigService.Current()
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	ws.DeleteSection(c.Param("name"))
+	name := strings.TrimPrefix(c.Param("name"), "/")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "section name is required"})
+		return
+	}
+	ws.DeleteSection(name)
 	ws2, _ := klipperConfigService.Current()
 	c.JSON(http.StatusOK, workspaceResponse(ws2))
 }

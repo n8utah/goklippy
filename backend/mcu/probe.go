@@ -56,3 +56,6 @@ func (r IdentifyResult) String() string {
 
 // DefaultProbeTimeout is used when no timeout is configured.
 const DefaultProbeTimeout = 5 * time.Second
+
+// identifyScanWait caps identify duration when auto-probing baud rates.
+const identifyScanWait = 4 * time.Second

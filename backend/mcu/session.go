@@ -212,18 +212,19 @@ func (s *Session) SetServoAngle(oid int, angle float64) error {
 	if angle > 180 {
 		angle = 180
 	}
-	// Standard hobby servo: 1ms=0°, 2ms=180° within 20ms period.
+	// Standard hobby servo: 1ms=0°, 2ms=180° within 20ms period (software PWM).
+	const periodSec = 0.020
 	widthSec := 0.001 + (angle/180.0)*0.001
-	duty := widthSec / 0.020
-	value := int(duty * 65535)
-	if value < 0 {
-		value = 0
+	cycleTicks := int(s.ClockFreq * periodSec)
+	onTicks := int(float64(cycleTicks) * (widthSec / periodSec))
+	if onTicks < 1 {
+		onTicks = 1
 	}
-	if value > 65535 {
-		value = 65535
+	if onTicks > cycleTicks {
+		onTicks = cycleTicks
 	}
 	clock := s.EstimatedClock() + uint64(s.ClockFreq*0.050)
-	return s.Conn.SendCommand(fmt.Sprintf("queue_pwm_out oid=%d clock=%d value=%d", oid, clock, value))
+	return s.Conn.SendCommand(fmt.Sprintf("queue_digital_out oid=%d clock=%d on_ticks=%d", oid, clock, onTicks))
 }
 
 // StepperJog moves a stepper continuously or for a fixed step count.

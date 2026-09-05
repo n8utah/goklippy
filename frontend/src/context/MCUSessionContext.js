@@ -6,11 +6,18 @@ import {
   getMCUSession,
   jogMCUStepper,
   listMCUSessions,
+  logMCU,
   openMCUSessionWS,
   setMCUDigitalOut,
   setMCUServo,
   stopMCUStepper,
 } from '../helpers/api';
+import {
+  clampServoAngle,
+  DEFAULT_SERVO_ANGLE,
+  scaleServoAngle,
+  flipServoAngle,
+} from '../helpers/servoGroups';
 
 const SESSION_STORAGE_KEY = 'goklippy_mcu_session_id';
 const RECONNECT_BASE_MS = 1000;
@@ -22,9 +29,12 @@ export function MCUSessionProvider({ children }) {
   const [session, setSession] = useState(null);
   const [readings, setReadings] = useState({});
   const [connecting, setConnecting] = useState(false);
+  const [connectStatus, setConnectStatus] = useState('');
   const [error, setError] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
   const [runningSteppers, setRunningSteppers] = useState({});
+  const [stepperJogState, setStepperJogState] = useState({});
+  const [servoAngles, setServoAngles] = useState({});
 
   const wsRef = useRef(null);
   const sessionIdRef = useRef(null);
@@ -145,6 +155,8 @@ export function MCUSessionProvider({ children }) {
       setSession(data);
       setReadings({});
       setRunningSteppers({});
+      setStepperJogState({});
+      setServoAngles({});
       setError('');
       sessionStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
       attachWebSocket(data.session_id);
@@ -184,25 +196,63 @@ export function MCUSessionProvider({ children }) {
     };
   }, [resumeSession, closeWebSocket, clearReconnectTimer]);
 
+  const connectInFlightRef = useRef(false);
+  const connectTickRef = useRef(null);
+
   const connect = useCallback(
     async (port, options = {}) => {
+      if (connectInFlightRef.current) {
+        setError('Connect already in progress — please wait');
+        return;
+      }
+      connectInFlightRef.current = true;
       setConnecting(true);
       setError('');
+      const started = performance.now();
+      setConnectStatus('Sending connect request to backend…');
+      logMCU('connect start', { port, options });
+
+      connectTickRef.current = setInterval(() => {
+        const secs = Math.round((performance.now() - started) / 1000);
+        setConnectStatus(
+          `Connecting to ${port}… (${secs}s — check backend terminal for serial progress)`,
+        );
+      }, 1000);
+
       try {
+        setConnectStatus(`Connecting to ${port}… (0s — check backend terminal for serial progress)`);
         const data = await connectMCU({
           port,
-          baud: options.baud,
+          baud: options.baud ?? 0,
           use_workspace: options.useWorkspace ?? true,
           config_path: options.configPath,
           profile_id: options.profileId ?? 'ramps14',
         });
+        logMCU('connect session received', {
+          port,
+          sessionId: data.session_id,
+          objects: data.objects?.length,
+          elapsedMs: Math.round(performance.now() - started),
+        });
+        setConnectStatus('Connected — opening live telemetry…');
         adoptSession(data);
         return data;
       } catch (err) {
+        logMCU('connect error', {
+          port,
+          elapsedMs: Math.round(performance.now() - started),
+          error: err.message,
+        });
         setError(err.message);
         throw err;
       } finally {
+        if (connectTickRef.current) {
+          clearInterval(connectTickRef.current);
+          connectTickRef.current = null;
+        }
+        connectInFlightRef.current = false;
         setConnecting(false);
+        setConnectStatus('');
       }
     },
     [adoptSession],
@@ -217,6 +267,8 @@ export function MCUSessionProvider({ children }) {
       setSession(null);
       setReadings({});
       setRunningSteppers({});
+      setStepperJogState({});
+      setServoAngles({});
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
       sessionIdRef.current = null;
       return;
@@ -231,6 +283,8 @@ export function MCUSessionProvider({ children }) {
     setSession(null);
     setReadings({});
     setRunningSteppers({});
+    setStepperJogState({});
+    setServoAngles({});
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
     sessionIdRef.current = null;
   }, [session, closeWebSocket, clearReconnectTimer]);
@@ -267,37 +321,81 @@ export function MCUSessionProvider({ children }) {
   const setServo = useCallback(
     async (oid, angle) => {
       if (!session?.session_id) return;
-      await setMCUServo(session.session_id, oid, angle);
+      const clamped = clampServoAngle(angle);
+      await setMCUServo(session.session_id, oid, clamped);
+      setServoAngles((prev) => ({ ...prev, [oid]: clamped }));
+      return clamped;
     },
     [session],
   );
 
-  const jogStepper = useCallback(
-    async (oid, { forward, speedHz, steps }) => {
-      if (!session?.session_id) return;
-      return jogMCUStepper(session.session_id, oid, { forward, speed_hz: speedHz, steps });
-    },
+  const servoObjects = useMemo(
+    () =>
+      (session?.objects || []).filter(
+        (obj) => obj.kind === 'pwm_out' && obj.meta?.device === 'servo',
+      ),
     [session],
   );
 
-  const stopStepper = useCallback(
-    async (oid) => {
-      if (!session?.session_id) return;
-      const result = await stopMCUStepper(session.session_id, oid);
-      setRunningSteppers((prev) => {
-        if (!prev[oid]) return prev;
-        const next = { ...prev };
-        delete next[oid];
-        return next;
-      });
-      return result;
+  const setServosAtAngles = useCallback(
+    async (items) => {
+      if (!session?.session_id || items.length === 0) return;
+      await Promise.all(items.map(({ oid, angle }) => setServo(oid, angle)));
     },
-    [session],
+    [session, setServo],
   );
 
-  const isStepperRunning = useCallback(
-    (oid) => Boolean(runningSteppers[oid]),
-    [runningSteppers],
+  const setAllServosAngle = useCallback(
+    async (angle) => {
+      if (servoObjects.length === 0) return;
+      await setServosAtAngles(servoObjects.map((obj) => ({ oid: obj.oid, angle })));
+    },
+    [servoObjects, setServosAtAngles],
+  );
+
+  const flipServos = useCallback(
+    async (oids) => {
+      if (!session?.session_id || oids.length === 0) return;
+      await setServosAtAngles(
+        oids.map((oid) => ({
+          oid,
+          angle: flipServoAngle(servoAngles[oid] ?? DEFAULT_SERVO_ANGLE),
+        })),
+      );
+    },
+    [session, servoAngles, setServosAtAngles],
+  );
+
+  const flipAllServos = useCallback(async () => {
+    await flipServos(servoObjects.map((obj) => obj.oid));
+  }, [flipServos, servoObjects]);
+
+  const scaleServoAnglesFor = useCallback(
+    async (oids, factor) => {
+      if (!session?.session_id || oids.length === 0) return;
+      await setServosAtAngles(
+        oids.map((oid) => ({
+          oid,
+          angle: scaleServoAngle(servoAngles[oid] ?? DEFAULT_SERVO_ANGLE, factor),
+        })),
+      );
+    },
+    [session, servoAngles, setServosAtAngles],
+  );
+
+  const scaleAllServoAngles = useCallback(
+    async (factor) => {
+      await scaleServoAnglesFor(
+        servoObjects.map((obj) => obj.oid),
+        factor,
+      );
+    },
+    [scaleServoAnglesFor, servoObjects],
+  );
+
+  const stepperObjects = useMemo(
+    () => (session?.objects || []).filter((obj) => obj.kind === 'stepper'),
+    [session],
   );
 
   const setStepperRunning = useCallback((oid, running) => {
@@ -313,11 +411,203 @@ export function MCUSessionProvider({ children }) {
     });
   }, []);
 
+  const jogStepper = useCallback(
+    async (oid, { forward, speedHz, steps }) => {
+      if (!session?.session_id) return;
+      const stepCount = steps ?? 0;
+      const result = await jogMCUStepper(session.session_id, oid, {
+        forward,
+        speed_hz: speedHz,
+        steps: stepCount,
+      });
+      if (stepCount <= 0) {
+        setStepperJogState((prev) => ({ ...prev, [oid]: { forward, speedHz } }));
+        setStepperRunning(oid, true);
+      } else {
+        setStepperJogState((prev) => {
+          if (!prev[oid]) return prev;
+          const next = { ...prev };
+          delete next[oid];
+          return next;
+        });
+        setStepperRunning(oid, false);
+      }
+      return result;
+    },
+    [session, setStepperRunning],
+  );
+
+  const stopStepper = useCallback(
+    async (oid) => {
+      if (!session?.session_id) return;
+      const result = await stopMCUStepper(session.session_id, oid);
+      setRunningSteppers((prev) => {
+        if (!prev[oid]) return prev;
+        const next = { ...prev };
+        delete next[oid];
+        return next;
+      });
+      setStepperJogState((prev) => {
+        if (!prev[oid]) return prev;
+        const next = { ...prev };
+        delete next[oid];
+        return next;
+      });
+      return result;
+    },
+    [session],
+  );
+
+  const stopAllSteppers = useCallback(async () => {
+    if (!session?.session_id || stepperObjects.length === 0) return;
+    const oids = stepperObjects.map((obj) => obj.oid);
+    await Promise.all(oids.map((oid) => stopMCUStepper(session.session_id, oid)));
+    setRunningSteppers({});
+    setStepperJogState({});
+  }, [session, stepperObjects]);
+
+  const stopSteppers = useCallback(
+    async (oids) => {
+      if (!session?.session_id || oids.length === 0) return;
+      await Promise.all(oids.map((oid) => stopMCUStepper(session.session_id, oid)));
+      setRunningSteppers((prev) => {
+        const next = { ...prev };
+        for (const oid of oids) {
+          delete next[oid];
+        }
+        return next;
+      });
+      setStepperJogState((prev) => {
+        const next = { ...prev };
+        for (const oid of oids) {
+          delete next[oid];
+        }
+        return next;
+      });
+    },
+    [session],
+  );
+
+  const startSteppers = useCallback(
+    async (oids, { forward = true, speedHz = 500 } = {}) => {
+      if (!session?.session_id || oids.length === 0) return;
+      await Promise.all(oids.map((oid) => jogStepper(oid, { forward, speedHz, steps: 0 })));
+    },
+    [session, jogStepper],
+  );
+
+  const startSteppersAtSpeeds = useCallback(
+    async (items) => {
+      if (!session?.session_id || items.length === 0) return;
+      await Promise.all(
+        items.map(({ oid, forward = true, speedHz = 500 }) =>
+          jogStepper(oid, { forward, speedHz, steps: 0 }),
+        ),
+      );
+    },
+    [session, jogStepper],
+  );
+
+  const startAllSteppers = useCallback(
+    async (options = {}) => {
+      if (stepperObjects.length === 0) return;
+      await startSteppers(
+        stepperObjects.map((obj) => obj.oid),
+        options,
+      );
+    },
+    [stepperObjects, startSteppers],
+  );
+
+  const reverseSteppers = useCallback(
+    async (oids) => {
+      if (!session?.session_id || oids.length === 0) return;
+      const updates = oids
+        .filter((oid) => stepperJogState[oid])
+        .map((oid) => ({
+          oid,
+          forward: !stepperJogState[oid].forward,
+          speedHz: stepperJogState[oid].speedHz,
+        }));
+      if (updates.length === 0) return;
+
+      await Promise.all(
+        updates.map((item) =>
+          jogMCUStepper(session.session_id, item.oid, {
+            forward: item.forward,
+            speed_hz: item.speedHz,
+            steps: 0,
+          }),
+        ),
+      );
+
+      setStepperJogState((prev) => {
+        const next = { ...prev };
+        for (const item of updates) {
+          next[item.oid] = { forward: item.forward, speedHz: item.speedHz };
+        }
+        return next;
+      });
+    },
+    [session, stepperJogState],
+  );
+
+  const reverseAllSteppers = useCallback(async () => {
+    await reverseSteppers(Object.keys(stepperJogState).map(Number));
+  }, [reverseSteppers, stepperJogState]);
+
+  const scaleStepperSpeeds = useCallback(
+    async (oids, factor) => {
+      if (!session?.session_id || oids.length === 0) return;
+
+      const updates = oids
+        .filter((oid) => stepperJogState[oid])
+        .map((oid) => ({
+          oid,
+          forward: stepperJogState[oid].forward,
+          speedHz: Math.min(50000, Math.max(1, Math.round(stepperJogState[oid].speedHz * factor))),
+        }));
+      if (updates.length === 0) return;
+
+      await Promise.all(
+        updates.map((item) =>
+          jogMCUStepper(session.session_id, item.oid, {
+            forward: item.forward,
+            speed_hz: item.speedHz,
+            steps: 0,
+          }),
+        ),
+      );
+
+      setStepperJogState((prev) => {
+        const next = { ...prev };
+        for (const item of updates) {
+          next[item.oid] = { forward: item.forward, speedHz: item.speedHz };
+        }
+        return next;
+      });
+    },
+    [session, stepperJogState],
+  );
+
+  const scaleAllStepperSpeeds = useCallback(
+    async (factor) => {
+      await scaleStepperSpeeds(Object.keys(stepperJogState).map(Number), factor);
+    },
+    [scaleStepperSpeeds, stepperJogState],
+  );
+
+  const isStepperRunning = useCallback(
+    (oid) => Boolean(runningSteppers[oid]),
+    [runningSteppers],
+  );
+
   const value = useMemo(
     () => ({
       session,
       readings,
       connecting,
+      connectStatus,
       error,
       wsConnected,
       connected: Boolean(session?.session_id),
@@ -328,8 +618,27 @@ export function MCUSessionProvider({ children }) {
       resumeSession,
       setDigitalOut,
       setServo,
+      servoObjects,
+      servoAngles,
+      setServosAtAngles,
+      setAllServosAngle,
+      flipServos,
+      flipAllServos,
+      scaleServoAnglesFor,
+      scaleAllServoAngles,
       jogStepper,
       stopStepper,
+      stopAllSteppers,
+      startAllSteppers,
+      startSteppers,
+      startSteppersAtSpeeds,
+      stopSteppers,
+      reverseSteppers,
+      reverseAllSteppers,
+      scaleAllStepperSpeeds,
+      scaleStepperSpeeds,
+      stepperObjects,
+      stepperJogState,
       isStepperRunning,
       setStepperRunning,
     }),
@@ -337,6 +646,7 @@ export function MCUSessionProvider({ children }) {
       session,
       readings,
       connecting,
+      connectStatus,
       error,
       wsConnected,
       objectsBySlot,
@@ -346,8 +656,27 @@ export function MCUSessionProvider({ children }) {
       resumeSession,
       setDigitalOut,
       setServo,
+      servoObjects,
+      servoAngles,
+      setServosAtAngles,
+      setAllServosAngle,
+      flipServos,
+      flipAllServos,
+      scaleServoAnglesFor,
+      scaleAllServoAngles,
       jogStepper,
       stopStepper,
+      stopAllSteppers,
+      startAllSteppers,
+      startSteppers,
+      startSteppersAtSpeeds,
+      stopSteppers,
+      reverseSteppers,
+      reverseAllSteppers,
+      scaleAllStepperSpeeds,
+      scaleStepperSpeeds,
+      stepperObjects,
+      stepperJogState,
       isStepperRunning,
       setStepperRunning,
     ],

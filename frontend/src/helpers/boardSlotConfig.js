@@ -41,8 +41,10 @@ export function configSectionName(slotId, slot) {
       return slotId === 'heater_bed' ? 'heater_bed' : 'extruder';
     case 'thermistor':
       return `temperature_sensor ${slotId.replace(/^thermistor_/, '')}`;
-    case 'servo':
-      return `servo ${slotId.replace(/^servo_/, 'servo_')}`;
+    case 'servo': {
+      const suffix = slotId.replace(/^servo_/, '') || slotId;
+      return `servo ${suffix}`;
+    }
     case 'endstop':
       return slotId;
     default:

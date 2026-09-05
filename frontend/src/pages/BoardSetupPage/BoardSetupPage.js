@@ -4,6 +4,10 @@ import BoardDiagram from './components/BoardDiagram/BoardDiagram';
 
 import ConnectionPanel from './components/ConnectionPanel/ConnectionPanel';
 
+import GlobalSteppersPanel from './components/GlobalSteppersPanel/GlobalSteppersPanel';
+
+import GlobalServosPanel from './components/GlobalServosPanel/GlobalServosPanel';
+
 import ConfigPanel from './components/ConfigPanel/ConfigPanel';
 
 import { useBoardSetupPageLogic } from './BoardSetupPage.logic';
@@ -61,6 +65,10 @@ const BoardSetupPage = () => {
     connected,
 
     connecting,
+
+    connectStatus,
+
+    wsConnected,
 
     sessionError,
 
@@ -153,7 +161,9 @@ const BoardSetupPage = () => {
 
           <span>
 
-            Live on <strong>{session.port}</strong> — live readings via WebSocket
+            Live on <strong>{session.port}</strong>
+
+            {wsConnected ? ' — telemetry connected' : ' — waiting for live telemetry…'}
 
           </span>
 
@@ -177,16 +187,21 @@ const BoardSetupPage = () => {
 
           <ConnectInline connecting={connecting} onConnect={handleConnect} />
 
+          {connecting && (
+            <p className={appStyles.muted}>
+              {connectStatus ||
+                'Opening serial port and running Klipper identify — trying baud rates, usually 30–90 seconds. Click Connect only once.'}
+            </p>
+          )}
+
         </div>
 
       )}
 
 
 
-      {(configError || sessionError) && tab === 'visual' && (
-
+      {(configError || (sessionError && !sessionError.includes('reconnecting'))) && (
         <p className={appStyles.errorText}>{configError || sessionError}</p>
-
       )}
 
 
@@ -240,6 +255,11 @@ const BoardSetupPage = () => {
             onStopStepper={stopStepper}
 
           />
+
+          <div className={styles.controlsColumn}>
+            <GlobalSteppersPanel />
+            <GlobalServosPanel />
+          </div>
 
         </div>
 
