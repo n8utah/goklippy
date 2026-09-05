@@ -57,8 +57,7 @@ func (s *Session) telemetryLoop() {
 		}
 		s.telemMu.Unlock()
 
-		s.RefreshStepperReadings()
-		readings := s.Poll(150 * time.Millisecond)
+		readings := s.Poll(50 * time.Millisecond)
 
 		s.telemMu.Lock()
 		for _, ch := range subs {

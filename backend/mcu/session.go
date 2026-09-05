@@ -2,6 +2,7 @@ package mcu
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ type Session struct {
 	ClockBase     uint64
 	ClockBaseAt   time.Time
 	stopTrsyncOIDs map[int]int // stepper OID -> dedicated stop trsync OID
+	InitCommands   []string
 
 	telemMu       sync.Mutex
 	telemSubs     map[chan map[string]Reading]struct{}
@@ -30,6 +32,8 @@ type Session struct {
 
 	jogMu      sync.Mutex
 	jogKeepers map[int]*stepperJogKeeper
+
+	stepperMu sync.Mutex // serializes stepper jog/stop (MCU rejects reset_step_clock while moving)
 
 	readings       map[int]Reading
 	stepperJogging map[int]bool
@@ -212,24 +216,15 @@ func (s *Session) SetServoAngle(oid int, angle float64) error {
 	if angle > 180 {
 		angle = 180
 	}
-	// Standard hobby servo: 1ms=0°, 2ms=180° within 20ms period (software PWM).
-	const periodSec = 0.020
-	widthSec := 0.001 + (angle/180.0)*0.001
-	cycleTicks := int(s.ClockFreq * periodSec)
-	onTicks := int(float64(cycleTicks) * (widthSec / periodSec))
-	if onTicks < 1 {
-		onTicks = 1
-	}
-	if onTicks > cycleTicks {
-		onTicks = cycleTicks
-	}
-	clock := s.EstimatedClock() + uint64(s.ClockFreq*0.050)
-	return s.Conn.SendCommand(fmt.Sprintf("queue_digital_out oid=%d clock=%d on_ticks=%d", oid, clock, onTicks))
+	return s.queueServoPulse(oid, angle)
 }
 
 // StepperJog moves a stepper continuously or for a fixed step count.
 // If the stepper is already jogging continuously, direction and speed are updated in place.
 func (s *Session) StepperJog(oid int, forward bool, speedHz float64, steps int) error {
+	s.stepperMu.Lock()
+	defer s.stepperMu.Unlock()
+
 	continuous := steps <= 0
 	if continuous && s.isStepperJogging(oid) {
 		if err := s.stepperJogMove(oid, forward, speedHz, 0, true); err != nil {
@@ -252,6 +247,10 @@ func (s *Session) StepperJog(oid int, forward bool, speedHz float64, steps int) 
 }
 
 func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps int, restart bool) error {
+	if err := s.checkMCUShutdown("before stepper jog"); err != nil {
+		return err
+	}
+
 	stopTrsyncOID, err := s.stopTrsyncForStepper(oid)
 	if err != nil {
 		return err
@@ -266,20 +265,21 @@ func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps i
 		interval = 1
 	}
 
-	mcuClock, err := s.Conn.MCUClock()
-	if err != nil {
-		return fmt.Errorf("get mcu clock: %w", err)
-	}
 	margin := 0.25
 	if restart {
 		margin = 0.08
 	}
-	startClock := uint64(mcuClock) + uint64(s.ClockFreq*margin)
-
-	cmds := make([]string, 0, 8)
-	if restart {
-		cmds = append(cmds, fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
+	startClock, err := s.motionClock(margin)
+	if err != nil {
+		return err
 	}
+
+	cmds := make([]string, 0, 10)
+	cmds = append(cmds, s.stepperDriverEnableCommands(oid)...)
+	// Always stop any in-flight move before reset_step_clock — Klipper shuts down if
+	// reset_step_clock is sent while the stepper queue is active, and queue_step is
+	// silently dropped while SF_NEED_RESET is set without a prior reset.
+	cmds = append(cmds, fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
 	cmds = append(cmds,
 		fmt.Sprintf("trsync_start oid=%d report_clock=0 report_ticks=0 expire_reason=0", stopTrsyncOID),
 		fmt.Sprintf("stepper_stop_on_trigger oid=%d trsync_oid=%d", oid, stopTrsyncOID),
@@ -290,11 +290,18 @@ func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps i
 	if err := s.Conn.SendCommands(cmds); err != nil {
 		return err
 	}
-
-	s.mu.Lock()
-	s.ClockBase = uint64(mcuClock)
-	s.ClockBaseAt = time.Now()
-	s.mu.Unlock()
+	if err := s.checkMCUShutdown("after stepper jog"); err != nil {
+		return err
+	}
+	slog.Info("stepper jog scheduled",
+		"port", s.Port,
+		"oid", oid,
+		"forward", forward,
+		"speed_hz", speedHz,
+		"start_clock", startClock,
+		"interval", interval,
+		"steps", steps,
+	)
 	return nil
 }
 
@@ -331,6 +338,9 @@ func (s *Session) RefreshStepperReadings() {
 
 // StepperStop halts an in-progress stepper move.
 func (s *Session) StepperStop(oid int) error {
+	s.stepperMu.Lock()
+	defer s.stepperMu.Unlock()
+
 	stopTrsyncOID, err := s.stopTrsyncForStepper(oid)
 	if err != nil {
 		return err

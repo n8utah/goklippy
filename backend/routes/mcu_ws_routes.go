@@ -99,7 +99,5 @@ func StopMCUStepper(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	time.Sleep(50 * time.Millisecond)
-	pos, _ := session.StepperPosition(req.OID)
-	c.JSON(http.StatusOK, gin.H{"ok": true, "position": pos})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

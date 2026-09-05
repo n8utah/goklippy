@@ -254,9 +254,21 @@ func SetMCUServo(c *gin.Context) {
 		return
 	}
 	if err := session.SetServoAngle(req.OID, req.Angle); err != nil {
+		slog.Warn("servo angle failed",
+			"session_id", session.ID,
+			"oid", req.OID,
+			"angle", req.Angle,
+			"error", err,
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	slog.Info("servo angle set",
+		"session_id", session.ID,
+		"port", session.Port,
+		"oid", req.OID,
+		"angle", req.Angle,
+	)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -276,9 +288,7 @@ func JogMCUStepper(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	time.Sleep(100 * time.Millisecond)
-	pos, _ := session.StepperPosition(req.OID)
-	c.JSON(http.StatusOK, gin.H{"ok": true, "position": pos})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func sessionResponse(session *mcu.Session) gin.H {

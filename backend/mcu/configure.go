@@ -167,6 +167,19 @@ func (c *Conn) ConfigureWithInit(finalized []string, initCommands []string) erro
 		}
 	}
 
+	status, err = c.GetConfig()
+	if err != nil {
+		return err
+	}
+	if status.IsShutdown {
+		slog.Warn("mcu shutdown after init",
+			"port", c.logPort,
+			"crc", status.CRC,
+			"move_count", status.MoveCount,
+		)
+		return fmt.Errorf("mcu shutdown after init commands")
+	}
+
 	slog.Info("mcu configure complete",
 		"port", c.logPort,
 		"duration_ms", time.Since(start).Milliseconds(),
