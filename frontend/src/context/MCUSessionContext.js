@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  checkMCUPCA9685,
   connectMCU,
   disconnectMCU,
   getMCUSession,
@@ -11,6 +12,7 @@ import {
   setMCUDigitalOut,
   setMCUServo,
   stopMCUStepper,
+  startMCUStepperRoutine,
 } from '../helpers/api';
 import {
   clampServoAngle,
@@ -18,6 +20,7 @@ import {
   scaleServoAngle,
   flipServoAngle,
 } from '../helpers/servoGroups';
+import { segmentsForAPI } from '../helpers/stepperRoutines';
 
 const SESSION_STORAGE_KEY = 'goklippy_mcu_session_id';
 const RECONNECT_BASE_MS = 1000;
@@ -34,7 +37,10 @@ export function MCUSessionProvider({ children }) {
   const [wsConnected, setWsConnected] = useState(false);
   const [runningSteppers, setRunningSteppers] = useState({});
   const [stepperJogState, setStepperJogState] = useState({});
+  const [stepperRoutineOids, setStepperRoutineOids] = useState({});
   const [servoAngles, setServoAngles] = useState({});
+  // PCA9685 board checks by board name: { state, message, ... } or { state: 'checking' }.
+  const [pcaStatus, setPcaStatus] = useState({});
 
   const wsRef = useRef(null);
   const sessionIdRef = useRef(null);
@@ -156,7 +162,9 @@ export function MCUSessionProvider({ children }) {
       setReadings({});
       setRunningSteppers({});
       setStepperJogState({});
+      setStepperRoutineOids({});
       setServoAngles({});
+      setPcaStatus({});
       setError('');
       sessionStorage.setItem(SESSION_STORAGE_KEY, data.session_id);
       attachWebSocket(data.session_id);
@@ -268,6 +276,7 @@ export function MCUSessionProvider({ children }) {
       setReadings({});
       setRunningSteppers({});
       setStepperJogState({});
+      setStepperRoutineOids({});
       setServoAngles({});
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
       sessionIdRef.current = null;
@@ -284,7 +293,9 @@ export function MCUSessionProvider({ children }) {
     setReadings({});
     setRunningSteppers({});
     setStepperJogState({});
+    setStepperRoutineOids({});
     setServoAngles({});
+    setPcaStatus({});
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
     sessionIdRef.current = null;
   }, [session, closeWebSocket, clearReconnectTimer]);
@@ -328,6 +339,39 @@ export function MCUSessionProvider({ children }) {
     },
     [session],
   );
+
+  const pcaBoardNames = useMemo(
+    () =>
+      (session?.objects || [])
+        .filter((obj) => obj.kind === 'i2c' && obj.meta?.device === 'pca9685')
+        .map((obj) => obj.meta.board),
+    [session],
+  );
+
+  const checkPCA9685Boards = useCallback(async () => {
+    const sessionId = session?.session_id;
+    if (!sessionId || pcaBoardNames.length === 0) return;
+    setPcaStatus(Object.fromEntries(pcaBoardNames.map((name) => [name, { state: 'checking' }])));
+    try {
+      const { boards } = await checkMCUPCA9685(sessionId);
+      setPcaStatus(Object.fromEntries((boards || []).map((b) => [b.board, b])));
+    } catch (err) {
+      setPcaStatus(
+        Object.fromEntries(
+          pcaBoardNames.map((name) => [name, { state: 'error', message: err.message }]),
+        ),
+      );
+    }
+  }, [session?.session_id, pcaBoardNames]);
+
+  // Check boards once per session so a missing one shows up right after connecting.
+  const checkedSessionRef = useRef(null);
+  useEffect(() => {
+    if (!session?.session_id || checkedSessionRef.current === session.session_id) return;
+    if (pcaBoardNames.length === 0) return;
+    checkedSessionRef.current = session.session_id;
+    checkPCA9685Boards();
+  }, [session?.session_id, pcaBoardNames, checkPCA9685Boards]);
 
   const servoObjects = useMemo(
     () =>
@@ -423,6 +467,12 @@ export function MCUSessionProvider({ children }) {
       if (stepCount <= 0) {
         setStepperJogState((prev) => ({ ...prev, [oid]: { forward, speedHz } }));
         setStepperRunning(oid, true);
+        setStepperRoutineOids((prev) => {
+          if (!prev[oid]) return prev;
+          const next = { ...prev };
+          delete next[oid];
+          return next;
+        });
       } else {
         setStepperJogState((prev) => {
           if (!prev[oid]) return prev;
@@ -453,6 +503,12 @@ export function MCUSessionProvider({ children }) {
         delete next[oid];
         return next;
       });
+      setStepperRoutineOids((prev) => {
+        if (!prev[oid]) return prev;
+        const next = { ...prev };
+        delete next[oid];
+        return next;
+      });
       return result;
     },
     [session],
@@ -464,6 +520,7 @@ export function MCUSessionProvider({ children }) {
     await Promise.all(oids.map((oid) => stopMCUStepper(session.session_id, oid)));
     setRunningSteppers({});
     setStepperJogState({});
+    setStepperRoutineOids({});
   }, [session, stepperObjects]);
 
   const stopSteppers = useCallback(
@@ -484,8 +541,48 @@ export function MCUSessionProvider({ children }) {
         }
         return next;
       });
+      setStepperRoutineOids((prev) => {
+        const next = { ...prev };
+        for (const oid of oids) {
+          delete next[oid];
+        }
+        return next;
+      });
     },
     [session],
+  );
+
+  const startStepperRoutine = useCallback(
+    async (oid, segments, routineName = '') => {
+      if (!session?.session_id) return;
+      await startMCUStepperRoutine(session.session_id, oid, segmentsForAPI(segments));
+      setStepperRoutineOids((prev) => ({ ...prev, [oid]: routineName || true }));
+      setRunningSteppers((prev) => {
+        if (!prev[oid]) return prev;
+        const next = { ...prev };
+        delete next[oid];
+        return next;
+      });
+      setStepperJogState((prev) => {
+        if (!prev[oid]) return prev;
+        const next = { ...prev };
+        delete next[oid];
+        return next;
+      });
+    },
+    [session],
+  );
+
+  const startStepperRoutineForMembers = useCallback(
+    async (routine) => {
+      if (!session?.session_id || !routine?.segments?.length) return;
+      const keys = new Set(routine.members);
+      const targets = stepperObjects.filter((obj) => keys.has(obj.slot_id || obj.section || String(obj.oid)));
+      for (const obj of targets) {
+        await startStepperRoutine(obj.oid, routine.segments, routine.name);
+      }
+    },
+    [session, stepperObjects, startStepperRoutine],
   );
 
   const startSteppers = useCallback(
@@ -626,6 +723,8 @@ export function MCUSessionProvider({ children }) {
       flipAllServos,
       scaleServoAnglesFor,
       scaleAllServoAngles,
+      pcaStatus,
+      checkPCA9685Boards,
       jogStepper,
       stopStepper,
       stopAllSteppers,
@@ -639,8 +738,11 @@ export function MCUSessionProvider({ children }) {
       scaleStepperSpeeds,
       stepperObjects,
       stepperJogState,
+      stepperRoutineOids,
       isStepperRunning,
       setStepperRunning,
+      startStepperRoutine,
+      startStepperRoutineForMembers,
     }),
     [
       session,
@@ -664,6 +766,8 @@ export function MCUSessionProvider({ children }) {
       flipAllServos,
       scaleServoAnglesFor,
       scaleAllServoAngles,
+      pcaStatus,
+      checkPCA9685Boards,
       jogStepper,
       stopStepper,
       stopAllSteppers,
@@ -677,8 +781,11 @@ export function MCUSessionProvider({ children }) {
       scaleStepperSpeeds,
       stepperObjects,
       stepperJogState,
+      stepperRoutineOids,
       isStepperRunning,
       setStepperRunning,
+      startStepperRoutine,
+      startStepperRoutineForMembers,
     ],
   );
 

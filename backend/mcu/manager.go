@@ -121,6 +121,7 @@ func (m *Manager) Connect(port string, baud int, timeout time.Duration, build cf
 	session.InitCommands = build.InitCommands
 	session.ClockBase = conn.clockBase
 	session.ClockBaseAt = conn.clockBaseAt
+	session.InitPCA9685Boards()
 
 	m.mu.Lock()
 	m.sessions[id] = session

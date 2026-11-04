@@ -17,6 +17,7 @@ import {
   findSectionForSlot,
   slotStatesFromWorkspace,
 } from '../../helpers/boardSlotConfig';
+import { pca9685BoardsInConfig, pca9685Sections } from '../../helpers/pca9685Config';
 import { useMCUSession } from '../../context/MCUSessionContext';
 
 const PROFILE_ID = 'ramps14';
@@ -225,6 +226,27 @@ export function useBoardSetupPageLogic() {
     [profile, workspace, syncWorkspaceState],
   );
 
+  /** Add (or replace) a PCA9685 board and its servo sections; used on the next connect. */
+  const addPCA9685Board = async (board) => {
+    setConfigLoading(true);
+    setConfigError('');
+    try {
+      let ws = null;
+      for (const section of pca9685Sections(board)) {
+        ws = await updateKlipperSection(section.name, section.options);
+      }
+      if (ws) syncWorkspaceState(ws);
+      return true;
+    } catch (err) {
+      setConfigError(err.message);
+      return false;
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const pcaBoards = useMemo(() => pca9685BoardsInConfig(workspace?.merged_sections), [workspace]);
+
   const loadConfigFile = async (path) => {
     setConfigLoading(true);
     setConfigError('');
@@ -308,6 +330,8 @@ export function useBoardSetupPageLogic() {
     loadConfigFile,
     saveConfig,
     applyRawConfig,
+    addPCA9685Board,
+    pcaBoards,
     session,
     connected,
     connecting,

@@ -53,6 +53,14 @@ func (s *Session) checkMCUShutdown(context string) error {
 	return nil
 }
 
+func (s *Session) mcuIsShutdown() (bool, error) {
+	status, err := s.Conn.GetConfig()
+	if err != nil {
+		return false, err
+	}
+	return status.IsShutdown, nil
+}
+
 func (s *Session) recoverMCUShutdown() error {
 	if err := s.Conn.ClearShutdown(); err != nil {
 		return err

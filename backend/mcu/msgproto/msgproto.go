@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -770,19 +769,17 @@ func (self *MessageParser) Encode_msgblock(seq int, cmd []int) []int {
 	return out
 }
 
+// Parse_buffer decodes a %*s argument written as hex (Klipper's text form, e.g.
+// "write=06000000cd01"), one byte per two digits.
 func (self *MessageParser) Parse_buffer(value string) []int {
-	if value == "" {
-		return []int{}
-	}
-	tval, _ := strconv.Atoi(value)
-
-	var out []int
-	for i := 0; i < int(math.Floor(float64(len(value)/2))); i++ {
-		out = append(out, tval&0xff)
-		tval >>= 8
-	}
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
+	out := []int{}
+	for i := 0; i+1 < len(value); i += 2 {
+		b, err := strconv.ParseUint(value[i:i+2], 16, 8)
+		if err != nil {
+			slog.Error("invalid hex buffer", "value", value)
+			return []int{}
+		}
+		out = append(out, int(b))
 	}
 	return out
 }
@@ -811,7 +808,15 @@ func (self *MessageParser) lookup_msgid(msgformat string) int {
 	return msgid
 }
 
-func (self *MessageParser) Create_command(msg string) []int {
+func (self *MessageParser) Create_command(msg string) (encoded []int) {
+	// Encoders panic on values the dictionary doesn't know (a mistyped pin or bus
+	// name); report those as an empty command, which callers treat as an error.
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("failed to encode command", "command", msg, "error", r)
+			encoded = []int{}
+		}
+	}()
 	parts := strings.Split(strings.TrimSpace(msg), " ")
 	if len(parts) == 0 {
 		return []int{}
@@ -866,8 +871,8 @@ func (self *MessageParser) Fill_enumerations(enumerations map[string]interface{}
 		for enum, val := range enumsList {
 			data, ok := val.(float64)
 			if ok {
-				//# Simple enumeration
-				enums[enum] = data
+				//# Simple enumeration (an int like the ranges below, which the encoders expect)
+				enums[enum] = int(data)
 				continue
 			}
 			//# Enumeration range

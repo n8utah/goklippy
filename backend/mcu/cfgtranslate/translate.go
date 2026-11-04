@@ -11,10 +11,12 @@ const defaultClockFreq = 16000000
 
 // Builder converts Klipper config sections into MCU config commands.
 type Builder struct {
-	nextOID   int
-	lines     []string
-	objects   []ObjectSpec
-	clockFreq int
+	nextOID        int
+	nextVirtualOID int
+	lines          []string
+	objects        []ObjectSpec
+	clockFreq      int
+	pcaBoards      map[string]int // [pca9685 name] -> its config_i2c oid
 }
 
 // NewBuilder creates a config command builder.
@@ -34,6 +36,9 @@ func BuildHardwareCommands(f *klipperconfig.File) ([]string, error) {
 // Build generates config commands, init commands, and the object registry.
 func Build(f *klipperconfig.File) (BuildResult, error) {
 	b := NewBuilder()
+	if err := b.addPCA9685Boards(f); err != nil {
+		return BuildResult{}, err
+	}
 	for _, name := range f.Order {
 		sec := f.Sections[name]
 		switch {
@@ -219,6 +224,11 @@ func (b *Builder) addServo(name string, sec klipperconfig.Section) error {
 	if pin == "" {
 		return fmt.Errorf("%s: pin is required", name)
 	}
+	if board, channel, onBoard, err := parsePCA9685Pin(pin); err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	} else if onBoard {
+		return b.addPCA9685Servo(name, pin, board, channel, sec)
+	}
 	oid := b.allocOID()
 	// RAMPS D11 (ar11/PB5) uses AVR Timer1, which Klipper reserves — hardware
 	// config_pwm_out triggers shutdown. Use software PWM via digital_out instead
@@ -269,7 +279,7 @@ func (b *Builder) buildInitCommands() []string {
 				obj.OID,
 			))
 		case KindPWMOut:
-			if obj.Meta["device"] == "servo" {
+			if obj.Meta["device"] == "servo" && obj.Meta["pwm"] == "software" {
 				init = append(init, fmt.Sprintf(
 					"set_digital_out_pwm_cycle oid=%d cycle_ticks=%d",
 					obj.OID, b.cycleTicks(0.020),

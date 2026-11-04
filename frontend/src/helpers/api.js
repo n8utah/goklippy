@@ -199,8 +199,16 @@ export function setMCUServo(sessionId, oid, angle) {
   return postJSON(`/api/v1/mcu/sessions/${sessionId}/servo`, { oid, angle });
 }
 
+export function checkMCUPCA9685(sessionId) {
+  return postJSON(`/api/v1/mcu/sessions/${sessionId}/pca9685/check`, {});
+}
+
 export function jogMCUStepper(sessionId, oid, payload) {
   return postJSON(`/api/v1/mcu/sessions/${sessionId}/stepper/jog`, { oid, ...payload });
+}
+
+export function startMCUStepperRoutine(sessionId, oid, segments) {
+  return postJSON(`/api/v1/mcu/sessions/${sessionId}/stepper/routine`, { oid, segments });
 }
 
 export function getMCUPorts() {

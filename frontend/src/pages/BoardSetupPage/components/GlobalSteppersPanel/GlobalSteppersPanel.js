@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useMCUSession } from '../../../../context/MCUSessionContext';
 
 import StepperGroupsSection from './StepperGroupsSection';
+import StepperRoutinesSection from './StepperRoutinesSection';
 
 import styles from './GlobalSteppersPanel.module.css';
 import appStyles from '../../../../styles/app.module.css';
@@ -135,6 +136,8 @@ const GlobalSteppersPanel = () => {
       )}
 
       <StepperGroupsSection connected={connected} busy={busy} onRun={run} />
+
+      <StepperRoutinesSection connected={connected} busy={busy} onRun={run} />
 
       {connected && stepperObjects.length > 0 && (
         <p className={styles.footerMeta}>{stepperObjects.length} stepper(s) configured</p>

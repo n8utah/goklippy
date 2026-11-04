@@ -60,6 +60,10 @@ const BoardSetupPage = () => {
 
     applyRawConfig,
 
+    addPCA9685Board,
+
+    pcaBoards,
+
     session,
 
     connected,
@@ -258,7 +262,11 @@ const BoardSetupPage = () => {
 
           <div className={styles.controlsColumn}>
             <GlobalSteppersPanel />
-            <GlobalServosPanel />
+            <GlobalServosPanel
+              pcaBoards={pcaBoards}
+              configBusy={configLoading}
+              onAddPCA9685Board={addPCA9685Board}
+            />
           </div>
 
         </div>

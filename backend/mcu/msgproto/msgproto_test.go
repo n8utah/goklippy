@@ -21,6 +21,14 @@ func TestCrc16_ccitt(t *testing.T) {
 	assert.Equal(t, MESSAGE_SYNC, block[4])
 }
 
+func TestParseBufferHex(t *testing.T) {
+	p := NewMessageParser("")
+	assert.Equal(t, []int{0x06, 0x00, 0x00, 0xcd, 0x01}, p.Parse_buffer("060000cd01"))
+	assert.Equal(t, []int{0xfe, 0x79}, p.Parse_buffer("FE79"))
+	assert.Empty(t, p.Parse_buffer(""))
+	assert.Empty(t, p.Parse_buffer("zz"))
+}
+
 func TestDefaultMessagesIdentifyCommand(t *testing.T) {
 	p := NewMessageParser("")
 	cmd := p.Create_command("identify offset=0 count=40")

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { useMCUSession } from '../../../../context/MCUSessionContext';
 
+import PCA9685Section from './PCA9685Section';
 import ServoGroupsSection from './ServoGroupsSection';
 
 import styles from '../GlobalSteppersPanel/GlobalSteppersPanel.module.css';
@@ -17,7 +18,7 @@ function servoLabel(obj) {
   return obj.label || obj.slot_id || obj.section || `OID ${obj.oid}`;
 }
 
-const GlobalServosPanel = () => {
+const GlobalServosPanel = ({ pcaBoards = [], configBusy = false, onAddPCA9685Board }) => {
   const {
     connected,
     servoObjects,
@@ -26,15 +27,21 @@ const GlobalServosPanel = () => {
     setAllServosAngle,
     flipAllServos,
     scaleAllServoAngles,
+    pcaStatus,
+    checkPCA9685Boards,
   } = useMCUSession();
 
   const [busy, setBusy] = useState(false);
   const [applyAngle, setApplyAngle] = useState(DEFAULT_SERVO_ANGLE);
+  const [moveError, setMoveError] = useState('');
 
   const run = async (action) => {
     setBusy(true);
+    setMoveError('');
     try {
       await action();
+    } catch (err) {
+      setMoveError(err.message || 'Servo move failed');
     } finally {
       setBusy(false);
     }
@@ -111,6 +118,8 @@ const GlobalServosPanel = () => {
         </button>
       </div>
 
+      {moveError && <p className={styles.groupWarn}>{moveError}</p>}
+
       {connected && servoObjects.length > 0 && (
         <div className={styles.listBlock}>
           <p className={styles.listLabel}>Individual</p>
@@ -129,6 +138,17 @@ const GlobalServosPanel = () => {
       )}
 
       <ServoGroupsSection connected={connected} busy={busy} onRun={run} />
+
+      {onAddPCA9685Board && (
+        <PCA9685Section
+          boards={pcaBoards}
+          connected={connected}
+          busy={configBusy}
+          onAdd={onAddPCA9685Board}
+          status={pcaStatus}
+          onCheck={checkPCA9685Boards}
+        />
+      )}
 
       {connected && servoObjects.length > 0 && (
         <p className={styles.footerMeta}>{servoObjects.length} servo(s) configured</p>

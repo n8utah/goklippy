@@ -33,7 +33,14 @@ type Session struct {
 	jogMu      sync.Mutex
 	jogKeepers map[int]*stepperJogKeeper
 
-	stepperMu sync.Mutex // serializes stepper jog/stop (MCU rejects reset_step_clock while moving)
+	stepperLocksGuard sync.Mutex
+	stepperLocks      map[int]*sync.Mutex // per-stepper: reset_step_clock must not overlap on same oid
+	routineKeepersMu  sync.Mutex
+	routineKeepers    map[int]*stepperRoutineKeeper
+	routineSerialMu   sync.Mutex // one COM port: serialize routine MCU traffic across oids
+
+	pcaMu    sync.Mutex
+	pcaReady map[int]bool // PCA9685 board oid -> registers set up
 
 	readings       map[int]Reading
 	stepperJogging map[int]bool
@@ -80,6 +87,7 @@ func NewSession(id, port string, baud int, conn *Conn, objects []cfgtranslate.Ob
 func (s *Session) Close() error {
 	s.StopTelemetry()
 	s.stopAllJogKeepers()
+	s.stopAllStepperRoutines()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.Conn == nil {
@@ -210,6 +218,9 @@ func (s *Session) SetDigitalOut(oid int, value bool) error {
 
 // SetServoAngle sets a servo PWM output (0-180 degrees).
 func (s *Session) SetServoAngle(oid int, angle float64) error {
+	if obj := s.objectByOID(oid); obj != nil && obj.Meta["pwm"] == "pca9685" {
+		return s.setPCA9685Servo(obj, angle)
+	}
 	if angle < 0 {
 		angle = 0
 	}
@@ -219,21 +230,37 @@ func (s *Session) SetServoAngle(oid int, angle float64) error {
 	return s.queueServoPulse(oid, angle)
 }
 
+func (s *Session) stepperLock(oid int) *sync.Mutex {
+	s.stepperLocksGuard.Lock()
+	defer s.stepperLocksGuard.Unlock()
+	if s.stepperLocks == nil {
+		s.stepperLocks = make(map[int]*sync.Mutex)
+	}
+	m, ok := s.stepperLocks[oid]
+	if !ok {
+		m = &sync.Mutex{}
+		s.stepperLocks[oid] = m
+	}
+	return m
+}
+
 // StepperJog moves a stepper continuously or for a fixed step count.
 // If the stepper is already jogging continuously, direction and speed are updated in place.
 func (s *Session) StepperJog(oid int, forward bool, speedHz float64, steps int) error {
-	s.stepperMu.Lock()
-	defer s.stepperMu.Unlock()
+	s.stepperLock(oid).Lock()
+	defer s.stepperLock(oid).Unlock()
+
+	s.stopStepperRoutineLocked(oid)
 
 	continuous := steps <= 0
 	if continuous && s.isStepperJogging(oid) {
-		if err := s.stepperJogMove(oid, forward, speedHz, 0, true); err != nil {
+		if err := s.stepperJogMove(oid, forward, speedHz, 0, 0.08); err != nil {
 			return err
 		}
 		s.updateJogKeeper(oid, forward, speedHz)
 		return nil
 	}
-	if err := s.stepperJogMove(oid, forward, speedHz, steps, false); err != nil {
+	if err := s.stepperJogMove(oid, forward, speedHz, steps, 0.25); err != nil {
 		return err
 	}
 	if continuous {
@@ -246,11 +273,7 @@ func (s *Session) StepperJog(oid int, forward bool, speedHz float64, steps int) 
 	return nil
 }
 
-func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps int, restart bool) error {
-	if err := s.checkMCUShutdown("before stepper jog"); err != nil {
-		return err
-	}
-
+func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps int, scheduleMarginSec float64) error {
 	stopTrsyncOID, err := s.stopTrsyncForStepper(oid)
 	if err != nil {
 		return err
@@ -265,11 +288,10 @@ func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps i
 		interval = 1
 	}
 
-	margin := 0.25
-	if restart {
-		margin = 0.08
+	if scheduleMarginSec <= 0 {
+		scheduleMarginSec = 0.25
 	}
-	startClock, err := s.motionClock(margin)
+	startClock, err := s.motionClock(scheduleMarginSec)
 	if err != nil {
 		return err
 	}
@@ -336,18 +358,13 @@ func (s *Session) RefreshStepperReadings() {
 	}
 }
 
-// StepperStop halts an in-progress stepper move.
+// StepperStop halts an in-progress stepper move or routine.
 func (s *Session) StepperStop(oid int) error {
-	s.stepperMu.Lock()
-	defer s.stepperMu.Unlock()
+	s.stepperLock(oid).Lock()
+	defer s.stepperLock(oid).Unlock()
 
-	stopTrsyncOID, err := s.stopTrsyncForStepper(oid)
-	if err != nil {
-		return err
-	}
-	s.stopJogKeeper(oid)
-	s.setStepperJogging(oid, false)
-	return s.Conn.SendCommand(fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
+	s.stopStepperRoutineLocked(oid)
+	return s.stepperStopUnlocked(oid)
 }
 
 func (s *Session) stopTrsyncForStepper(stepperOID int) (int, error) {

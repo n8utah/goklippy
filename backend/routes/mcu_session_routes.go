@@ -33,11 +33,22 @@ type servoRequest struct {
 	Angle float64 `json:"angle"`
 }
 
+type stepperRoutineSegmentRequest struct {
+	Forward bool    `json:"forward"`
+	SpeedHz float64 `json:"speed_hz"`
+	Steps   int     `json:"steps"`
+}
+
+type stepperRoutineRequest struct {
+	OID      int                            `json:"oid"`
+	Segments []stepperRoutineSegmentRequest `json:"segments"`
+}
+
 type stepperJogRequest struct {
-	OID      int     `json:"oid"`
-	Forward  bool    `json:"forward"`
-	SpeedHz  float64 `json:"speed_hz"`
-	Steps    int     `json:"steps"`
+	OID     int     `json:"oid"`
+	Forward bool    `json:"forward"`
+	SpeedHz float64 `json:"speed_hz"`
+	Steps   int     `json:"steps"`
 }
 
 // ConnectMCU POST /mcu/connect
@@ -272,6 +283,16 @@ func SetMCUServo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// CheckMCUPCA9685 POST /mcu/sessions/:id/pca9685/check
+func CheckMCUPCA9685(c *gin.Context) {
+	session, ok := mcu.DefaultManager().Get(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"boards": session.CheckPCA9685Boards()})
+}
+
 // JogMCUStepper POST /mcu/sessions/:id/stepper/jog
 func JogMCUStepper(c *gin.Context) {
 	session, ok := mcu.DefaultManager().Get(c.Param("id"))
@@ -285,6 +306,33 @@ func JogMCUStepper(c *gin.Context) {
 		return
 	}
 	if err := session.StepperJog(req.OID, req.Forward, req.SpeedHz, req.Steps); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// StartMCUStepperRoutine POST /mcu/sessions/:id/stepper/routine
+func StartMCUStepperRoutine(c *gin.Context) {
+	session, ok := mcu.DefaultManager().Get(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+	var req stepperRoutineRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	segments := make([]mcu.StepperRoutineSegment, 0, len(req.Segments))
+	for _, seg := range req.Segments {
+		segments = append(segments, mcu.StepperRoutineSegment{
+			Forward: seg.Forward,
+			SpeedHz: seg.SpeedHz,
+			Steps:   seg.Steps,
+		})
+	}
+	if err := session.StartStepperRoutine(req.OID, segments); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
