@@ -37,6 +37,7 @@ type Session struct {
 	stepperLocks      map[int]*sync.Mutex // per-stepper: reset_step_clock must not overlap on same oid
 	routineKeepersMu  sync.Mutex
 	routineKeepers    map[int]*stepperRoutineKeeper
+	routineErrors     map[int]string // stepper OID -> why its routine stopped on its own
 	routineSerialMu   sync.Mutex // one COM port: serialize routine MCU traffic across oids
 
 	pcaMu    sync.Mutex

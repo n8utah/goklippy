@@ -26,6 +26,7 @@ const GlobalSteppersPanel = () => {
 
   const [busy, setBusy] = useState(false);
   const [startSpeed, setStartSpeed] = useState(DEFAULT_STEPPER_SPEED);
+  const [actionError, setActionError] = useState('');
 
   const clampSpeed = (value) => Math.min(50000, Math.max(1, value));
 
@@ -34,8 +35,11 @@ const GlobalSteppersPanel = () => {
 
   const run = async (action) => {
     setBusy(true);
+    setActionError('');
     try {
       await action();
+    } catch (err) {
+      setActionError(err.message || 'Stepper command failed');
     } finally {
       setBusy(false);
     }
@@ -49,6 +53,8 @@ const GlobalSteppersPanel = () => {
       {!connected && (
         <p className={styles.connectHint}>Connect to run steppers. Groups can be edited anytime.</p>
       )}
+
+      {actionError && <p className={styles.groupWarn}>{actionError}</p>}
 
       <label className={styles.label} htmlFor="global-start-speed">
         Start speed (steps/s)

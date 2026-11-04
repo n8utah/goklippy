@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"slices"
 	"time"
 
 	"goklippy/backend/mcu"
@@ -70,12 +71,31 @@ func MCUSessionWebSocket(c *gin.Context) {
 		}
 	}()
 
+	// Routine states go out on connect and then whenever they change, so the UI learns
+	// about a routine that stopped on its own (e.g. the MCU refused its steps).
+	var lastRoutines []mcu.RoutineState
+	sendRoutines := func(force bool) error {
+		routines := session.RoutineStates()
+		if !force && slices.Equal(routines, lastRoutines) {
+			return nil
+		}
+		lastRoutines = routines
+		// gin.H rather than mcuWSMessage so an empty list is still sent (no omitempty).
+		return conn.WriteJSON(gin.H{"type": "routines", "routines": routines})
+	}
+	if err := sendRoutines(true); err != nil {
+		return
+	}
+
 	for readings := range updates {
 		out := make(map[string]mcu.Reading, len(readings))
 		for k, v := range readings {
 			out[k] = v
 		}
 		if err := send(mcuWSMessage{Type: "readings", Readings: out, At: time.Now().UTC()}); err != nil {
+			return
+		}
+		if err := sendRoutines(false); err != nil {
 			return
 		}
 	}

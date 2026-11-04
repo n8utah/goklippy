@@ -1,8 +1,11 @@
 package mcu
 
 import (
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPatternDuration(t *testing.T) {
@@ -109,6 +112,43 @@ func TestRepeatPatternSegments(t *testing.T) {
 	if len(repeated) != 6 {
 		t.Fatalf("expected 6 segments for 3 reps, got %d", len(repeated))
 	}
+}
+
+func TestPatternTicks(t *testing.T) {
+	segments := []StepperRoutineSegment{
+		{Forward: true, SpeedHz: 500, Steps: 100},
+		{Forward: false, SpeedHz: 1000, Steps: 10},
+	}
+	// 16 MHz: 32000 ticks per step at 500 Hz, 16000 at 1 kHz.
+	assert.Equal(t, uint64(100*32000+10*16000), patternTicks(segments, 16e6))
+	assert.Equal(t, 2*patternTicks(segments, 16e6), patternTicks(repeatPatternSegments(segments, 2), 16e6))
+}
+
+func TestClockAhead(t *testing.T) {
+	assert.Equal(t, int64(500), clockAhead(1000, 1500))
+	assert.Equal(t, int64(-500), clockAhead(1500, 1000))
+	// Across the 32-bit wrap: the end is just past zero, now is just before it.
+	assert.Equal(t, int64(0x20), clockAhead(0xfffffff0, 0x10))
+	assert.Equal(t, int64(-0x20), clockAhead(0x10, 0xfffffff0))
+}
+
+func TestRoutineStates(t *testing.T) {
+	s := &Session{}
+	current := &stepperRoutineKeeper{stop: make(chan struct{})}
+	replaced := &stepperRoutineKeeper{stop: make(chan struct{})}
+	s.routineKeepers = map[int]*stepperRoutineKeeper{2: current, 5: current}
+
+	s.failRoutine(5, current, fmt.Errorf("refill failed"))
+	s.failRoutine(2, replaced, fmt.Errorf("stale loop")) // not the current routine: ignored
+	delete(s.routineKeepers, 5)                           // the failed loop exits
+
+	assert.Equal(t, []RoutineState{
+		{OID: 2, Running: true},
+		{OID: 5, Error: "refill failed"},
+	}, s.RoutineStates())
+
+	s.stopStepperRoutineLocked(5) // a stop or new routine clears the failure
+	assert.Equal(t, []RoutineState{{OID: 2, Running: true}}, s.RoutineStates())
 }
 
 func TestValidateRoutineSegments(t *testing.T) {

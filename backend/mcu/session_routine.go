@@ -3,6 +3,7 @@ package mcu
 import (
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 )
 
@@ -27,6 +28,13 @@ const (
 	maxQueueOpsPerBatch        = 40
 	maxPatternBatchRepetitions = 12
 	minQueueOpsPerBatch        = 6
+	// routineDrainMarginSec: with less than this left in the MCU queue, an append could
+	// arrive after the queue empties (the MCU shuts down on steps in the past), so the
+	// loop lets the queue finish and starts a fresh batch instead.
+	routineDrainMarginSec = 0.03
+	routineClockResync    = 2 * time.Second
+	// routineMaxRefillFailures in a row ends the routine and reports the error.
+	routineMaxRefillFailures = 3
 )
 
 func patternMoveDuration(segments []StepperRoutineSegment) time.Duration {
@@ -195,12 +203,15 @@ func (s *Session) StartStepperRoutine(oid int, segments []StepperRoutineSegment)
 	return nil
 }
 
+// stopStepperRoutineLocked cancels the oid's routine, if any, and clears its last
+// failure: a stop, jog or new routine means the user has moved on from it.
 func (s *Session) stopStepperRoutineLocked(oid int) {
 	s.routineKeepersMu.Lock()
 	state, ok := s.routineKeepers[oid]
 	if ok {
 		delete(s.routineKeepers, oid)
 	}
+	delete(s.routineErrors, oid)
 	s.routineKeepersMu.Unlock()
 	if !ok {
 		return
@@ -217,47 +228,117 @@ func (s *Session) stopAllStepperRoutines() {
 	keepers := s.routineKeepers
 	s.routineKeepers = make(map[int]*stepperRoutineKeeper)
 	s.routineKeepersMu.Unlock()
-	for _, state := range keepers {
-		select {
-		case <-state.stop:
-		default:
+	for oid, state := range keepers {
+		s.stepperLock(oid).Lock()
+		if !state.stopped() {
 			close(state.stop)
+			_ = s.stepperStopUnlocked(oid)
+		}
+		s.stepperLock(oid).Unlock()
+	}
+}
+
+// RoutineState is one stepper's routine as the UI should show it.
+type RoutineState struct {
+	OID     int    `json:"oid"`
+	Running bool   `json:"running"`
+	Error   string `json:"error,omitempty"`
+}
+
+// RoutineStates lists running routines and ones that stopped on an error, by oid.
+func (s *Session) RoutineStates() []RoutineState {
+	s.routineKeepersMu.Lock()
+	defer s.routineKeepersMu.Unlock()
+	states := make([]RoutineState, 0, len(s.routineKeepers)+len(s.routineErrors))
+	for oid := range s.routineKeepers {
+		states = append(states, RoutineState{OID: oid, Running: true})
+	}
+	for oid, msg := range s.routineErrors {
+		if _, running := s.routineKeepers[oid]; !running {
+			states = append(states, RoutineState{OID: oid, Error: msg})
 		}
 	}
+	sort.Slice(states, func(i, j int) bool { return states[i].OID < states[j].OID })
+	return states
+}
+
+// failRoutine records why a routine gave up, unless a newer one replaced it.
+func (s *Session) failRoutine(oid int, state *stepperRoutineKeeper, err error) {
+	s.routineKeepersMu.Lock()
+	defer s.routineKeepersMu.Unlock()
+	if s.routineKeepers[oid] != state {
+		return
+	}
+	if s.routineErrors == nil {
+		s.routineErrors = make(map[int]string)
+	}
+	s.routineErrors[oid] = err.Error()
+}
+
+func routineStepInterval(clockFreq, speedHz float64) int {
+	interval := int(clockFreq / clampJogSpeed(speedHz))
+	if interval < 1 {
+		interval = 1
+	}
+	return interval
+}
+
+// patternTicks is how many MCU clock ticks the segments take to step out, matching
+// the intervals routineSegmentCommands sends.
+func patternTicks(segments []StepperRoutineSegment, clockFreq float64) uint64 {
+	var ticks uint64
+	for _, seg := range segments {
+		if seg.Steps > 0 {
+			ticks += uint64(seg.Steps) * uint64(routineStepInterval(clockFreq, seg.SpeedHz))
+		}
+	}
+	return ticks
+}
+
+// clockAhead is how far b is past a on the MCU's 32-bit clock, negative if b is
+// earlier. Valid while they are within half a wrap (~134 s at 16 MHz).
+func clockAhead(a, b uint64) int64 {
+	return int64(int32(uint32(b) - uint32(a)))
+}
+
+// routineClockNow is the MCU clock, re-read from the MCU when the host estimate is
+// older than routineClockResync so crystal drift can't build up over a long run.
+func (s *Session) routineClockNow() uint64 {
+	s.mu.RLock()
+	stale := time.Since(s.ClockBaseAt) > routineClockResync
+	s.mu.RUnlock()
+	if stale {
+		if clock, err := s.motionClock(0); err == nil {
+			return clock
+		}
+	}
+	return s.EstimatedClock() & 0xffffffff
 }
 
 func routineSegmentCommands(oid int, segments []StepperRoutineSegment, clockFreq float64) []string {
 	cmds := make([]string, 0, len(segments)*2)
 	for _, seg := range segments {
-		speedHz := clampJogSpeed(seg.SpeedHz)
 		dir := 0
 		if seg.Forward {
 			dir = 1
 		}
-		interval := int(clockFreq / speedHz)
-		if interval < 1 {
-			interval = 1
-		}
+		interval := routineStepInterval(clockFreq, seg.SpeedHz)
 		cmds = append(cmds, fmt.Sprintf("set_next_step_dir oid=%d dir=%d", oid, dir))
 		cmds = append(cmds, queueStepCommands(oid, interval, seg.Steps)...)
 	}
 	return cmds
 }
 
-func (s *Session) sendStepperRoutinePattern(oid int, segments []StepperRoutineSegment, fastClock bool) (uint64, error) {
+func (s *Session) sendStepperRoutinePattern(oid int, segments []StepperRoutineSegment) (uint64, error) {
 	stopTrsyncOID, err := s.stopTrsyncForStepper(oid)
 	if err != nil {
 		return 0, err
 	}
 
-	var startClock uint64
-	if fastClock {
-		startClock = s.scheduleClock(routineScheduleMarginSec)
-	} else {
-		startClock, err = s.motionClock(routineScheduleMarginSec)
-		if err != nil {
-			return 0, err
-		}
+	// A live clock read: queueEnd is counted from this, so it has to be accurate.
+	startClock, err := s.motionClock(routineScheduleMarginSec)
+	if err != nil {
+		return 0, err
 	}
 
 	cmds := make([]string, 0, 10+len(segments)*3)
@@ -276,7 +357,8 @@ func (s *Session) sendStepperRoutinePattern(oid int, segments []StepperRoutineSe
 	return startClock, nil
 }
 
-func (s *Session) stepperRoutinePatternMove(oid int, segments []StepperRoutineSegment, fastClock bool) error {
+// stepperRoutinePatternMove starts a fresh batch and returns the MCU clock it starts at.
+func (s *Session) stepperRoutinePatternMove(oid int, segments []StepperRoutineSegment) (uint64, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt > 0 {
 			slog.Info("retrying stepper routine pattern",
@@ -285,13 +367,18 @@ func (s *Session) stepperRoutinePatternMove(oid int, segments []StepperRoutineSe
 				"attempt", attempt+1,
 			)
 			if err := s.recoverMCUShutdown(); err != nil {
-				return err
+				return 0, err
 			}
 		}
 
-		startClock, err := s.sendStepperRoutinePattern(oid, segments, fastClock)
+		startClock, err := s.sendStepperRoutinePattern(oid, segments)
 		if err != nil {
-			return err
+			// Retry once if the MCU shut down (e.g. a move scheduled in the past);
+			// anything else is a real failure.
+			if shutdown, qerr := s.mcuIsShutdown(); attempt == 0 && qerr == nil && shutdown {
+				continue
+			}
+			return 0, err
 		}
 
 		slog.Info("stepper routine pattern scheduled",
@@ -300,11 +387,10 @@ func (s *Session) stepperRoutinePatternMove(oid int, segments []StepperRoutineSe
 			"segments", len(segments),
 			"queue_ops", patternQueueStepCount(segments),
 			"start_clock", startClock,
-			"fast_clock", fastClock,
 		)
-		return nil
+		return startClock, nil
 	}
-	return fmt.Errorf("stepper routine pattern failed after retry")
+	return 0, fmt.Errorf("stepper routine pattern failed after retry")
 }
 
 // stepperRoutineAppend queues more pattern steps without reset_step_clock.
@@ -317,14 +403,49 @@ func (s *Session) stepperRoutineAppend(oid int, segments []StepperRoutineSegment
 	return s.Conn.SendCommands(cmds)
 }
 
+// stopped reports whether the routine was cancelled.
+func (state *stepperRoutineKeeper) stopped() bool {
+	select {
+	case <-state.stop:
+		return true
+	default:
+		return false
+	}
+}
+
+// errRoutineStopped ends the loop quietly when a stop, jog or new routine took over.
+var errRoutineStopped = fmt.Errorf("routine stopped")
+
+// sendIfActive runs fn under the stepper lock unless the routine was cancelled. Whoever
+// cancels a routine (StepperStop, StepperJog, StartStepperRoutine) holds that lock while
+// closing stop, so once the loop sees stop closed it must not touch the stepper: the new
+// owner's commands are already queued.
+func (s *Session) sendIfActive(oid int, state *stepperRoutineKeeper, fn func() error) error {
+	s.stepperLock(oid).Lock()
+	defer s.stepperLock(oid).Unlock()
+	if state.stopped() {
+		return errRoutineStopped
+	}
+	return s.withRoutineSerial(fn)
+}
+
 func (s *Session) stepperRoutineLoop(oid int, state *stepperRoutineKeeper) {
 	defer func() {
 		s.routineKeepersMu.Lock()
-		delete(s.routineKeepers, oid)
+		// A newer routine on this oid may have replaced us; leave its entry alone.
+		if s.routineKeepers[oid] == state {
+			delete(s.routineKeepers, oid)
+		}
 		s.routineKeepersMu.Unlock()
 	}()
 
-	time.Sleep(routineStartStagger(oid))
+	timer := time.NewTimer(routineStartStagger(oid))
+	select {
+	case <-state.stop:
+		timer.Stop()
+		return
+	case <-timer.C:
+	}
 
 	moveDur := patternMoveDuration(state.segments)
 	activeRoutines := s.activeRoutineCount()
@@ -333,79 +454,107 @@ func (s *Session) stepperRoutineLoop(oid int, state *stepperRoutineKeeper) {
 	refillReps := patternRefillRepetitions(state.segments, opsLimit)
 	refillWait := routineRefillWait(state.segments, activeRoutines)
 
-	scheduleBatch := func(reps int) time.Time {
-		return time.Now().Add(time.Duration(reps) * moveDur)
+	// queueEnd is the MCU clock at which the last queued step fires. Every batch and
+	// top-up is whole pattern repetitions, so when the queue empties the stepper is
+	// back at a pattern boundary and a fresh batch carries on without losing steps.
+	var queueEnd uint64
+	startBatch := func() error {
+		batchSegments := repeatPatternSegments(state.segments, batchReps)
+		return s.sendIfActive(oid, state, func() error {
+			startClock, err := s.stepperRoutinePatternMove(oid, batchSegments)
+			if err != nil {
+				return err
+			}
+			queueEnd = (startClock + patternTicks(batchSegments, s.ClockFreq)) & 0xffffffff
+			return nil
+		})
 	}
-
-	batchSegments := repeatPatternSegments(state.segments, batchReps)
-	err := s.withRoutineSerial(func() error {
-		return s.stepperRoutinePatternMove(oid, batchSegments, false)
-	})
-	if err != nil {
-		slog.Warn("stepper routine pattern failed",
-			"port", s.Port,
-			"oid", oid,
-			"error", err,
-		)
-		return
-	}
-	queuedUntil := scheduleBatch(batchReps)
-
-	for {
-		timer := time.NewTimer(refillWait)
+	// sleep waits d, returning false if the routine was cancelled meanwhile.
+	sleep := func(d time.Duration) bool {
+		timer := time.NewTimer(d)
+		defer timer.Stop()
 		select {
 		case <-state.stop:
-			timer.Stop()
-			s.stepperLock(oid).Lock()
-			_ = s.stepperStopUnlocked(oid)
-			s.stepperLock(oid).Unlock()
-			return
+			return false
 		case <-timer.C:
+			return true
+		}
+	}
+
+	if err := startBatch(); err != nil {
+		if err != errRoutineStopped {
+			slog.Warn("stepper routine pattern failed",
+				"port", s.Port,
+				"oid", oid,
+				"error", err,
+			)
+			s.failRoutine(oid, state, err)
+		}
+		return
+	}
+
+	failures := 0
+	for {
+		// No stop command on cancel: the canceller already stopped or replaced the motion.
+		if !sleep(refillWait) {
+			return
 		}
 
-		opsLimit = routineQueueOpsLimitFor(s.activeRoutineCount())
-		activeRoutines := s.activeRoutineCount()
+		activeRoutines = s.activeRoutineCount()
+		opsLimit = routineQueueOpsLimitFor(activeRoutines)
 		batchReps = patternBatchRepetitions(state.segments, opsLimit)
 		refillReps = patternRefillRepetitions(state.segments, opsLimit)
 		refillWait = routineRefillWait(state.segments, activeRoutines)
-
-		remaining := time.Until(queuedUntil)
-		lowWater := moveDur / 2
 		topUpBelow := moveDur * 2
 
-		var refillErr error
-		refillErr = s.withRoutineSerial(func() error {
-			if remaining <= lowWater {
-				batchSegments = repeatPatternSegments(state.segments, batchReps)
-				if err := s.stepperRoutinePatternMove(oid, batchSegments, true); err != nil {
-					return err
-				}
-				queuedUntil = scheduleBatch(batchReps)
-				slog.Info("stepper routine batch restarted",
-					"port", s.Port,
-					"oid", oid,
-					"reps", batchReps,
-					"queue_ops", patternQueueStepCount(batchSegments),
-				)
-				return nil
-			}
-			if remaining <= topUpBelow {
+		var drainFor time.Duration
+		restart := false
+		err := s.sendIfActive(oid, state, func() error {
+			left := time.Duration(float64(clockAhead(s.routineClockNow(), queueEnd)) / s.ClockFreq * float64(time.Second))
+			switch {
+			case left <= time.Duration(routineDrainMarginSec*float64(time.Second)):
+				// Too late to append safely. Let the queued steps finish rather than
+				// cutting them off, then start over from the pattern's first segment.
+				restart, drainFor = true, max(left, 0)
+			case left <= topUpBelow:
 				refillSegments := repeatPatternSegments(state.segments, refillReps)
 				if err := s.stepperRoutineAppend(oid, refillSegments, opsLimit); err != nil {
 					return err
 				}
-				queuedUntil = queuedUntil.Add(time.Duration(refillReps) * moveDur)
+				queueEnd = (queueEnd + patternTicks(refillSegments, s.ClockFreq)) & 0xffffffff
 			}
 			return nil
 		})
-
-		if refillErr != nil {
-			slog.Warn("stepper routine refill failed, will retry",
+		if err == nil && restart {
+			slog.Info("stepper routine queue ran low, restarting after it drains",
 				"port", s.Port,
 				"oid", oid,
-				"error", refillErr,
+				"drain_ms", drainFor.Milliseconds(),
 			)
+			if !sleep(drainFor + 5*time.Millisecond) {
+				return
+			}
+			err = startBatch()
 		}
+
+		if err == errRoutineStopped {
+			return
+		}
+		if err != nil {
+			failures++
+			slog.Warn("stepper routine refill failed",
+				"port", s.Port,
+				"oid", oid,
+				"failures", failures,
+				"error", err,
+			)
+			if failures >= routineMaxRefillFailures {
+				s.failRoutine(oid, state, err)
+				return
+			}
+			continue
+		}
+		failures = 0
 	}
 }
 

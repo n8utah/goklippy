@@ -155,7 +155,10 @@ function wsBaseUrl() {
 }
 
 /** Open a WebSocket for live MCU session telemetry. */
-export function openMCUSessionWS(sessionId, { onOpen, onSession, onReadings, onError, onClose } = {}) {
+export function openMCUSessionWS(
+  sessionId,
+  { onOpen, onSession, onReadings, onRoutines, onError, onClose } = {},
+) {
   const url = `${wsBaseUrl()}/api/v1/mcu/sessions/${sessionId}/ws`;
   logMCU('websocket opening', { sessionId, url });
   const ws = new WebSocket(url);
@@ -171,6 +174,9 @@ export function openMCUSessionWS(sessionId, { onOpen, onSession, onReadings, onE
       }
       if (msg.type === 'readings') {
         onReadings?.(msg.readings);
+      }
+      if (msg.type === 'routines') {
+        onRoutines?.(msg.routines || []);
       }
     } catch {
       // ignore malformed frames

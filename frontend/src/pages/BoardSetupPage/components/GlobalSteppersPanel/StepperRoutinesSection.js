@@ -23,6 +23,7 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
   const {
     stepperObjects,
     stepperRoutineOids,
+    stepperRoutineErrors,
     startStepperRoutineForMembers,
     stopSteppers,
   } = useMCUSession();
@@ -301,6 +302,8 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
           const available = oids.length;
           const missing = routine.members.length - available;
           const running = routineHasRunning(routine);
+          // Messages from members whose routine stopped on its own (backend-reported).
+          const failures = [...new Set(oids.map((oid) => stepperRoutineErrors[oid]).filter(Boolean))];
           return (
             <li key={routine.id} className={styles.groupCard}>
               <div className={styles.groupCardHead}>
@@ -322,6 +325,11 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
               {missing > 0 && connected && (
                 <p className={styles.groupWarn}>{missing} member(s) not in current session</p>
               )}
+              {failures.map((msg) => (
+                <p key={msg} className={styles.groupWarn}>
+                  Stopped on its own: {msg}
+                </p>
+              ))}
               <div className={styles.groupActions}>
                 <button
                   type="button"

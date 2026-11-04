@@ -38,6 +38,8 @@ export function MCUSessionProvider({ children }) {
   const [runningSteppers, setRunningSteppers] = useState({});
   const [stepperJogState, setStepperJogState] = useState({});
   const [stepperRoutineOids, setStepperRoutineOids] = useState({});
+  // Routines that stopped on their own, by oid: { [oid]: error message }.
+  const [stepperRoutineErrors, setStepperRoutineErrors] = useState({});
   const [servoAngles, setServoAngles] = useState({});
   // PCA9685 board checks by board name: { state, message, ... } or { state: 'checking' }.
   const [pcaStatus, setPcaStatus] = useState({});
@@ -82,6 +84,20 @@ export function MCUSessionProvider({ children }) {
         },
         onReadings: (payload) => {
           setReadings(payload || {});
+        },
+        onRoutines: (routines) => {
+          // The backend is the source of truth for which routines are running: one
+          // can stop on its own when the MCU refuses its steps.
+          setStepperRoutineOids((prev) => {
+            const next = {};
+            for (const r of routines) {
+              if (r.running) next[r.oid] = prev[r.oid] || true;
+            }
+            return next;
+          });
+          setStepperRoutineErrors(
+            Object.fromEntries(routines.filter((r) => r.error).map((r) => [r.oid, r.error])),
+          );
         },
         onError: () => {
           setWsConnected(false);
@@ -163,6 +179,7 @@ export function MCUSessionProvider({ children }) {
       setRunningSteppers({});
       setStepperJogState({});
       setStepperRoutineOids({});
+      setStepperRoutineErrors({});
       setServoAngles({});
       setPcaStatus({});
       setError('');
@@ -277,6 +294,7 @@ export function MCUSessionProvider({ children }) {
       setRunningSteppers({});
       setStepperJogState({});
       setStepperRoutineOids({});
+      setStepperRoutineErrors({});
       setServoAngles({});
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
       sessionIdRef.current = null;
@@ -294,6 +312,7 @@ export function MCUSessionProvider({ children }) {
     setRunningSteppers({});
     setStepperJogState({});
     setStepperRoutineOids({});
+    setStepperRoutineErrors({});
     setServoAngles({});
     setPcaStatus({});
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
@@ -455,6 +474,18 @@ export function MCUSessionProvider({ children }) {
     });
   }, []);
 
+  // A stop, jog or new run on a stepper dismisses its routine's last failure.
+  const clearRoutineErrors = useCallback((oids) => {
+    setStepperRoutineErrors((prev) => {
+      if (!oids.some((oid) => prev[oid])) return prev;
+      const next = { ...prev };
+      for (const oid of oids) {
+        delete next[oid];
+      }
+      return next;
+    });
+  }, []);
+
   const jogStepper = useCallback(
     async (oid, { forward, speedHz, steps }) => {
       if (!session?.session_id) return;
@@ -464,6 +495,7 @@ export function MCUSessionProvider({ children }) {
         speed_hz: speedHz,
         steps: stepCount,
       });
+      clearRoutineErrors([oid]);
       if (stepCount <= 0) {
         setStepperJogState((prev) => ({ ...prev, [oid]: { forward, speedHz } }));
         setStepperRunning(oid, true);
@@ -484,13 +516,14 @@ export function MCUSessionProvider({ children }) {
       }
       return result;
     },
-    [session, setStepperRunning],
+    [session, setStepperRunning, clearRoutineErrors],
   );
 
   const stopStepper = useCallback(
     async (oid) => {
       if (!session?.session_id) return;
       const result = await stopMCUStepper(session.session_id, oid);
+      clearRoutineErrors([oid]);
       setRunningSteppers((prev) => {
         if (!prev[oid]) return prev;
         const next = { ...prev };
@@ -511,7 +544,7 @@ export function MCUSessionProvider({ children }) {
       });
       return result;
     },
-    [session],
+    [session, clearRoutineErrors],
   );
 
   const stopAllSteppers = useCallback(async () => {
@@ -521,12 +554,14 @@ export function MCUSessionProvider({ children }) {
     setRunningSteppers({});
     setStepperJogState({});
     setStepperRoutineOids({});
+    setStepperRoutineErrors({});
   }, [session, stepperObjects]);
 
   const stopSteppers = useCallback(
     async (oids) => {
       if (!session?.session_id || oids.length === 0) return;
       await Promise.all(oids.map((oid) => stopMCUStepper(session.session_id, oid)));
+      clearRoutineErrors(oids);
       setRunningSteppers((prev) => {
         const next = { ...prev };
         for (const oid of oids) {
@@ -549,13 +584,14 @@ export function MCUSessionProvider({ children }) {
         return next;
       });
     },
-    [session],
+    [session, clearRoutineErrors],
   );
 
   const startStepperRoutine = useCallback(
     async (oid, segments, routineName = '') => {
       if (!session?.session_id) return;
       await startMCUStepperRoutine(session.session_id, oid, segmentsForAPI(segments));
+      clearRoutineErrors([oid]);
       setStepperRoutineOids((prev) => ({ ...prev, [oid]: routineName || true }));
       setRunningSteppers((prev) => {
         if (!prev[oid]) return prev;
@@ -570,7 +606,7 @@ export function MCUSessionProvider({ children }) {
         return next;
       });
     },
-    [session],
+    [session, clearRoutineErrors],
   );
 
   const startStepperRoutineForMembers = useCallback(
@@ -739,6 +775,7 @@ export function MCUSessionProvider({ children }) {
       stepperObjects,
       stepperJogState,
       stepperRoutineOids,
+      stepperRoutineErrors,
       isStepperRunning,
       setStepperRunning,
       startStepperRoutine,
@@ -782,6 +819,7 @@ export function MCUSessionProvider({ children }) {
       stepperObjects,
       stepperJogState,
       stepperRoutineOids,
+      stepperRoutineErrors,
       isStepperRunning,
       setStepperRunning,
       startStepperRoutine,
