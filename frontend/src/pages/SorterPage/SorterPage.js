@@ -111,9 +111,6 @@ const SorterPage = ({ onGoBoard }) => {
           </div>
           )}
           <div className={styles.buttonRow}>
-            <button type="button" className={appStyles.buttonSecondary} disabled={channels.c4.oid == null || channels.c4.indexing} onClick={() => logic.runIndex(1)}>
-              Index once
-            </button>
             {channels.c4.indexing ? (
               <button type="button" className={appStyles.button} onClick={() => logic.stopChannel(channels.c4)}>
                 Stop indexing
@@ -141,6 +138,7 @@ const SorterPage = ({ onGoBoard }) => {
             onStart={() => logic.startChannel(channels[id])}
             onStop={() => logic.stopChannel(channels[id])}
             onZero={() => logic.zeroChannel(channels[id])}
+            onForwardSlot={() => logic.runIndex(1, true)}
             routines={logic.routines}
             routineId={logic.routineIdFor(id)}
             onChooseRoutine={(routineId) => logic.chooseRoutine(id, routineId)}

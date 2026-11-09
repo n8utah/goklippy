@@ -328,11 +328,11 @@ export function useSorterPageLogic() {
       }
     });
 
-  const runIndex = (count) =>
+  const runIndex = (count, forward = channels.c4.config.forward) =>
     guard(() => {
       const c4 = channels.c4;
       return startStepperIndexing(c4.oid, {
-        forward: c4.config.forward,
+        forward,
         speedHz: c4.targetHz,
         stepsPerIndex: (settings.indexDegrees / 360) * c4.stepsPerRev,
         dwellMs: settings.dwellMs,

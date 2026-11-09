@@ -37,6 +37,7 @@ const ChannelCard = ({
   onStart,
   onStop,
   onZero,
+  onForwardSlot,
 }) => {
   const isCarousel = channel.id === 'c4';
   const missing = channel.oid == null;
@@ -117,6 +118,16 @@ const ChannelCard = ({
       )}
 
       <div className={styles.buttonRow}>
+        {isCarousel && (
+          <button
+            type="button"
+            className={appStyles.button}
+            disabled={missing || channel.indexing || channel.direction !== 0}
+            onClick={onForwardSlot}
+          >
+            Forward 1 slot ({indexDegrees}°)
+          </button>
+        )}
         {!isCarousel &&
           (channel.running ? (
             <button type="button" className={appStyles.button} onClick={onStop}>
