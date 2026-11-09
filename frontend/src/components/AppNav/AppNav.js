@@ -5,6 +5,7 @@ const AppNav = ({ page, onChange }) => {
     { id: 'devices', label: 'Devices' },
     { id: 'board', label: 'Board Setup' },
     { id: 'editor', label: 'Overlay Editor' },
+    { id: 'sorter', label: 'LEGO Sorter' },
     { id: 'home', label: 'Auth / Dev' },
   ];
 

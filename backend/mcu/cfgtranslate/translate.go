@@ -139,8 +139,9 @@ func (b *Builder) addStepper(name string, sec klipperconfig.Section) error {
 	)
 	b.lines = append(b.lines, line)
 	b.addObject(name, oid, KindStepper, map[string]string{
-		"step_pin": stepPin,
-		"dir_pin":  dirPin,
+		"step_pin":   stepPin,
+		"dir_pin":    dirPin,
+		"microsteps": sec.Options["microsteps"],
 	})
 
 	if enablePin := sec.Options["enable_pin"]; enablePin != "" {

@@ -163,7 +163,7 @@ const DevicesPage = ({ onGoBoard }) => {
                   </td>
 
                   <td className={styles.notesCell}>
-                    {isConnected ? 'Active session' : port.description || port.error || '—'}
+                    {isConnected ? 'Active session' : port.error || port.description || '—'}
                   </td>
 
                 </tr>

@@ -45,8 +45,10 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	mcuGroup.POST("/sessions/:id/digital-out", routes.SetMCUDigitalOut)
 	mcuGroup.POST("/sessions/:id/servo", routes.SetMCUServo)
 	mcuGroup.POST("/sessions/:id/pca9685/check", routes.CheckMCUPCA9685)
+	mcuGroup.POST("/sessions/:id/reset", routes.ResetMCU)
 	mcuGroup.POST("/sessions/:id/stepper/jog", routes.JogMCUStepper)
 	mcuGroup.POST("/sessions/:id/stepper/routine", routes.StartMCUStepperRoutine)
+	mcuGroup.POST("/sessions/:id/stepper/index", routes.IndexMCUStepper)
 	mcuGroup.POST("/sessions/:id/stepper/stop", routes.StopMCUStepper)
 
 	registerFrontendHosting(r, cfg.Frontend)

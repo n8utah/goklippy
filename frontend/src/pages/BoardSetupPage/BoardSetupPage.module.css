@@ -90,3 +90,8 @@
   padding: 8px 10px;
   min-width: 120px;
 }
+
+.liveActions {
+  display: flex;
+  gap: 8px;
+}

@@ -34,7 +34,29 @@ func (c *Conn) MCUClock() (uint32, error) {
 func (c *Conn) SendCommands(commands []string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.sendCommandsLocked(commands)
+}
 
+// SendAtClock reads the MCU clock and sends the commands built from it without letting
+// any other traffic in between, so a move's start time can't pass while it waits for
+// the serial port.
+func (c *Conn) SendAtClock(marginTicks uint32, build func(startClock uint32) []string) (uint32, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	params, err := c.queryLocked("get_clock", "clock", time.Now().Add(c.timeout))
+	if err != nil {
+		return 0, err
+	}
+	clock, ok := params["clock"].(int64)
+	if !ok {
+		return 0, fmt.Errorf("get_clock: unexpected response")
+	}
+	startClock := uint32(clock) + marginTicks
+	return startClock, c.sendCommandsLocked(build(startClock))
+}
+
+func (c *Conn) sendCommandsLocked(commands []string) error {
 	for _, command := range commands {
 		if c.pinResolver != nil {
 			command = c.pinResolver.UpdateCommand(command)
@@ -43,12 +65,25 @@ func (c *Conn) SendCommands(commands []string) error {
 		if len(cmd) == 0 {
 			return fmt.Errorf("failed to encode command %q", command)
 		}
-		block := c.parser.Encode_msgblock(c.nextSeq(), cmd)
-		if err := c.writeBlockLocked(block); err != nil {
+		if err := c.sendBlockLocked(cmd); err != nil {
 			return err
 		}
 	}
-	return c.drainLocked(50 * time.Millisecond)
+	return nil
+}
+
+// sendBlockLocked writes one command once it fits in the MCU's receive buffer.
+func (c *Conn) sendBlockLocked(cmd []int) error {
+	if err := c.waitForWindow(msgproto.MESSAGE_MIN + len(cmd)); err != nil {
+		return err
+	}
+	seq := c.nextSeq()
+	block := c.parser.Encode_msgblock(seq, cmd)
+	if err := c.writeBlockLocked(block); err != nil {
+		return err
+	}
+	c.inflight = append(c.inflight, sentBlock{seq: seq, size: len(block)})
+	return nil
 }
 
 // SendCommand sends a host→MCU command without waiting for a specific response.
@@ -269,6 +304,8 @@ func (c *Conn) resetForReconfigure() error {
 	c.seq = 0
 	c.sawIncomingBytes = false
 	c.skipConfigSend = false
+	c.shutdownReason = ""
+	c.inflight = c.inflight[:0]
 	c.mu.Unlock()
 
 	return c.Identify()
@@ -282,11 +319,13 @@ func (c *Conn) ClearShutdown() error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	block := c.parser.Encode_msgblock(c.nextSeq(), cmd)
-	if err := c.writeBlockLocked(block); err != nil {
+	if err := c.sendBlockLocked(cmd); err != nil {
 		return err
 	}
-	return c.drainLocked(200 * time.Millisecond)
+	// Reports already in flight are consumed first so they can't re-mark the shutdown.
+	err := c.drainLocked(200 * time.Millisecond)
+	c.shutdownReason = ""
+	return err
 }
 
 func configureWait(opTimeout time.Duration) time.Duration {

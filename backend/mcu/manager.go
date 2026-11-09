@@ -119,6 +119,7 @@ func (m *Manager) Connect(port string, baud int, timeout time.Duration, build cf
 	session := NewSession(id, port, usedBaud, conn, build.Objects)
 	session.stopTrsyncOIDs = stopTrsyncOIDs
 	session.InitCommands = build.InitCommands
+	session.ConfigLines = lines
 	session.ClockBase = conn.clockBase
 	session.ClockBaseAt = conn.clockBaseAt
 	session.InitPCA9685Boards()

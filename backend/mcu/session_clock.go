@@ -12,6 +12,23 @@ func (s *Session) scheduleClock(marginSec float64) uint64 {
 	return (s.EstimatedClock() + uint64(s.ClockFreq*marginSec)) & 0xffffffff
 }
 
+// sendAtMotionClock sends commands built around a start time marginSec from now, and
+// returns that start time. The clock read and the send are one step on the wire.
+func (s *Session) sendAtMotionClock(marginSec float64, build func(startClock uint64) []string) (uint64, error) {
+	margin := uint32(s.ClockFreq * marginSec)
+	startClock, err := s.Conn.SendAtClock(margin, func(start uint32) []string {
+		return build(uint64(start))
+	})
+	if err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	s.ClockBase = uint64(startClock - margin)
+	s.ClockBaseAt = time.Now()
+	s.mu.Unlock()
+	return uint64(startClock), nil
+}
+
 // motionClock returns a future MCU clock tick for scheduling moves. It prefers
 // a live get_clock query (accurate for steppers) and falls back to the host
 // estimate when the serial port is busy.

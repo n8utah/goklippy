@@ -16,6 +16,27 @@ import (
 
 const defaultIdentifyChunk = 40
 
+// serialReadTimeout bounds how long a read holds the connection lock when the MCU has
+// nothing to say. Motion commands wait on that lock, so it has to stay short.
+const serialReadTimeout = 5 * time.Millisecond
+
+// sentBlock is a block the MCU has not acknowledged yet.
+type sentBlock struct {
+	seq  int
+	size int
+}
+
+const (
+	// maxInflightBytes stays under the MCU's 192-byte receive buffer. Writing past it
+	// overflows the buffer, and the MCU then discards everything until resynced.
+	maxInflightBytes = 150
+	// maxInflightBlocks keeps sequence numbers (4 bits) unambiguous.
+	maxInflightBlocks = 12
+	// ackWait is how long to wait for room in the window. The MCU drops replies when
+	// its transmit buffer is full, so a missing ack doesn't mean the block was lost.
+	ackWait = 100 * time.Millisecond
+)
+
 // Conn is a Klipper MCU serial connection with message framing.
 type Conn struct {
 	mu               sync.Mutex
@@ -29,6 +50,9 @@ type Conn struct {
 	identifyMaxWait  time.Duration // when >0, caps identify wait (baud scan)
 	skipConfigSend   bool          // set when MCU already has matching config CRC
 	sawIncomingBytes bool
+	mcuExpectedSeq   int // next sequence the MCU says it wants, from its latest frame
+	shutdownReason   string // set when the MCU reports a shutdown, until it is cleared
+	inflight         []sentBlock // blocks written but not yet acknowledged, oldest first
 	clockBase        uint64
 	clockBaseAt      time.Time
 }
@@ -82,7 +106,7 @@ func openConn(portName string, baud int, timeout time.Duration, hardReset bool) 
 		return nil, friendlyOpenError(portName, err)
 	}
 
-	if err := port.SetReadTimeout(100 * time.Millisecond); err != nil {
+	if err := port.SetReadTimeout(serialReadTimeout); err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("set read timeout: %w", err)
 	}
@@ -150,6 +174,35 @@ func friendlyOpenError(portName string, err error) error {
 		)
 	}
 	return fmt.Errorf("open serial port %s: %w", portName, err)
+}
+
+// Reopen closes and reopens the port at baud, which resets Arduino-class boards, and
+// clears all protocol state. Call Identify or ConfigureWithInit afterwards.
+func (c *Conn) Reopen(baud int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.port == nil {
+		return fmt.Errorf("serial port closed")
+	}
+	if err := c.port.Close(); err != nil {
+		slog.Warn("closing serial port for reset", "port", c.logPort, "error", err)
+	}
+	c.port = nil
+
+	fresh, err := openConnWithRetry(c.logPort, baud, c.timeout, false)
+	if err != nil {
+		return err
+	}
+	c.port = fresh.port
+	c.parser = fresh.parser
+	c.pinResolver = nil
+	c.readBuf = nil
+	c.seq = 0
+	c.inflight = nil
+	c.sawIncomingBytes = false
+	c.skipConfigSend = false
+	c.shutdownReason = ""
+	return nil
 }
 
 // Close closes the serial port.
@@ -331,18 +384,11 @@ func (c *Conn) sendWithResponse(command, responseName string) (map[string]interf
 func (c *Conn) sendWithResponseUntil(command, responseName string, deadline time.Time) (map[string]interface{}, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.queryLocked(command, responseName, deadline)
+}
 
-	if c.pinResolver != nil {
-		command = c.pinResolver.UpdateCommand(command)
-	}
-
-	cmd := c.parser.Create_command(command)
-	if len(cmd) == 0 {
-		return nil, fmt.Errorf("failed to encode command %q", command)
-	}
-
-	block := c.parser.Encode_msgblock(c.nextSeq(), cmd)
-	if err := c.writeBlockLocked(block); err != nil {
+func (c *Conn) queryLocked(command, responseName string, deadline time.Time) (map[string]interface{}, error) {
+	if err := c.sendCommandsLocked([]string{command}); err != nil {
 		return nil, err
 	}
 
@@ -363,6 +409,41 @@ func (c *Conn) sendWithResponseUntil(command, responseName string, deadline time
 	return nil, fmt.Errorf("timeout waiting for %q", responseName)
 }
 
+// ackThrough drops blocks the MCU has consumed; expected is the next one it wants.
+func (c *Conn) ackThrough(expected int) {
+	for i, b := range c.inflight {
+		if b.seq == expected {
+			c.inflight = c.inflight[i:]
+			return
+		}
+	}
+	c.inflight = c.inflight[:0]
+}
+
+func inflightBytes(blocks []sentBlock) int {
+	total := 0
+	for _, b := range blocks {
+		total += b.size
+	}
+	return total
+}
+
+// waitForWindow blocks until a block of size bytes fits in the MCU's receive buffer.
+func (c *Conn) waitForWindow(size int) error {
+	deadline := time.Now().Add(ackWait)
+	for len(c.inflight) >= maxInflightBlocks || (len(c.inflight) > 0 && inflightBytes(c.inflight)+size > maxInflightBytes) {
+		if time.Now().After(deadline) {
+			slog.Warn("mcu ack overdue, continuing", "port", c.logPort, "unacked_blocks", len(c.inflight))
+			c.inflight = c.inflight[:0]
+			return nil
+		}
+		if _, err := c.readMessageLocked(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *Conn) nextSeq() int {
 	seq := c.seq & msgproto.MESSAGE_SEQ_MASK
 	c.seq = (c.seq + 1) & msgproto.MESSAGE_SEQ_MASK
@@ -381,19 +462,22 @@ func (c *Conn) writeBlockLocked(block []int) error {
 	if n != len(buf) {
 		return fmt.Errorf("short write: %d/%d bytes", n, len(buf))
 	}
-	return c.port.Drain()
+	return nil
 }
 
 func (c *Conn) recentIncomingBytes() bool {
 	return c.sawIncomingBytes
 }
 
+// drainIdle ends a drain once the MCU has been quiet this long.
+const drainIdle = 8 * time.Millisecond
+
 // DrainInbound reads messages until idle for drainFor, invoking handler for each.
 func (c *Conn) DrainInbound(drainFor time.Duration, handler func(map[string]interface{})) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	idleDeadline := time.Now().Add(30 * time.Millisecond)
+	idleDeadline := time.Now().Add(drainIdle)
 	deadline := time.Now().Add(drainFor)
 	for time.Now().Before(deadline) {
 		params, err := c.readMessageLocked()
@@ -406,11 +490,42 @@ func (c *Conn) DrainInbound(drainFor time.Duration, handler func(map[string]inte
 			}
 			continue
 		}
-		idleDeadline = time.Now().Add(30 * time.Millisecond)
+		idleDeadline = time.Now().Add(drainIdle)
 		if handler != nil {
 			handler(params)
 		}
 	}
+}
+
+// logIfShutdown surfaces MCU shutdown reports, which would otherwise be discarded
+// by whichever call happened to be reading.
+func (c *Conn) logIfShutdown(params map[string]interface{}) {
+	name, _ := params["#name"].(string)
+	if name != "shutdown" && name != "is_shutdown" {
+		return
+	}
+	reason := fmt.Sprint(params["static_string_id"])
+	if c.shutdownReason != reason {
+		slog.Warn("mcu reported shutdown", "port", c.logPort, "reason", reason)
+	}
+	c.shutdownReason = reason
+}
+
+// ShutdownReason returns why the MCU shut down, or "" if it has not. It only reflects
+// frames already read, so use GetConfig when the answer has to be current.
+func (c *Conn) ShutdownReason() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.shutdownReason
+}
+
+// SeqState returns the next sequence the host will send and the one the MCU last
+// asked for. Once traffic settles they should match; if not, the MCU is discarding
+// everything the host sends.
+func (c *Conn) SeqState() (hostNext, mcuExpected int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.seq, c.mcuExpectedSeq
 }
 
 func (c *Conn) readMessageLocked() (map[string]interface{}, error) {
@@ -418,7 +533,10 @@ func (c *Conn) readMessageLocked() (map[string]interface{}, error) {
 		if msgLen := c.parser.Check_packet(c.readBuf); msgLen > 0 {
 			frame := c.readBuf[:msgLen]
 			c.readBuf = c.readBuf[msgLen:]
+			c.mcuExpectedSeq = frame[msgproto.MESSAGE_POS_SEQ] & msgproto.MESSAGE_SEQ_MASK
+			c.ackThrough(c.mcuExpectedSeq)
 			if params, ok := c.parser.ParseSafe(frame); ok {
+				c.logIfShutdown(params)
 				return params, nil
 			}
 			continue

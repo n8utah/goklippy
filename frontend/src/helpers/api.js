@@ -132,6 +132,10 @@ export function disconnectMCU(sessionId) {
   return postJSON('/api/v1/mcu/disconnect', { session_id: sessionId });
 }
 
+export function resetMCU(sessionId) {
+  return postJSON(`/api/v1/mcu/sessions/${sessionId}/reset`, {});
+}
+
 export function getMCUSession(sessionId) {
   return getJSON(`/api/v1/mcu/sessions/${sessionId}`);
 }
@@ -157,7 +161,7 @@ function wsBaseUrl() {
 /** Open a WebSocket for live MCU session telemetry. */
 export function openMCUSessionWS(
   sessionId,
-  { onOpen, onSession, onReadings, onRoutines, onError, onClose } = {},
+  { onOpen, onSession, onReadings, onRoutines, onMotion, onError, onClose } = {},
 ) {
   const url = `${wsBaseUrl()}/api/v1/mcu/sessions/${sessionId}/ws`;
   logMCU('websocket opening', { sessionId, url });
@@ -174,6 +178,9 @@ export function openMCUSessionWS(
       }
       if (msg.type === 'readings') {
         onReadings?.(msg.readings);
+      }
+      if (msg.type === 'motion') {
+        onMotion?.(msg.motion);
       }
       if (msg.type === 'routines') {
         onRoutines?.(msg.routines || []);
@@ -207,6 +214,10 @@ export function setMCUServo(sessionId, oid, angle) {
 
 export function checkMCUPCA9685(sessionId) {
   return postJSON(`/api/v1/mcu/sessions/${sessionId}/pca9685/check`, {});
+}
+
+export function indexMCUStepper(sessionId, oid, payload) {
+  return postJSON(`/api/v1/mcu/sessions/${sessionId}/stepper/index`, { oid, ...payload });
 }
 
 export function jogMCUStepper(sessionId, oid, payload) {

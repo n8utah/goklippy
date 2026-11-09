@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"goklippy/backend/mcu/cfgtranslate"
@@ -25,6 +26,14 @@ type Session struct {
 	ClockBaseAt   time.Time
 	stopTrsyncOIDs map[int]int // stepper OID -> dedicated stop trsync OID
 	InitCommands   []string
+	ConfigLines    []string // finalized config, resent after a board reset
+	recoverMu      sync.Mutex
+	resetting      atomic.Bool
+
+	motionMu   sync.Mutex
+	motionSubs map[chan MotionSnapshot]struct{}
+	motionStop chan struct{}
+	motionDone chan struct{}
 
 	telemMu       sync.Mutex
 	telemSubs     map[chan map[string]Reading]struct{}
@@ -39,6 +48,7 @@ type Session struct {
 	routineKeepers    map[int]*stepperRoutineKeeper
 	routineErrors     map[int]string // stepper OID -> why its routine stopped on its own
 	routineSerialMu   sync.Mutex // one COM port: serialize routine MCU traffic across oids
+	indexRemainders   map[int]float64 // stepper OID -> rounding carried between indexed moves
 
 	pcaMu    sync.Mutex
 	pcaReady map[int]bool // PCA9685 board oid -> registers set up
@@ -87,6 +97,7 @@ func NewSession(id, port string, baud int, conn *Conn, objects []cfgtranslate.Ob
 // Close shuts down the serial connection.
 func (s *Session) Close() error {
 	s.StopTelemetry()
+	s.stopMotion()
 	s.stopAllJogKeepers()
 	s.stopAllStepperRoutines()
 	s.mu.Lock()
@@ -251,17 +262,15 @@ func (s *Session) StepperJog(oid int, forward bool, speedHz float64, steps int) 
 	s.stepperLock(oid).Lock()
 	defer s.stepperLock(oid).Unlock()
 
+	if err := s.ensureMCUReady(); err != nil {
+		return err
+	}
 	s.stopStepperRoutineLocked(oid)
 
 	continuous := steps <= 0
-	if continuous && s.isStepperJogging(oid) {
-		if err := s.stepperJogMove(oid, forward, speedHz, 0, 0.08); err != nil {
-			return err
-		}
-		s.updateJogKeeper(oid, forward, speedHz)
-		return nil
-	}
-	if err := s.stepperJogMove(oid, forward, speedHz, steps, 0.25); err != nil {
+	if err := s.stepperJogMove(oid, forward, speedHz, steps); err != nil {
+		s.stopJogKeeper(oid)
+		s.setStepperJogging(oid, false)
 		return err
 	}
 	if continuous {
@@ -274,7 +283,7 @@ func (s *Session) StepperJog(oid int, forward bool, speedHz float64, steps int) 
 	return nil
 }
 
-func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps int, scheduleMarginSec float64) error {
+func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps int) error {
 	stopTrsyncOID, err := s.stopTrsyncForStepper(oid)
 	if err != nil {
 		return err
@@ -289,31 +298,25 @@ func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps i
 		interval = 1
 	}
 
-	if scheduleMarginSec <= 0 {
-		scheduleMarginSec = 0.25
-	}
-	startClock, err := s.motionClock(scheduleMarginSec)
-	if err != nil {
-		return err
-	}
-
-	cmds := make([]string, 0, 10)
-	cmds = append(cmds, s.stepperDriverEnableCommands(oid)...)
+	startClock, err := s.sendAtMotionClock(motionStartMarginSec, func(startClock uint64) []string {
+		cmds := make([]string, 0, 10)
+		cmds = append(cmds, s.stepperDriverEnableCommands(oid)...)
 	// Always stop any in-flight move before reset_step_clock — Klipper shuts down if
 	// reset_step_clock is sent while the stepper queue is active, and queue_step is
 	// silently dropped while SF_NEED_RESET is set without a prior reset.
-	cmds = append(cmds, fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
-	cmds = append(cmds,
-		fmt.Sprintf("trsync_start oid=%d report_clock=0 report_ticks=0 expire_reason=0", stopTrsyncOID),
-		fmt.Sprintf("stepper_stop_on_trigger oid=%d trsync_oid=%d", oid, stopTrsyncOID),
-		fmt.Sprintf("reset_step_clock oid=%d clock=%d", oid, startClock),
-		fmt.Sprintf("set_next_step_dir oid=%d dir=%d", oid, dir),
-	)
-	cmds = append(cmds, queueStepCommands(oid, interval, steps)...)
-	if err := s.Conn.SendCommands(cmds); err != nil {
+		cmds = append(cmds, fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
+		cmds = append(cmds,
+			fmt.Sprintf("trsync_start oid=%d report_clock=0 report_ticks=0 expire_reason=0", stopTrsyncOID),
+			fmt.Sprintf("stepper_stop_on_trigger oid=%d trsync_oid=%d", oid, stopTrsyncOID),
+			fmt.Sprintf("reset_step_clock oid=%d clock=%d", oid, startClock),
+			fmt.Sprintf("set_next_step_dir oid=%d dir=%d", oid, dir),
+		)
+		return append(cmds, queueStepCommands(oid, interval, steps)...)
+	})
+	if err != nil {
 		return err
 	}
-	if err := s.checkMCUShutdown("after stepper jog"); err != nil {
+	if err := s.failIfShutdown(); err != nil {
 		return err
 	}
 	slog.Info("stepper jog scheduled",

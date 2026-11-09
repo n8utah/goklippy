@@ -5,9 +5,11 @@ import {
   getBoardDiagram,
   getBoardProfile,
   getKlipperWorkspace,
+  getMCUPorts,
   listKlipperConfigFiles,
   loadKlipperConfig,
   saveKlipperConfig,
+  scanMCUPorts,
   updateKlipperRaw,
   updateKlipperSection,
 } from '../../helpers/api';
@@ -21,6 +23,17 @@ import { pca9685BoardsInConfig, pca9685Sections } from '../../helpers/pca9685Con
 import { useMCUSession } from '../../context/MCUSessionContext';
 
 const PROFILE_ID = 'ramps14';
+const LAST_PORT_STORAGE_KEY = 'goklippy_last_mcu_port';
+
+/** Keep `preferred` if it is a sensible choice; otherwise pick the likeliest board. */
+function pickPort(ports, preferred) {
+  const klipperPorts = ports.filter((p) => p.is_klipper);
+  const candidates = klipperPorts.length > 0 ? klipperPorts : ports;
+  if (candidates.some((p) => p.name === preferred)) {
+    return preferred;
+  }
+  return (candidates.find((p) => p.is_usb) || candidates[0])?.name ?? '';
+}
 
 export function useBoardSetupPageLogic() {
   const [tab, setTab] = useState('visual');
@@ -35,6 +48,12 @@ export function useBoardSetupPageLogic() {
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState('');
 
+  const [ports, setPorts] = useState([]);
+  const [selectedPort, setSelectedPort] = useState('');
+  const [scanningPorts, setScanningPorts] = useState(false);
+  const [scanMessage, setScanMessage] = useState('');
+  const [resettingBoard, setResettingBoard] = useState(false);
+
   const {
     session,
     connected,
@@ -44,6 +63,7 @@ export function useBoardSetupPageLogic() {
     error: sessionError,
     connect,
     disconnect,
+    resetBoard,
     objectsBySlot,
     readingForSlot,
     setDigitalOut,
@@ -67,6 +87,39 @@ export function useBoardSetupPageLogic() {
     }
     loadProfile();
   }, []);
+
+  const applyPorts = useCallback((nextPorts) => {
+    setPorts(nextPorts);
+    setSelectedPort((prev) => pickPort(nextPorts, prev || localStorage.getItem(LAST_PORT_STORAGE_KEY)));
+  }, []);
+
+  // Listing does not open the ports, so it is safe to run on load.
+  useEffect(() => {
+    if (connected) {
+      return;
+    }
+    getMCUPorts()
+      .then((data) => applyPorts(data.ports || []))
+      .catch((err) => setConfigError(err.message));
+  }, [connected, applyPorts]);
+
+  const scanPorts = async () => {
+    setScanningPorts(true);
+    setScanMessage('');
+    setConfigError('');
+    try {
+      const data = await scanMCUPorts();
+      const scanned = data.ports || [];
+      applyPorts(scanned);
+      if (!scanned.some((p) => p.is_klipper)) {
+        setScanMessage('No Klipper board responded. Check the USB cable and that nothing else is using the port.');
+      }
+    } catch (err) {
+      setConfigError(err.message);
+    } finally {
+      setScanningPorts(false);
+    }
+  };
 
   const syncWorkspaceState = useCallback(
     (ws) => {
@@ -304,8 +357,21 @@ export function useBoardSetupPageLogic() {
     }
     try {
       await connect(port, { useWorkspace: true, profileId: PROFILE_ID });
+      localStorage.setItem(LAST_PORT_STORAGE_KEY, port);
     } catch (err) {
       setConfigError(err.message);
+    }
+  };
+
+  const handleResetBoard = async () => {
+    setResettingBoard(true);
+    setConfigError('');
+    try {
+      await resetBoard();
+    } catch (err) {
+      setConfigError(err.message);
+    } finally {
+      setResettingBoard(false);
     }
   };
 
@@ -338,8 +404,16 @@ export function useBoardSetupPageLogic() {
     connectStatus,
     wsConnected,
     sessionError,
+    ports,
+    selectedPort,
+    setSelectedPort,
+    scanningPorts,
+    scanMessage,
+    scanPorts,
     handleConnect,
     disconnect,
+    resettingBoard,
+    handleResetBoard,
     objectsBySlot,
     readingForSlot,
     setDigitalOut,

@@ -8,6 +8,9 @@ import (
 const (
 	maxJogSpeedHz     = 50000.0
 	maxQueueStepCount = 65535
+	// motionStartMarginSec is how far ahead a move is scheduled. It only has to cover
+	// the serial trip now that the clock read and the send can't be separated.
+	motionStartMarginSec = 0.05
 )
 
 type stepperJogKeeper struct {
@@ -33,9 +36,6 @@ func jogKeeperWait(speedHz float64) time.Duration {
 	if waitSec < 0.25 {
 		waitSec = 0.25
 	}
-	if waitSec > 20 {
-		waitSec = 20
-	}
 	return time.Duration(waitSec * float64(time.Second))
 }
 
@@ -56,15 +56,6 @@ func (s *Session) startJogKeeper(oid int, forward bool, speedHz float64) {
 	s.jogMu.Unlock()
 
 	go s.jogKeeperLoop(oid, state)
-}
-
-func (s *Session) updateJogKeeper(oid int, forward bool, speedHz float64) {
-	s.jogMu.Lock()
-	defer s.jogMu.Unlock()
-	if state, ok := s.jogKeepers[oid]; ok {
-		state.forward = forward
-		state.speedHz = clampJogSpeed(speedHz)
-	}
 }
 
 func (s *Session) stopJogKeeper(oid int) {
@@ -100,23 +91,18 @@ func (s *Session) jogKeeperLoop(oid int, state *stepperJogKeeper) {
 		case <-timer.C:
 		}
 
-		if !s.isStepperJogging(oid) {
-			return
-		}
-
-		s.jogMu.Lock()
-		forward := state.forward
-		speedHz = state.speedHz
-		stop = state.stop
-		s.jogMu.Unlock()
-
+		// Under the stepper lock so a stop or new jog can't land between this check
+		// and the append.
+		s.stepperLock(oid).Lock()
 		select {
 		case <-stop:
+			s.stepperLock(oid).Unlock()
 			return
 		default:
 		}
-
-		if err := s.stepperJogAppend(oid, forward, speedHz); err != nil {
+		err := s.stepperJogAppend(oid, state.forward, speedHz)
+		s.stepperLock(oid).Unlock()
+		if err != nil {
 			s.setStepperJogging(oid, false)
 			s.stopJogKeeper(oid)
 			return

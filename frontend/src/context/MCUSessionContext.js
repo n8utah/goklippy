@@ -5,10 +5,12 @@ import {
   connectMCU,
   disconnectMCU,
   getMCUSession,
+  indexMCUStepper,
   jogMCUStepper,
   listMCUSessions,
   logMCU,
   openMCUSessionWS,
+  resetMCU,
   setMCUDigitalOut,
   setMCUServo,
   stopMCUStepper,
@@ -25,6 +27,8 @@ import { segmentsForAPI } from '../helpers/stepperRoutines';
 const SESSION_STORAGE_KEY = 'goklippy_mcu_session_id';
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
+const MOTION_HISTORY_LENGTH = 60; // 12 s at 5 readings per second
+export const INDEXING_LABEL = 'indexing';
 
 const MCUSessionContext = createContext(null);
 
@@ -41,6 +45,10 @@ export function MCUSessionProvider({ children }) {
   // Routines that stopped on their own, by oid: { [oid]: error message }.
   const [stepperRoutineErrors, setStepperRoutineErrors] = useState({});
   const [servoAngles, setServoAngles] = useState({});
+  // Latest measured motion: { at, steppers: [...], shutdown_reason }.
+  const [motion, setMotion] = useState(null);
+  // Rolling step rate per stepper oid, oldest first.
+  const [motionHistory, setMotionHistory] = useState({});
   // PCA9685 board checks by board name: { state, message, ... } or { state: 'checking' }.
   const [pcaStatus, setPcaStatus] = useState({});
 
@@ -84,6 +92,16 @@ export function MCUSessionProvider({ children }) {
         },
         onReadings: (payload) => {
           setReadings(payload || {});
+        },
+        onMotion: (snapshot) => {
+          setMotion(snapshot);
+          setMotionHistory((prev) => {
+            const next = { ...prev };
+            for (const m of snapshot.steppers || []) {
+              next[m.oid] = [...(prev[m.oid] || []), Math.abs(m.steps_per_sec)].slice(-MOTION_HISTORY_LENGTH);
+            }
+            return next;
+          });
         },
         onRoutines: (routines) => {
           // The backend is the source of truth for which routines are running: one
@@ -318,6 +336,19 @@ export function MCUSessionProvider({ children }) {
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
     sessionIdRef.current = null;
   }, [session, closeWebSocket, clearReconnectTimer]);
+
+  /** Restart the board; the session stays connected but all motion has ended. */
+  const resetBoard = useCallback(async () => {
+    if (!session?.session_id) return;
+    await resetMCU(session.session_id);
+    setRunningSteppers({});
+    setStepperJogState({});
+    setStepperRoutineOids({});
+    setStepperRoutineErrors({});
+    setServoAngles({});
+    setPcaStatus({});
+    setError('');
+  }, [session]);
 
   const objectsBySlot = useMemo(() => {
     const map = {};
@@ -609,6 +640,29 @@ export function MCUSessionProvider({ children }) {
     [session, clearRoutineErrors],
   );
 
+  /** Rotate in fixed increments; count 0 repeats until stopped. */
+  const startStepperIndexing = useCallback(
+    async (oid, { forward, speedHz, stepsPerIndex, dwellMs, count }) => {
+      if (!session?.session_id) return;
+      await indexMCUStepper(session.session_id, oid, {
+        forward,
+        speed_hz: speedHz,
+        steps_per_index: stepsPerIndex,
+        dwell_ms: dwellMs,
+        count,
+      });
+      clearRoutineErrors([oid]);
+      setRunningSteppers((prev) => {
+        if (!prev[oid]) return prev;
+        const next = { ...prev };
+        delete next[oid];
+        return next;
+      });
+      setStepperRoutineOids((prev) => ({ ...prev, [oid]: INDEXING_LABEL }));
+    },
+    [session, clearRoutineErrors],
+  );
+
   const startStepperRoutineForMembers = useCallback(
     async (routine) => {
       if (!session?.session_id || !routine?.segments?.length) return;
@@ -748,6 +802,7 @@ export function MCUSessionProvider({ children }) {
       readingForSlot,
       connect,
       disconnect,
+      resetBoard,
       resumeSession,
       setDigitalOut,
       setServo,
@@ -779,6 +834,9 @@ export function MCUSessionProvider({ children }) {
       isStepperRunning,
       setStepperRunning,
       startStepperRoutine,
+      startStepperIndexing,
+      motion,
+      motionHistory,
       startStepperRoutineForMembers,
     }),
     [
@@ -792,6 +850,7 @@ export function MCUSessionProvider({ children }) {
       readingForSlot,
       connect,
       disconnect,
+      resetBoard,
       resumeSession,
       setDigitalOut,
       setServo,
@@ -823,6 +882,9 @@ export function MCUSessionProvider({ children }) {
       isStepperRunning,
       setStepperRunning,
       startStepperRoutine,
+      startStepperIndexing,
+      motion,
+      motionHistory,
       startStepperRoutineForMembers,
     ],
   );

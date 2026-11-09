@@ -19,17 +19,17 @@ func InitMCUConfig(cfg config.MCUConfig) {
 
 // GetMCUPorts GET /mcu/ports
 func GetMCUPorts(c *gin.Context) {
-	if cached, ok := discovery.Cached(); ok {
-		c.JSON(http.StatusOK, cached)
-		return
-	}
 	ports, err := discovery.ListPorts()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	var scannedAt *time.Time
+	if cached, ok := discovery.Cached(); ok {
+		scannedAt = &cached.ScannedAt
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"scanned_at": nil,
+		"scanned_at": scannedAt,
 		"ports":      ports,
 	})
 }

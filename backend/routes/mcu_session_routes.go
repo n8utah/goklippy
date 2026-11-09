@@ -44,6 +44,15 @@ type stepperRoutineRequest struct {
 	Segments []stepperRoutineSegmentRequest `json:"segments"`
 }
 
+type stepperIndexRequest struct {
+	OID           int     `json:"oid"`
+	Forward       bool    `json:"forward"`
+	SpeedHz       float64 `json:"speed_hz"`
+	StepsPerIndex float64 `json:"steps_per_index"`
+	DwellMs       int     `json:"dwell_ms"`
+	Count         int     `json:"count"`
+}
+
 type stepperJogRequest struct {
 	OID     int     `json:"oid"`
 	Forward bool    `json:"forward"`
@@ -233,6 +242,21 @@ func GetMCUReadings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"readings": readings, "at": time.Now().UTC()})
 }
 
+// ResetMCU POST /mcu/sessions/:id/reset
+func ResetMCU(c *gin.Context) {
+	session, ok := mcu.DefaultManager().Get(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+	if err := session.Reset(); err != nil {
+		slog.Warn("mcu reset failed", "session_id", session.ID, "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // SetMCUDigitalOut POST /mcu/sessions/:id/digital-out
 func SetMCUDigitalOut(c *gin.Context) {
 	session, ok := mcu.DefaultManager().Get(c.Param("id"))
@@ -306,6 +330,32 @@ func JogMCUStepper(c *gin.Context) {
 		return
 	}
 	if err := session.StepperJog(req.OID, req.Forward, req.SpeedHz, req.Steps); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// IndexMCUStepper POST /mcu/sessions/:id/stepper/index
+func IndexMCUStepper(c *gin.Context) {
+	session, ok := mcu.DefaultManager().Get(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+	var req stepperIndexRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	move := mcu.IndexMove{
+		Forward:       req.Forward,
+		SpeedHz:       req.SpeedHz,
+		StepsPerIndex: req.StepsPerIndex,
+		Dwell:         time.Duration(req.DwellMs) * time.Millisecond,
+		Count:         req.Count,
+	}
+	if err := session.StartStepperIndexing(req.OID, move); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

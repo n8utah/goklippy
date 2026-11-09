@@ -87,16 +87,32 @@ func MCUSessionWebSocket(c *gin.Context) {
 		return
 	}
 
-	for readings := range updates {
-		out := make(map[string]mcu.Reading, len(readings))
-		for k, v := range readings {
-			out[k] = v
-		}
-		if err := send(mcuWSMessage{Type: "readings", Readings: out, At: time.Now().UTC()}); err != nil {
-			return
-		}
-		if err := sendRoutines(false); err != nil {
-			return
+	motion := session.SubscribeMotion()
+	defer session.UnsubscribeMotion(motion)
+
+	for {
+		select {
+		case readings, ok := <-updates:
+			if !ok {
+				return
+			}
+			out := make(map[string]mcu.Reading, len(readings))
+			for k, v := range readings {
+				out[k] = v
+			}
+			if err := send(mcuWSMessage{Type: "readings", Readings: out, At: time.Now().UTC()}); err != nil {
+				return
+			}
+			if err := sendRoutines(false); err != nil {
+				return
+			}
+		case snapshot, ok := <-motion:
+			if !ok {
+				return
+			}
+			if err := conn.WriteJSON(gin.H{"type": "motion", "motion": snapshot}); err != nil {
+				return
+			}
 		}
 	}
 }

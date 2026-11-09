@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import BoardDiagram from './components/BoardDiagram/BoardDiagram';
 
 import ConnectionPanel from './components/ConnectionPanel/ConnectionPanel';
@@ -76,6 +74,14 @@ const BoardSetupPage = () => {
 
     sessionError,
 
+    ports,
+    selectedPort,
+    setSelectedPort,
+    scanningPorts,
+    scanMessage,
+    scanPorts,
+    resettingBoard,
+    handleResetBoard,
     handleConnect,
 
     disconnect,
@@ -171,11 +177,20 @@ const BoardSetupPage = () => {
 
           </span>
 
-          <button type="button" className={appStyles.buttonSecondary} onClick={disconnect}>
-
-            Disconnect
-
-          </button>
+          <div className={styles.liveActions}>
+            <button
+              type="button"
+              className={appStyles.buttonSecondary}
+              disabled={resettingBoard}
+              title="Restarts the board and stops all motors. Takes a few seconds."
+              onClick={handleResetBoard}
+            >
+              {resettingBoard ? 'Resetting…' : 'Reset board'}
+            </button>
+            <button type="button" className={appStyles.buttonSecondary} disabled={resettingBoard} onClick={disconnect}>
+              Disconnect
+            </button>
+          </div>
 
         </div>
 
@@ -187,9 +202,17 @@ const BoardSetupPage = () => {
 
         <div className={styles.connectRow}>
 
-          <p className={appStyles.muted}>Connect from Devices, or enter a port here:</p>
-
-          <ConnectInline connecting={connecting} onConnect={handleConnect} />
+          <p className={appStyles.muted}>Choose a serial port:</p>
+          <ConnectInline
+            ports={ports}
+            port={selectedPort}
+            onPortChange={setSelectedPort}
+            connecting={connecting}
+            scanning={scanningPorts}
+            onScan={scanPorts}
+            onConnect={handleConnect}
+          />
+          {scanMessage && <p className={appStyles.muted}>{scanMessage}</p>}
 
           {connecting && (
             <p className={appStyles.muted}>
@@ -309,39 +332,46 @@ const BoardSetupPage = () => {
 
 
 
-function ConnectInline({ connecting, onConnect }) {
-
-  const [port, setPort] = useState('COM6');
-
-  return (
-
-    <div className={styles.connectInline}>
-
-      <input
-
-        className={styles.portInput}
-
-        value={port}
-
-        onChange={(e) => setPort(e.target.value)}
-
-        placeholder="COM6"
-
-      />
-
-      <button type="button" className={appStyles.button} disabled={connecting} onClick={() => onConnect(port)}>
-
-        {connecting ? 'Connecting…' : 'Connect'}
-
-      </button>
-
-    </div>
-
-  );
-
+function portLabel(port) {
+  if (port.is_klipper) {
+    return `${port.name} — Klipper ${port.version || ''}`.trim();
+  }
+  return port.description ? `${port.name} — ${port.description}` : port.name;
 }
 
-
+function ConnectInline({ ports, port, onPortChange, connecting, scanning, onScan, onConnect }) {
+  const busy = connecting || scanning;
+  return (
+    <div className={styles.connectInline}>
+      <select
+        className={styles.portInput}
+        aria-label="Serial port"
+        value={port}
+        disabled={busy || ports.length === 0}
+        onChange={(e) => onPortChange(e.target.value)}
+      >
+        {ports.length === 0 && <option value="">No serial ports found</option>}
+        {ports.map((p) => (
+          <option key={p.name} value={p.name}>
+            {portLabel(p)}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className={appStyles.buttonSecondary}
+        disabled={busy}
+        title="Checks each port for a Klipper board. Boards may reset while being checked."
+        onClick={onScan}
+      >
+        {scanning ? 'Scanning…' : 'Scan'}
+      </button>
+      <button type="button" className={appStyles.button} disabled={busy || !port} onClick={() => onConnect(port)}>
+        {connecting ? 'Connecting…' : 'Connect'}
+      </button>
+    </div>
+  );
+}
 
 export default BoardSetupPage;
 

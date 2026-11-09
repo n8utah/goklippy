@@ -20,7 +20,6 @@ type stepperRoutineKeeper struct {
 }
 
 const (
-	routineScheduleMarginSec = 0.02
 	routineRefillLeadRatio   = 0.35
 	routineRefillReps        = 2
 	// maxQueueOpsPerBatch limits queue_step commands per serial batch. The Klipper MCU
@@ -182,6 +181,9 @@ func (s *Session) StartStepperRoutine(oid int, segments []StepperRoutineSegment)
 	s.stepperLock(oid).Lock()
 	defer s.stepperLock(oid).Unlock()
 
+	if err := s.ensureMCUReady(); err != nil {
+		return err
+	}
 	s.stopStepperRoutineLocked(oid)
 	s.stopJogKeeper(oid)
 	s.setStepperJogging(oid, false)
@@ -336,61 +338,36 @@ func (s *Session) sendStepperRoutinePattern(oid int, segments []StepperRoutineSe
 	}
 
 	// A live clock read: queueEnd is counted from this, so it has to be accurate.
-	startClock, err := s.motionClock(routineScheduleMarginSec)
-	if err != nil {
-		return 0, err
-	}
-
-	cmds := make([]string, 0, 10+len(segments)*3)
-	cmds = append(cmds, s.stepperDriverEnableCommands(oid)...)
-	cmds = append(cmds, fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
-	cmds = append(cmds,
-		fmt.Sprintf("trsync_start oid=%d report_clock=0 report_ticks=0 expire_reason=0", stopTrsyncOID),
-		fmt.Sprintf("stepper_stop_on_trigger oid=%d trsync_oid=%d", oid, stopTrsyncOID),
-		fmt.Sprintf("reset_step_clock oid=%d clock=%d", oid, startClock),
-	)
-	cmds = append(cmds, routineSegmentCommands(oid, segments, s.ClockFreq)...)
-
-	if err := s.Conn.SendCommands(cmds); err != nil {
-		return 0, err
-	}
-	return startClock, nil
+	return s.sendAtMotionClock(motionStartMarginSec, func(startClock uint64) []string {
+		cmds := make([]string, 0, 10+len(segments)*3)
+		cmds = append(cmds, s.stepperDriverEnableCommands(oid)...)
+		cmds = append(cmds, fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
+		cmds = append(cmds,
+			fmt.Sprintf("trsync_start oid=%d report_clock=0 report_ticks=0 expire_reason=0", stopTrsyncOID),
+			fmt.Sprintf("stepper_stop_on_trigger oid=%d trsync_oid=%d", oid, stopTrsyncOID),
+			fmt.Sprintf("reset_step_clock oid=%d clock=%d", oid, startClock),
+		)
+		return append(cmds, routineSegmentCommands(oid, segments, s.ClockFreq)...)
+	})
 }
 
 // stepperRoutinePatternMove starts a fresh batch and returns the MCU clock it starts at.
 func (s *Session) stepperRoutinePatternMove(oid int, segments []StepperRoutineSegment) (uint64, error) {
-	for attempt := 0; attempt < 2; attempt++ {
-		if attempt > 0 {
-			slog.Info("retrying stepper routine pattern",
-				"port", s.Port,
-				"oid", oid,
-				"attempt", attempt+1,
-			)
-			if err := s.recoverMCUShutdown(); err != nil {
-				return 0, err
-			}
-		}
-
-		startClock, err := s.sendStepperRoutinePattern(oid, segments)
-		if err != nil {
-			// Retry once if the MCU shut down (e.g. a move scheduled in the past);
-			// anything else is a real failure.
-			if shutdown, qerr := s.mcuIsShutdown(); attempt == 0 && qerr == nil && shutdown {
-				continue
-			}
-			return 0, err
-		}
-
-		slog.Info("stepper routine pattern scheduled",
-			"port", s.Port,
-			"oid", oid,
-			"segments", len(segments),
-			"queue_ops", patternQueueStepCount(segments),
-			"start_clock", startClock,
-		)
-		return startClock, nil
+	startClock, err := s.sendStepperRoutinePattern(oid, segments)
+	if err != nil {
+		return 0, err
 	}
-	return 0, fmt.Errorf("stepper routine pattern failed after retry")
+	if err := s.failIfShutdown(); err != nil {
+		return 0, err
+	}
+	slog.Info("stepper routine pattern scheduled",
+		"port", s.Port,
+		"oid", oid,
+		"segments", len(segments),
+		"queue_ops", patternQueueStepCount(segments),
+		"start_clock", startClock,
+	)
+	return startClock, nil
 }
 
 // stepperRoutineAppend queues more pattern steps without reset_step_clock.
@@ -497,6 +474,14 @@ func (s *Session) stepperRoutineLoop(oid int, state *stepperRoutineKeeper) {
 	for {
 		// No stop command on cancel: the canceller already stopped or replaced the motion.
 		if !sleep(refillWait) {
+			return
+		}
+
+		// The MCU drops everything once shut down; don't keep claiming to run.
+		if reason := s.Conn.ShutdownReason(); reason != "" {
+			err := fmt.Errorf("mcu shut down: %s", reason)
+			slog.Warn("stepper routine ended by mcu shutdown", "port", s.Port, "oid", oid, "reason", reason)
+			s.failRoutine(oid, state, err)
 			return
 		}
 

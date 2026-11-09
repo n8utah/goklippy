@@ -32,7 +32,12 @@ func (s *Session) stepperDriverEnableCommands(stepperOID int) []string {
 	return nil
 }
 
-func (s *Session) checkMCUShutdown(context string) error {
+// ensureMCUReady clears an earlier shutdown before new motion is sent. A shutdown has
+// already killed every move on the MCU, so anything still marked running is ended here.
+func (s *Session) ensureMCUReady() error {
+	s.recoverMu.Lock()
+	defer s.recoverMu.Unlock()
+
 	status, err := s.Conn.GetConfig()
 	if err != nil {
 		return err
@@ -40,16 +45,45 @@ func (s *Session) checkMCUShutdown(context string) error {
 	if !status.IsShutdown {
 		return nil
 	}
-	slog.Warn("mcu shutdown detected",
-		"port", s.Port,
-		"context", context,
-		"crc", status.CRC,
-		"move_count", status.MoveCount,
-	)
+	s.abortAllMotion(fmt.Errorf("mcu shut down: %s", s.Conn.ShutdownReason()))
 	if err := s.recoverMCUShutdown(); err != nil {
-		return fmt.Errorf("mcu shutdown — disconnect and reconnect: %w", err)
+		return fmt.Errorf("mcu shutdown could not be cleared, use Reset: %w", err)
 	}
-	slog.Info("mcu recovered from shutdown", "port", s.Port, "context", context)
+	slog.Info("mcu recovered from shutdown", "port", s.Port)
+	return nil
+}
+
+// abortAllMotion forgets all running jogs and routines without talking to the MCU.
+func (s *Session) abortAllMotion(reason error) {
+	s.stopAllJogKeepers()
+	s.mu.Lock()
+	s.stepperJogging = make(map[int]bool)
+	s.mu.Unlock()
+
+	s.routineKeepersMu.Lock()
+	defer s.routineKeepersMu.Unlock()
+	if s.routineErrors == nil {
+		s.routineErrors = make(map[int]string)
+	}
+	for oid, state := range s.routineKeepers {
+		if !state.stopped() {
+			close(state.stop)
+		}
+		s.routineErrors[oid] = reason.Error()
+		delete(s.routineKeepers, oid)
+	}
+}
+
+// failIfShutdown turns a shutdown caused by commands just sent into an error, so the
+// caller doesn't report a move the MCU refused.
+func (s *Session) failIfShutdown() error {
+	shutdown, err := s.mcuIsShutdown()
+	if err != nil {
+		return err
+	}
+	if shutdown {
+		return fmt.Errorf("mcu shut down: %s", s.Conn.ShutdownReason())
+	}
 	return nil
 }
 
