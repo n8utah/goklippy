@@ -118,6 +118,7 @@ const BinsPage = () => {
           binOf={binOf}
           onSave={logic.saveBin}
           onPoint={logic.pointChute}
+          onEmpty={logic.emptyBin}
           onClose={() => logic.select(null)}
         />
       )}
@@ -131,10 +132,23 @@ const BinsPage = () => {
                 {layer.bins} bins{layer.max_piece_mm ? `, pieces up to ${layer.max_piece_mm} mm` : ''}
               </span>
             </h3>
-            <label className={styles.checkField}>
-              <input type="checkbox" checked={!layer.disabled} onChange={(e) => logic.setLayer(layer.layer, { disabled: !e.target.checked })} />
-              In use
-            </label>
+            <div className={styles.buttonRow}>
+              <label className={styles.checkField}>
+                Full at
+                <input
+                  type="number"
+                  min="0"
+                  className={styles.smallInput}
+                  value={layer.max_pieces}
+                  onChange={(e) => e.target.value !== '' && logic.setLayer(layer.layer, { maxPieces: Math.max(0, Math.round(Number(e.target.value))) })}
+                />
+                pieces (0: never)
+              </label>
+              <label className={styles.checkField}>
+                <input type="checkbox" checked={!layer.disabled} onChange={(e) => logic.setLayer(layer.layer, { disabled: !e.target.checked })} />
+                In use
+              </label>
+            </div>
           </div>
           {layer.sections.length === 0 ? (
             <p className={styles.muted}>{layer.bins} bins don&apos;t split into the chute&apos;s sections; fix the bin count on the LEGO Sorter page.</p>
@@ -156,7 +170,10 @@ const BinsPage = () => {
                         disabled={!view.profile}
                         onClick={() => logic.select({ layer: layer.layer, bin: bin.bin })}
                       >
-                        <span className={styles.binNumber}>{bin.bin}</span>
+                        <span className={styles.binNumber}>
+                          {bin.bin}
+                          {bin.count > 0 && <span className={bin.full ? styles.binFull : styles.binCount}>{bin.full ? `full · ${bin.count}` : bin.count}</span>}
+                        </span>
                         <span className={bin.categories.length ? styles.binCats : styles.binEmpty}>
                           {bin.categories.length ? bin.categories.map((c) => c.name).join(', ') : bin.reachable ? 'Unassigned' : 'Out of reach'}
                         </span>
@@ -169,6 +186,21 @@ const BinsPage = () => {
           )}
         </div>
       ))}
+
+      {logic.kits.length > 0 && (
+        <div className={styles.panel}>
+          <h3 className={styles.panelTitle}>Kits</h3>
+          {logic.kits.map((k) => (
+            <div key={k.category} className={styles.kit}>
+              <span>{k.name}</span>
+              <progress max={k.need} value={k.found} />
+              <span className={styles.muted}>
+                {k.found} of {k.need}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <RouteTester route={logic.route} setRoute={logic.setRoute} onTry={logic.tryRoute} canTry={Boolean(view.profile)} />
       <IdentifyPanel />

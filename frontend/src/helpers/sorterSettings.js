@@ -47,6 +47,28 @@ export const DEFAULT_SORTER_SETTINGS = {
     c4: { stepper: 'stepper_e0', forward: true, gear: 10.8 },
   },
   routines: {},
+  // The pulsing feeder (C1–C3) and the classification platter (C4); see the Tuning page.
+  feeder: {
+    dropPulseDeg: 30,
+    dropPauseMs: 100,
+    exitPulseDeg: 2,
+    exitPauseMs: 100,
+    holdAfterFallMs: 800,
+    minMoveDeg: 0.1,
+    maxMoveDeg: 120,
+    bulkPulseDeg: 10,
+    bulkPauseMs: 1500,
+    staleMs: 1000,
+  },
+  platter: {
+    sectors: 5,
+    exitSector: 2,
+    identifyTimeoutMs: 20000,
+    settleMs: 250,
+    burstFrames: 6,
+    stallMs: 30000,
+    idleIndexMs: 1500,
+  },
   // Which camera watches each channel (c2, c3, c4) and where its zones are.
   cameras: { devices: {}, zones: {}, width: 640, height: 480, fps: 10, ffmpeg: '', threshold: 0, minArea: 0 },
 };
@@ -71,6 +93,8 @@ export function normalizeSorterSettings(saved) {
     distributor: { ...DEFAULT_SORTER_SETTINGS.distributor, ...saved.distributor },
     channels: { ...DEFAULT_SORTER_SETTINGS.channels, ...saved.channels },
     cameras: { ...DEFAULT_SORTER_SETTINGS.cameras, ...saved.cameras },
+    feeder: { ...DEFAULT_SORTER_SETTINGS.feeder, ...saved.feeder },
+    platter: { ...DEFAULT_SORTER_SETTINGS.platter, ...saved.platter },
   };
 }
 

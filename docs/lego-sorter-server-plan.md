@@ -177,16 +177,15 @@ and `models/sort_e2e_test.go` sorts known pieces end to end on SQLite and checks
 | 1 Distribution | Built. Needs the chute's home switch fitted, then homing, calibration and test-every-bin. |
 | 2 Cameras and zones | Built: `logic/camera` (ffmpeg per camera, MJPEG split into frames, device list), live streams, the **Cameras** page with the zone editor and empty-channel capture. Tested with ffmpeg's test picture. Needs the three cameras and a current ffmpeg. |
 | 3 Perception | Built: `logic/vision` (zones, observations, box merging, angular tracker, background-difference detector) and `sorter.Perception`. Needs real frames to tune the detector's sensitivity. |
-| 4 Feeder | Built: `logic/sorter/feeder.go`. Tuning values are in the machine settings (`feeder`); no tuning page yet. |
+| 4 Feeder | Built: `logic/sorter/feeder.go`, tuned on the **Tuning** page. Flags a piece that won't ride for recovery. |
 | 5 Platter (C4) | Built: `logic/sorter/platter.go`, a slot model of the 5-sector carousel. Brickognize built and checked live. |
 | 6 Profiles and bins | Built. |
 | 7 Coordinator and dashboard | Built: the machine runs platter then feeder each tick, with runs and the **Dashboard** page. |
-| 8 Records and incidents | Partly: pieces, photos, runs, incidents and the **Records** page. The stall incident is the only kind raised. |
+| 8 Records, incidents, recovery | Built: pieces, photos, runs, incidents, reviews and the **Records** page; shakes and Sorter V2's landing-held procedure, clearing a stalled C4, shaking off a piece that didn't fall; bin counts with full bins and "emptied"; kit limits from set inventories. |
 
-Still to do: a feeder tuning page; automatic recovery (shake profiles) and the other incident kinds
-(no bin, piece circling, stuck at a landing); checking a piece really fell off C4; full bins and
-auto-assign (need piece counts); kit limits; piece review buttons; turn and shake buttons on the
-Dashboard.
+Not planned: BrickStore export, Hive sync, and sending reviews back to Brickognize as feedback.
+Still open: the "no bin" incident (pieces go to the bucket with a problem noted instead), a piece
+circling C4, and auto-assigning bins from recent counts.
 
 ### Phase 0: Foundations
 

@@ -252,6 +252,47 @@
   background: #ffffff;
 }
 
+.binNumber {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.binCount,
+.binFull {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.binFull {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.smallInput {
+  width: 64px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+.kit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.kit progress {
+  width: 100%;
+}
+
 @media (max-width: 760px) {
   .sections {
     grid-template-columns: repeat(2, minmax(0, 1fr));

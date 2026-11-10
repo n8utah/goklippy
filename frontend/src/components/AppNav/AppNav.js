@@ -9,6 +9,7 @@ const AppNav = ({ page, onChange }) => {
     { id: 'sorter', label: 'LEGO Sorter' },
     { id: 'chute', label: 'Chute' },
     { id: 'cameras', label: 'Cameras' },
+    { id: 'tuning', label: 'Tuning' },
     { id: 'bins', label: 'Bins' },
     { id: 'profiles', label: 'Profiles' },
     { id: 'records', label: 'Records' },

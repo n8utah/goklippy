@@ -1,4 +1,5 @@
 import { sorterPieceImageURL } from '../../../helpers/api';
+import ReviewPanel from './ReviewPanel';
 import { PROBLEM_LABELS, pieceBin, pieceName, pieceStatus, scorePct } from '../../../helpers/sorterPieces';
 
 import styles from '../RecordsPage.module.css';
@@ -7,7 +8,7 @@ import appStyles from '../../../styles/app.module.css';
 const time = (t) => (t ? new Date(t).toLocaleString() : '—');
 
 /** Everything recorded about one piece. */
-const PieceDetail = ({ piece, onClose }) => {
+const PieceDetail = ({ piece, onClose, onReview }) => {
   const status = pieceStatus(piece.status);
   const prediction = piece.prediction;
   const items = prediction?.items?.slice(0, 5) ?? [];
@@ -72,6 +73,8 @@ const PieceDetail = ({ piece, onClose }) => {
           ))}
         </div>
       )}
+
+      {piece.prediction && <ReviewPanel key={piece.id} piece={piece} onSave={onReview} />}
 
       {items.length > 0 && (
         <div>

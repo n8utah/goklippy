@@ -7,7 +7,7 @@ import appStyles from '../../../styles/app.module.css';
  * Chooses a bin's categories. A category already in another bin moves here when
  * saved. The parent remounts this (key) for each bin, so the draft starts fresh.
  */
-const BinEditor = ({ bin, layer, categories, binOf, onSave, onPoint, onClose }) => {
+const BinEditor = ({ bin, layer, categories, binOf, onSave, onPoint, onEmpty, onClose }) => {
   const [chosen, setChosen] = useState(() => bin.categories.map((c) => c.id));
   const [filter, setFilter] = useState('');
 
@@ -32,6 +32,9 @@ const BinEditor = ({ bin, layer, categories, binOf, onSave, onPoint, onClose }) 
         </button>
       </div>
       {!bin.reachable && <p className={styles.alert}>The chute can&apos;t reach this bin, so it gets no pieces.</p>}
+      <p className={styles.muted}>
+        {bin.count} piece{bin.count === 1 ? '' : 's'} since it was last emptied{bin.full ? ' — full, so it takes no more' : ''}.
+      </p>
 
       <input className={styles.search} placeholder="Find a category" value={filter} onChange={(e) => setFilter(e.target.value)} />
       <ul className={styles.categoryList}>
@@ -61,6 +64,9 @@ const BinEditor = ({ bin, layer, categories, binOf, onSave, onPoint, onClose }) 
         </button>
         <button type="button" className={appStyles.buttonSecondary} disabled={!bin.reachable} onClick={onPoint}>
           Point the chute here
+        </button>
+        <button type="button" className={appStyles.buttonSecondary} disabled={bin.count === 0} onClick={onEmpty}>
+          I emptied it
         </button>
       </div>
     </div>

@@ -12,6 +12,7 @@ import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
 import DashboardPage from './pages/DashboardPage/DashboardPage';
 import RecordsPage from './pages/RecordsPage/RecordsPage';
 import CamerasPage from './pages/CamerasPage/CamerasPage';
+import TuningPage from './pages/TuningPage/TuningPage';
 import styles from './styles/app.module.css';
 
 const App = () => {
@@ -35,6 +36,7 @@ const App = () => {
           {page === 'dashboard' && <DashboardPage onOpenPiece={openPiece} />}
           {page === 'records' && <RecordsPage key={pieceId || 'records'} initialPieceId={pieceId} />}
           {page === 'cameras' && <CamerasPage />}
+          {page === 'tuning' && <TuningPage />}
           {page === 'home' && <HomePage />}
           {page === 'devices' && <DevicesPage onGoBoard={() => setPage('board')} />}
           {page === 'board' && <BoardSetupPage />}

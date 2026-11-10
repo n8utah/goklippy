@@ -299,6 +299,26 @@ export function sorterCameraStreamURL(channel) {
   return `${API_BASE_URL}/api/v1/sorter/cameras/${channel}/stream`;
 }
 
+export function listSorterShakes() {
+  return getJSON('/api/v1/sorter/shakes');
+}
+
+export function shakeSorterChannel(channel, profile) {
+  return postJSON(`/api/v1/sorter/channels/${channel}/shake`, { profile });
+}
+
+export function emptySorterBin(layer, bin) {
+  return postJSON(`/api/v1/sorter/bins/${layer}/${bin}/empty`, {});
+}
+
+export function getSorterKits() {
+  return getJSON('/api/v1/sorter/kits');
+}
+
+export function reviewSorterPiece(id, review) {
+  return putJSON(`/api/v1/sorter/pieces/${id}/review`, review);
+}
+
 /** Where a piece would go now; nothing is saved. */
 export function routeSorterPiece(partId, colorId, pieceMm) {
   return postJSON('/api/v1/sorter/route', { part_id: partId, color_id: colorId, piece_mm: pieceMm || 0 });

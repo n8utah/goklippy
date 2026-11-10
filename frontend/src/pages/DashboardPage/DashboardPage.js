@@ -1,5 +1,6 @@
 import { CHANNEL_NAMES, STATE_LABELS, useDashboardPageLogic } from './DashboardPage.logic';
 import PieceCard from './components/PieceCard';
+import ChannelControls from './components/ChannelControls';
 import CameraView from '../../components/CameraView/CameraView';
 
 import styles from './DashboardPage.module.css';
@@ -108,6 +109,8 @@ const DashboardPage = ({ onOpenPiece }) => {
           <ChannelTile key={id} id={id} summary={state?.channels?.[id]} simulated={state?.hardware?.simulated} />
         ))}
       </div>
+
+      <ChannelControls shakes={logic.shakes} disabled={!logic.handsFree || logic.busy} onTurn={logic.turn} onShake={logic.shake} />
 
       <div className={styles.pieces}>
         <h3 className={styles.panelTitle}>On the classification channel</h3>

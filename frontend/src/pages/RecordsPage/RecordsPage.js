@@ -171,7 +171,7 @@ const RecordsPage = ({ initialPieceId }) => {
       )}
       {logic.error && <p className={styles.alert}>{logic.error}</p>}
 
-      {logic.piece && <PieceDetail piece={logic.piece} onClose={logic.closePiece} />}
+      {logic.piece && <PieceDetail piece={logic.piece} onClose={logic.closePiece} onReview={logic.reviewPiece} />}
 
       <div className={styles.tabs}>
         {TABS.map((t) => (

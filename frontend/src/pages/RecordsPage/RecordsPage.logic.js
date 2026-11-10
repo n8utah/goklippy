@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { getSorterPiece, getSorterStats, listSorterIncidents, listSorterPieces, listSorterRuns } from '../../helpers/api';
+import { getSorterPiece, getSorterStats, listSorterIncidents, listSorterPieces, listSorterRuns, reviewSorterPiece } from '../../helpers/api';
 
 export const PAGE_SIZE = 50;
 
@@ -79,6 +79,11 @@ export function useRecordsPageLogic(initialPieceId) {
     setTab('pieces');
   };
 
+  /** Saves a review; the piece comes back with it. Errors go to the panel. */
+  const reviewPiece = async (review) => {
+    setPiece(await reviewSorterPiece(pieceId, review));
+  };
+
   const openPiece = (id) => {
     setPiece(null);
     setPieceId(id);
@@ -98,6 +103,7 @@ export function useRecordsPageLogic(initialPieceId) {
     piece: pieceId ? piece : null,
     pieceId,
     openPiece,
+    reviewPiece,
     closePiece: () => setPieceId(null),
     showRun,
     refresh: () => setReload((n) => n + 1),

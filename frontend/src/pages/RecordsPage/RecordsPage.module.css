@@ -247,3 +247,52 @@
   border-radius: 6px;
   background: #ffffff;
 }
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.reviewRow,
+.yesNo,
+.issues {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.choice,
+.choiceOn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.choiceOn {
+  border-color: #0284c7;
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.yesNo select,
+.colorInput {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+.colorInput {
+  width: 70px;
+}

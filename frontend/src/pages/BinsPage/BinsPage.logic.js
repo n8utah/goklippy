@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { getSorterBins, resetSorterBins, routeSorterPiece, sendToSorterBin, setSorterBin } from '../../helpers/api';
+import { emptySorterBin, getSorterBins, getSorterKits, resetSorterBins, routeSorterPiece, sendToSorterBin, setSorterBin } from '../../helpers/api';
 import { useMachineSettings } from '../../helpers/sorterSettings';
 
 export const ROUTE_REASONS = {
@@ -19,11 +19,18 @@ export function useBinsPageLogic() {
   const [selected, setSelected] = useState(null); // { layer, bin }
   const [error, setError] = useState('');
   const [route, setRoute] = useState({ part: '', color: '', size: '', result: null });
+  const [kits, setKits] = useState([]);
 
   // Layer and section switches live in the machine settings, so read the bins
   // again after each save.
   useEffect(() => {
     let cancelled = false;
+    getSorterKits().then(
+      (data) => {
+        if (!cancelled) setKits(data.kits);
+      },
+      () => {},
+    );
     getSorterBins().then(
       (data) => {
         if (!cancelled) setView(data);
@@ -63,6 +70,12 @@ export function useBinsPageLogic() {
 
   const pointChute = () => guard(() => sendToSorterBin(selected.layer, selected.bin));
 
+  /** The bin was emptied: it counts from zero and takes pieces again. */
+  const emptyBin = () =>
+    guard(async () => {
+      setView(await emptySorterBin(selected.layer, selected.bin));
+    });
+
   const setDistributor = (patch) =>
     setSettings((prev) => ({ ...prev, distributor: { ...prev.distributor, ...patch } }));
 
@@ -95,6 +108,8 @@ export function useBinsPageLogic() {
     saveBin,
     resetBins,
     pointChute,
+    emptyBin,
+    kits,
     setDistributor,
     setLayer,
     toggleSection,
