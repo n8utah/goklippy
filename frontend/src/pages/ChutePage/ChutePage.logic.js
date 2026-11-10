@@ -7,48 +7,17 @@ import {
   cancelSorterJob,
   getSorterChute,
   moveSorterChannel,
-  openSorterWS,
   sendToSorterBin,
   sorterCommand,
   testSorterLayer,
   zeroSorterChute,
 } from '../../helpers/api';
 import { useMachineSettings } from '../../helpers/sorterSettings';
+import { useSorterState } from '../../helpers/sorterState';
 
-const RECONNECT_MS = 2000;
 // After a jog, read the angle back once the move should be over.
 const JOG_READBACK_MS = 600;
 export const JOG_STEPS = [-2, -0.25, 0.25, 2];
-
-/** The sorter's live state over its WebSocket, reconnecting if it drops. */
-function useSorterState() {
-  const [state, setState] = useState(null);
-  const [connected, setConnected] = useState(false);
-
-  useEffect(() => {
-    let ws;
-    let timer;
-    let closed = false;
-    const connect = () => {
-      ws = openSorterWS({
-        onOpen: () => setConnected(true),
-        onState: setState,
-        onClose: () => {
-          setConnected(false);
-          if (!closed) timer = setTimeout(connect, RECONNECT_MS);
-        },
-      });
-    };
-    connect();
-    return () => {
-      closed = true;
-      clearTimeout(timer);
-      ws?.close();
-    };
-  }, []);
-
-  return { state, connected };
-}
 
 export function useChutePageLogic() {
   const { session } = useMCUSession();

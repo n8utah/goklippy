@@ -170,13 +170,14 @@ func (m *Machine) RaiseIncident(ctx context.Context, inc Incident) error {
 
 func (m *Machine) sortSnapshot(snap *Snapshot) {
 	snap.Incident = m.incident
+	snap.Aboard, snap.Recent = []Piece{}, []Piece{}
 	if m.sort == nil {
 		return
 	}
 	st := m.sort
 	snap.RunID = st.runID
-	snap.Aboard = st.platter.Aboard()
-	snap.Recent = st.platter.Recent()
+	snap.Aboard = append(snap.Aboard, st.platter.Aboard()...)
+	snap.Recent = append(snap.Recent, st.platter.Recent()...)
 	now := time.Now()
 	snap.Channels = map[Channel]ChannelSummary{}
 	for _, ch := range []Channel{ChannelC2, ChannelC3, ChannelC4} {

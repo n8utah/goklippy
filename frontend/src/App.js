@@ -9,10 +9,18 @@ import SorterPage from './pages/SorterPage/SorterPage';
 import ChutePage from './pages/ChutePage/ChutePage';
 import BinsPage from './pages/BinsPage/BinsPage';
 import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
+import DashboardPage from './pages/DashboardPage/DashboardPage';
+import RecordsPage from './pages/RecordsPage/RecordsPage';
 import styles from './styles/app.module.css';
 
 const App = () => {
   const [page, setPage] = useState('board');
+  const [pieceId, setPieceId] = useState(null);
+
+  const openPiece = (piece) => {
+    setPieceId(piece.id);
+    setPage('records');
+  };
 
   return (
     <MCUSessionProvider>
@@ -23,6 +31,8 @@ const App = () => {
             <p className={styles.subtitle}>Klipper MCU workbench — visual board setup and config editing</p>
           </header>
           <AppNav page={page} onChange={setPage} />
+          {page === 'dashboard' && <DashboardPage onOpenPiece={openPiece} />}
+          {page === 'records' && <RecordsPage key={pieceId || 'records'} initialPieceId={pieceId} />}
           {page === 'home' && <HomePage />}
           {page === 'devices' && <DevicesPage onGoBoard={() => setPage('board')} />}
           {page === 'board' && <BoardSetupPage />}

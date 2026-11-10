@@ -245,6 +245,39 @@ export async function identifySorterPiece(files, pieceMm) {
   return parseJSON(response);
 }
 
+export function listSorterPieces({ run, status, q, limit = 50, offset = 0 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (run) params.set('run', String(run));
+  if (status) params.set('status', status);
+  if (q) params.set('q', q);
+  return getJSON(`/api/v1/sorter/pieces?${params}`);
+}
+
+export function getSorterPiece(id) {
+  return getJSON(`/api/v1/sorter/pieces/${id}`);
+}
+
+/** URL of one stored photo of a piece. */
+export function sorterPieceImageURL(id, index) {
+  return `${API_BASE_URL}/api/v1/sorter/pieces/${id}/images/${index}`;
+}
+
+export function listSorterRuns() {
+  return getJSON('/api/v1/sorter/runs');
+}
+
+export function listSorterIncidents() {
+  return getJSON('/api/v1/sorter/incidents');
+}
+
+export function getSorterStats() {
+  return getJSON('/api/v1/sorter/stats');
+}
+
+export function resolveSorterIncident(action) {
+  return postJSON('/api/v1/sorter/incident/resolve', { action });
+}
+
 /** Where a piece would go now; nothing is saved. */
 export function routeSorterPiece(partId, colorId, pieceMm) {
   return postJSON('/api/v1/sorter/route', { part_id: partId, color_id: colorId, piece_mm: pieceMm || 0 });

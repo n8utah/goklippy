@@ -2,6 +2,7 @@ import styles from '../../styles/app.module.css';
 
 const AppNav = ({ page, onChange }) => {
   const items = [
+    { id: 'dashboard', label: 'Dashboard' },
     { id: 'devices', label: 'Devices' },
     { id: 'board', label: 'Board Setup' },
     { id: 'editor', label: 'Overlay Editor' },
@@ -9,6 +10,7 @@ const AppNav = ({ page, onChange }) => {
     { id: 'chute', label: 'Chute' },
     { id: 'bins', label: 'Bins' },
     { id: 'profiles', label: 'Profiles' },
+    { id: 'records', label: 'Records' },
     { id: 'home', label: 'Auth / Dev' },
   ];
 
