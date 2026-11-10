@@ -49,6 +49,8 @@ type Hardware interface {
 	// the open angle and the rest to closed. -1 selects none, so every layer is closed
 	// and pieces fall through to the bottom bucket.
 	SelectLayer(layer int) error
+	// Shake runs a channel back and forth, ending where it began.
+	Shake(ch Channel, s Shake) (<-chan error, error)
 	// StopAll stops every sorter motor.
 	StopAll() error
 	Health() HardwareHealth

@@ -20,6 +20,8 @@ type SimHardware struct {
 	homed     bool
 	moves     []SimMove
 	onMove    func(ch Channel, from, to float64)
+	onShake   func(ch Channel)
+	shakes    []Channel
 }
 
 // OnMove calls fn after every move with the channel's rotor angle before and after
@@ -82,6 +84,39 @@ func (h *SimHardware) MoveChannel(ch Channel, deg, rpm float64) (<-chan error, e
 	h.mu.Unlock()
 	h.moved(ch, from, from+deg)
 	return doneAfter(seconds(d.Seconds() * h.TimeScale)), nil
+}
+
+// OnShake calls fn after every shake, so a simulated world can free held pieces.
+func (h *SimHardware) OnShake(fn func(ch Channel)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onShake = fn
+}
+
+func (h *SimHardware) Shake(ch Channel, sh Shake) (<-chan error, error) {
+	h.mu.Lock()
+	if !h.connected {
+		h.mu.Unlock()
+		return nil, ErrNoBoard
+	}
+	if sh.Rpm <= 0 || sh.Cycles < 1 {
+		h.mu.Unlock()
+		return nil, fmt.Errorf("%s: a shake needs a speed and at least one cycle", ch)
+	}
+	h.shakes = append(h.shakes, ch)
+	fn := h.onShake
+	h.mu.Unlock()
+	if fn != nil {
+		fn(ch)
+	}
+	return doneAfter(seconds(shakeDuration(sh).Seconds() * h.TimeScale)), nil
+}
+
+// Shakes lists the channels shaken so far.
+func (h *SimHardware) Shakes() []Channel {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]Channel(nil), h.shakes...)
 }
 
 func (h *SimHardware) SelectLayer(layer int) error {

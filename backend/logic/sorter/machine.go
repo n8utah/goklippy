@@ -380,6 +380,9 @@ func (m *Machine) handle(req request) error {
 		if err := m.transition(req.command, StateReady, StateRunning, StatePaused); err != nil {
 			return err
 		}
+		if m.job != nil {
+			m.job.cancel() // a recovery mid-way
+		}
 		m.endRun(time.Now().UTC())
 		if err := m.hw.StopAll(); err != nil {
 			slog.Warn("sorter stop: motors did not all stop", "error", err)

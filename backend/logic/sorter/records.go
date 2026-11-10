@@ -38,6 +38,7 @@ const (
 	ProblemNeverPhotographed = "never_photographed"
 	ProblemDidntFall         = "didnt_fall"
 	ProblemLost              = "lost"
+	ProblemSweptOff          = "swept_off"
 )
 
 var ErrPieceNotFound = errors.New("piece not found")

@@ -6,6 +6,7 @@ import "errors"
 const (
 	IncidentPlatterStuck = "platter_stuck"
 	IncidentBoardLost    = "board_lost"
+	IncidentLandingStuck = "landing_stuck"
 )
 
 // Ways an operator resolves an incident.

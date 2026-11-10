@@ -38,8 +38,12 @@ type PlatterDeps struct {
 	Settings   func() MachineSettings
 	// RunID is the current sort run, for the piece records.
 	RunID func() int64
-	// RaiseIncident stops the sort for the operator.
-	RaiseIncident func(Incident)
+	// OnStall is told when pieces aboard have made no progress for StallMs. The
+	// machine tries to clear the channel, then asks the operator.
+	OnStall func(aboard int)
+	// OnDidntFall is told when a piece is still at the exit after the index that
+	// should have dropped it.
+	OnDidntFall func()
 }
 
 type slotState int
@@ -86,6 +90,8 @@ type Platter struct {
 	lastProgress time.Time
 	stallRaised  bool
 	recent       []Piece // last pieces delivered, newest first
+	// checkFall: after a drop, the next settled frame must show the exit clear.
+	checkFall bool
 }
 
 const (
@@ -160,6 +166,7 @@ func (p *Platter) Step(now time.Time) {
 	}
 
 	obs := p.deps.Vision.Observation(ChannelC4)
+	p.verifyFall(now, obs)
 	p.watchDrop(now, obs, ps)
 	p.capture(now, obs, ps)
 	p.prepareExit(now, settings)
@@ -496,7 +503,53 @@ func (p *Platter) finishIndex(now time.Time, ps PlatterSettings) {
 	}
 	p.settleUntil = now.Add(time.Duration(ps.SettleMs) * time.Millisecond)
 	p.freeSince = p.settleUntil
+	p.checkFall = fallen != nil
 	p.progress(now)
+}
+
+// verifyFall looks at the first settled frame after a drop: a piece still in the exit
+// didn't fall. It was counted as delivered already; the problem is noted and the
+// machine shakes it off.
+func (p *Platter) verifyFall(now time.Time, obs vision.Observation) {
+	if !p.checkFall || !obs.Valid || obs.At.Before(p.settleUntil) {
+		return
+	}
+	p.checkFall = false
+	if !obs.InExit || len(p.recent) == 0 {
+		return
+	}
+	last := &p.recent[0]
+	last.AddProblem(ProblemDidntFall, "It was still at the exit after the turn meant to drop it.", now)
+	p.deps.Records.SavePiece(*last)
+	if p.deps.OnDidntFall != nil {
+		p.deps.OnDidntFall()
+	}
+}
+
+// Sweep records every piece aboard as gone to the bucket, after the machine turned the
+// channel round with every layer closed to clear it.
+func (p *Platter) Sweep(now time.Time) int {
+	n := 0
+	for i, s := range p.slots {
+		if s == nil {
+			continue
+		}
+		s.piece.Status = PieceDistributed
+		s.piece.DistributedAt = &now
+		s.piece.BinLayer, s.piece.BinNumber, s.piece.RouteReason = 0, 0, RouteMisc
+		s.piece.AddProblem(ProblemSweptOff, "The classification channel stopped making progress, so it was turned with every layer closed; the piece went to the bucket.", now)
+		p.deps.Records.SavePiece(s.piece)
+		p.recent = append([]Piece{s.piece.Clone()}, p.recent...)
+		p.slots[i] = nil
+		n++
+	}
+	if len(p.recent) > recentPieces {
+		p.recent = p.recent[:recentPieces]
+	}
+	p.aimDone, p.aimedFor, p.indexDone = nil, "", nil
+	p.settleUntil, p.freeSince = now, now
+	p.progress(now)
+	return n
 }
 
 func (p *Platter) exitIndex(settings MachineSettings) int {
@@ -511,7 +564,7 @@ func (p *Platter) progress(now time.Time) {
 // watchdog raises an incident when pieces are aboard and nothing has happened for
 // too long.
 func (p *Platter) watchdog(now time.Time, ps PlatterSettings) {
-	if p.stallRaised || ps.StallMs <= 0 || p.deps.RaiseIncident == nil {
+	if p.stallRaised || ps.StallMs <= 0 || p.deps.OnStall == nil {
 		return
 	}
 	aboard := len(p.Aboard())
@@ -519,11 +572,5 @@ func (p *Platter) watchdog(now time.Time, ps PlatterSettings) {
 		return
 	}
 	p.stallRaised = true
-	p.deps.RaiseIncident(Incident{
-		Kind:  IncidentPlatterStuck,
-		Title: "Stuck on the classification channel",
-		Message: fmt.Sprintf("Nothing has moved on for %s with %d piece(s) aboard. Clear the channel, then press Done.",
-			(time.Duration(ps.StallMs) * time.Millisecond).String(), aboard),
-		OpenedAt: now,
-	})
+	p.deps.OnStall(aboard)
 }

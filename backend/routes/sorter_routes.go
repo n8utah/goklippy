@@ -164,3 +164,35 @@ func sorterError(c *gin.Context, err error) {
 	}
 	c.JSON(status, gin.H{"error": err.Error()})
 }
+
+// ListSorterShakes GET /sorter/shakes: the shake profiles, gentlest first.
+func ListSorterShakes(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"shakes": sorter.ShakeProfiles})
+}
+
+type shakeRequest struct {
+	Profile string `json:"profile" binding:"required"`
+}
+
+// ShakeSorterChannel POST /sorter/channels/:channel/shake {"profile": "heavy"}
+func ShakeSorterChannel(c *gin.Context) {
+	ch, err := sorter.ParseChannel(c.Param("channel"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	var req shakeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "profile is required"})
+		return
+	}
+	if err := sorterMachine.ShakeChannel(c.Request.Context(), ch, req.Profile); err != nil {
+		if errors.Is(err, sorter.ErrUnknownShake) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		sorterError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}

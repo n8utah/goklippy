@@ -48,6 +48,13 @@ type SimPart struct {
 	RGB      color.RGBA
 	// Unknown parts get no match from the pretend Brickognize.
 	Unknown bool
+	// HeldOn makes the piece stick on that channel: turning it doesn't carry the
+	// piece until the channel has been shaken HeldShakes times. A huge HeldShakes
+	// never lets go.
+	HeldOn     Channel
+	HeldShakes int
+	// NoFall: on C4 it stops in the exit instead of falling, until C4 is shaken.
+	NoFall bool
 }
 
 // SimFall is a piece dropping off C4, with where it went.
@@ -62,6 +69,15 @@ type SimFall struct {
 type simPiece struct {
 	part  SimPart
 	angle float64
+	held  int // shakes still needed to free it
+}
+
+func newSimPiece(part SimPart, ch Channel) *simPiece {
+	p := &simPiece{part: part, angle: simLandAngle}
+	if part.HeldOn == ch {
+		p.held = part.HeldShakes
+	}
+	return p
 }
 
 // SimZones are the zones every simulated channel uses, in a 640×480 frame.
@@ -100,6 +116,7 @@ func NewSimWorld(hw *SimHardware, settings func() MachineSettings, supply []SimP
 		onRotor: map[Channel][]*simPiece{},
 	}
 	hw.OnMove(w.moved)
+	hw.OnShake(w.shaken)
 	return w
 }
 
@@ -146,16 +163,43 @@ func (w *SimWorld) feedBulk() {
 	default:
 		return
 	}
-	w.onRotor[ChannelC2] = append(w.onRotor[ChannelC2], &simPiece{part: part, angle: simLandAngle})
+	w.onRotor[ChannelC2] = append(w.onRotor[ChannelC2], newSimPiece(part, ChannelC2))
+}
+
+// shaken frees a little the pieces held on a shaken channel.
+func (w *SimWorld) shaken(ch Channel) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var stay []*simPiece
+	for _, p := range w.onRotor[ch] {
+		if p.held > 0 {
+			p.held--
+		}
+		if ch == ChannelC4 && p.part.NoFall && p.angle == simExitAngle {
+			w.fall(ch, p) // shaken off the exit
+			continue
+		}
+		stay = append(stay, p)
+	}
+	w.onRotor[ch] = stay
 }
 
 // turn moves a channel's pieces; those passing the exit's middle fall to the next.
 func (w *SimWorld) turn(ch Channel, deg float64) {
 	var stay []*simPiece
 	for _, p := range w.onRotor[ch] {
+		if p.held > 0 {
+			stay = append(stay, p) // held: the channel turns under it
+			continue
+		}
 		before := p.angle
 		p.angle += deg
 		if before < simExitAngle && p.angle >= simExitAngle {
+			if ch == ChannelC4 && p.part.NoFall {
+				p.angle = simExitAngle // hangs in the exit
+				stay = append(stay, p)
+				continue
+			}
 			w.fall(ch, p)
 			continue
 		}
@@ -168,9 +212,9 @@ func (w *SimWorld) turn(ch Channel, deg float64) {
 func (w *SimWorld) fall(ch Channel, p *simPiece) {
 	switch ch {
 	case ChannelC2:
-		w.onRotor[ChannelC3] = append(w.onRotor[ChannelC3], &simPiece{part: p.part, angle: simLandAngle})
+		w.onRotor[ChannelC3] = append(w.onRotor[ChannelC3], newSimPiece(p.part, ChannelC3))
 	case ChannelC3:
-		w.onRotor[ChannelC4] = append(w.onRotor[ChannelC4], &simPiece{part: p.part, angle: simLandAngle})
+		w.onRotor[ChannelC4] = append(w.onRotor[ChannelC4], newSimPiece(p.part, ChannelC4))
 		w.landedC4 = append(w.landedC4, p.part)
 	case ChannelC4:
 		status := w.hw.ChuteStatus()

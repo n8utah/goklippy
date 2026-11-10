@@ -181,14 +181,31 @@ func TestSortIdentificationFailureGoesToTheBucket(t *testing.T) {
 	_ = store
 }
 
+// stallSettings: Brickognize hangs and the platter waits for it, so it stalls.
+func stallSettings() sorter.MachineSettings {
+	s := fastSettings()
+	s.Platter.IdentifyTimeoutMs = 60_000
+	s.Platter.StallMs = 300
+	return s
+}
+
+func TestSortStallIsClearedByTurningTheChannel(t *testing.T) {
+	m, world, _ := startSimSort(t, stallSettings, []sorter.SimPart{sorter.SimCatalog[0]}, failingIdentifier{block: true})
+	require.Eventually(t, func() bool { return len(world.Falls()) == 1 && len(m.Snapshot().Recent) == 1 }, 20*time.Second, 10*time.Millisecond)
+	assert.Equal(t, 0, world.Falls()[0].Layer, "into the bucket, every layer closed")
+	piece := m.Snapshot().Recent[0]
+	require.NotEmpty(t, piece.Problems)
+	assert.Equal(t, sorter.ProblemSweptOff, piece.Problems[len(piece.Problems)-1].Kind)
+	assert.Nil(t, m.Snapshot().Incident, "cleared, so no incident")
+	require.NotNil(t, m.Snapshot().LastJob)
+	assert.Contains(t, m.Snapshot().LastJob.Name, "clear the classification channel")
+}
+
 func TestSortStallRaisesAnIncident(t *testing.T) {
-	settings := func() sorter.MachineSettings {
-		s := fastSettings()
-		s.Platter.IdentifyTimeoutMs = 60_000 // Brickognize hangs, and we wait for it
-		s.Platter.StallMs = 300
-		return s
-	}
-	m, _, store := startSimSort(t, settings, []sorter.SimPart{sorter.SimCatalog[0]}, failingIdentifier{block: true})
+	// A piece stuck to C4 that turning can't clear.
+	stuck := sorter.SimCatalog[0]
+	stuck.HeldOn, stuck.HeldShakes = sorter.ChannelC4, 1_000_000
+	m, _, store := startSimSort(t, stallSettings, []sorter.SimPart{stuck}, failingIdentifier{block: true})
 	require.Eventually(t, func() bool { return m.Snapshot().Incident != nil }, 20*time.Second, 10*time.Millisecond)
 	inc := m.Snapshot().Incident
 	assert.Equal(t, sorter.IncidentPlatterStuck, inc.Kind)
@@ -204,6 +221,41 @@ func TestSortStallRaisesAnIncident(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, incs, 1)
 	assert.Equal(t, sorter.ResolveDone, incs[0].Resolution)
+}
+
+func TestSortLandingHeldIsFreedByShaking(t *testing.T) {
+	held := sorter.SimCatalog[0]
+	held.HeldOn, held.HeldShakes = sorter.ChannelC3, 1 // one shake of C3 frees it
+	m, world, _ := startSimSort(t, fastSettings, []sorter.SimPart{held}, nil)
+	require.Eventually(t, func() bool { return len(world.Falls()) == 1 && len(m.Snapshot().Aboard) == 0 }, 60*time.Second, 20*time.Millisecond)
+	assert.NotZero(t, world.Falls()[0].Layer, "sorted into its bin after all")
+	assert.Nil(t, m.Snapshot().Incident)
+	require.NotNil(t, m.Snapshot().LastJob)
+	assert.Contains(t, m.Snapshot().LastJob.Name, "held where pieces land")
+}
+
+func TestSortLandingStuckRaisesAnIncident(t *testing.T) {
+	held := sorter.SimCatalog[0]
+	held.HeldOn, held.HeldShakes = sorter.ChannelC3, 1_000_000
+	m, _, _ := startSimSort(t, fastSettings, []sorter.SimPart{held}, nil)
+	require.Eventually(t, func() bool { return m.Snapshot().Incident != nil }, 60*time.Second, 20*time.Millisecond)
+	assert.Equal(t, sorter.IncidentLandingStuck, m.Snapshot().Incident.Kind)
+	require.NoError(t, m.ResolveIncident(context.Background(), sorter.ResolveDone))
+	assert.Nil(t, m.Snapshot().Incident)
+}
+
+func TestSortDidntFallIsShakenOff(t *testing.T) {
+	clingy := sorter.SimCatalog[2]
+	clingy.NoFall = true
+	m, world, store := startSimSort(t, fastSettings, []sorter.SimPart{clingy}, nil)
+	require.Eventually(t, func() bool { return len(world.Falls()) == 1 }, 20*time.Second, 10*time.Millisecond, "shaken off in the end")
+	require.Eventually(t, func() bool {
+		recent := m.Snapshot().Recent
+		return len(recent) == 1 && len(recent[0].Problems) > 0
+	}, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, sorter.ProblemDidntFall, m.Snapshot().Recent[0].Problems[0].Kind)
+	assert.NotZero(t, world.Falls()[0].Layer, "still into its bin: the doors stay set")
+	_ = store
 }
 
 func abs(v float64) float64 {

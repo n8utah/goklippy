@@ -45,8 +45,9 @@ func (m *Machine) AttachSorting(deps SortDeps) {
 		HW: m.hw, Vision: deps.Vision, Identifier: deps.Identifier, Sorting: deps.Sorting, Records: deps.Records,
 		Settings: m.settings,
 		RunID:    func() int64 { return st.runID },
-		// The platter steps on the loop, so it can raise straight onto it.
-		RaiseIncident: m.raiseIncident,
+		// The platter steps on the loop, so these run on it too.
+		OnStall:     m.onPlatterStall,
+		OnDidntFall: m.onDidntFall,
 	})
 	m.sort = st
 }
@@ -92,14 +93,18 @@ func (m *Machine) endRun(now time.Time) {
 
 // stepSorting runs the stations for one tick: the platter, then the feeder feeding it.
 func (m *Machine) stepSorting(now time.Time) {
-	if m.sort == nil || m.incident != nil {
-		return
+	if m.sort == nil || m.incident != nil || m.job != nil {
+		return // held: an incident, or a recovery moving the channels
 	}
 	st := m.sort
 	settings := m.settings()
 	st.platter.Step(now)
-	if m.incident != nil {
-		return // the platter just raised one
+	if m.incident != nil || m.job != nil {
+		return // the platter just raised one or started a recovery
+	}
+	if stuck := st.feeder.Stuck(); len(stuck) > 0 {
+		m.recoverLanding(stuck[0])
+		return
 	}
 	moves := st.feeder.Step(FeederInput{
 		Now:          now,
@@ -154,9 +159,118 @@ func (m *Machine) ResolveIncident(ctx context.Context, action string) error {
 		m.incident = nil
 		if m.sort != nil {
 			m.sort.platter.progress(now)
+			m.sort.feeder.Unstick(ChannelC2)
+			m.sort.feeder.Unstick(ChannelC3)
 		}
 		m.changed = true
 		return nil
+	}})
+}
+
+func (m *Machine) recovery() recoveryRunner {
+	return recoveryRunner{hw: m.hw, vision: m.sort.deps.Vision, settings: m.settings}
+}
+
+// recoverLanding runs the landing-held procedure on a channel whose piece won't ride;
+// if no probe sees it free, the operator is asked.
+func (m *Machine) recoverLanding(ch Channel) {
+	st := m.sort
+	runner := m.recovery()
+	var freed bool
+	err := m.startJob(fmt.Sprintf("Recovery: %s on %s", LandingHeld.Title, ch), func(ctx context.Context, report reportFunc) error {
+		var err error
+		freed, err = runner.run(ctx, LandingHeld, ch, report)
+		return err
+	}, func(err error) {
+		if err == nil && freed {
+			st.feeder.Unstick(ch)
+			return
+		}
+		m.raiseIncident(Incident{
+			Kind:    IncidentLandingStuck,
+			Title:   fmt.Sprintf("A piece is stuck where pieces land on %s", ch),
+			Message: "It doesn't move with the channel, and shaking didn't free it. Take it off, then press Done.",
+		})
+	})
+	if err != nil {
+		slog.Warn("couldn't start a recovery", "error", err)
+	}
+}
+
+// clearTurns is how far the platter turns, every layer closed, to clear a stall.
+const clearTurns = 2
+
+// onPlatterStall turns C4 round with every layer closed so what's aboard drops into
+// the bucket, then asks the operator if the camera still sees a piece.
+func (m *Machine) onPlatterStall(aboard int) {
+	st := m.sort
+	settings := m.settings()
+	err := m.startJob("Recovery: clear the classification channel", func(ctx context.Context, report reportFunc) error {
+		report(1, 2, "Closing every layer, so pieces drop into the bucket")
+		if err := m.hw.SelectLayer(-1); err != nil {
+			return err
+		}
+		if err := waitFor(ctx, time.Duration(settings.Distributor.DoorSettleMs)*time.Millisecond); err != nil {
+			return err
+		}
+		report(2, 2, fmt.Sprintf("Turning the channel %d times round", clearTurns))
+		done, err := m.hw.MoveChannel(ChannelC4, 360*clearTurns, settings.IndexRpm)
+		if err != nil {
+			return err
+		}
+		if err := awaitDone(ctx, done); err != nil {
+			return err
+		}
+		return waitFor(ctx, time.Duration(settings.Platter.SettleMs)*time.Millisecond+recoverySettle)
+	}, func(err error) {
+		now := time.Now().UTC()
+		st.platter.Sweep(now)
+		obs := st.deps.Vision.Observation(ChannelC4)
+		if err == nil && obs.Valid && obs.Empty() {
+			slog.Info("classification channel cleared", "pieces", aboard)
+			return
+		}
+		m.raiseIncident(Incident{
+			Kind:    IncidentPlatterStuck,
+			Title:   "Stuck on the classification channel",
+			Message: fmt.Sprintf("%d piece(s) made no progress, and turning the channel round didn't clear it. Clear the channel, then press Done.", aboard),
+		})
+	})
+	if err != nil {
+		slog.Warn("couldn't start clearing the classification channel", "error", err)
+	}
+}
+
+// onDidntFall shakes a piece off C4's exit.
+func (m *Machine) onDidntFall() {
+	runner := m.recovery()
+	err := m.startJob("Recovery: shake a piece off the classification channel", func(ctx context.Context, report reportFunc) error {
+		report(1, 1, "Shake C4: Heavy stuck")
+		return runner.shake(ctx, ChannelC4, "heavy")
+	}, nil)
+	if err != nil {
+		slog.Warn("couldn't start shaking C4", "error", err)
+	}
+}
+
+// ShakeChannel runs a shake by hand, as a job.
+func (m *Machine) ShakeChannel(ctx context.Context, ch Channel, key string) error {
+	p, err := shakeProfile(key)
+	if err != nil {
+		return err
+	}
+	return m.send(ctx, request{do: func() error {
+		if err := m.handsOff(); err != nil {
+			return err
+		}
+		sh := rotorShake(p, channelGear(m.settings(), ch))
+		return m.startJob(fmt.Sprintf("Shake %s: %s", ch, p.Label), func(ctx context.Context, report reportFunc) error {
+			done, err := m.hw.Shake(ch, sh)
+			if err != nil {
+				return err
+			}
+			return awaitDone(ctx, done)
+		}, nil)
 	}})
 }
 

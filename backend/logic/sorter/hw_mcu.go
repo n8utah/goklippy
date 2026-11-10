@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"time"
 
 	"goklippy/backend/mcu"
 	"goklippy/backend/mcu/cfgtranslate"
@@ -142,6 +143,54 @@ func (h *MCUHardware) MoveChannel(ch Channel, deg, rpm float64) (<-chan error, e
 	h.remainders[ch] = wanted - steps
 	h.mu.Unlock()
 	return doneAfter(d), nil
+}
+
+func (h *MCUHardware) Shake(ch Channel, sh Shake) (<-chan error, error) {
+	if sh.Rpm <= 0 || sh.Cycles < 1 {
+		return nil, fmt.Errorf("%s: a shake needs a speed and at least one cycle", ch)
+	}
+	s, err := h.session()
+	if err != nil {
+		return nil, err
+	}
+	st, err := h.stepperFor(s, h.settings(), ch)
+	if err != nil {
+		return nil, err
+	}
+	steps := int(math.Round(sh.AmplitudeDeg / 360 * st.stepsPerRev))
+	if steps < 1 {
+		return nil, fmt.Errorf("%s: a %.2f° shake is less than a step", ch, sh.AmplitudeDeg)
+	}
+	stroke := mcu.TrapezoidMove{Steps: steps, MaxHz: sh.Rpm / 60 * st.stepsPerRev, AccelHz: sh.AccelRpmS / 60 * st.stepsPerRev}
+	opsPerCycle, err := mcu.ShakeQueueOps(stroke, 2, s.ClockFreq)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", ch, err)
+	}
+	// Whole cycles per part, each part within the MCU's budget, run one after another.
+	perPart := max(1, mcu.MaxShakeQueueOps/opsPerCycle)
+	first := min(perPart, sh.Cycles)
+	d, err := s.StepperShake(st.oid, st.forward, stroke, 2*first)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", ch, err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		left := sh.Cycles - first
+		for {
+			time.Sleep(d)
+			if left <= 0 {
+				done <- nil
+				return
+			}
+			part := min(perPart, left)
+			left -= part
+			if d, err = s.StepperShake(st.oid, st.forward, stroke, 2*part); err != nil {
+				done <- fmt.Errorf("%s: %w", ch, err)
+				return
+			}
+		}
+	}()
+	return done, nil
 }
 
 func (h *MCUHardware) SelectLayer(layer int) error {
