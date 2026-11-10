@@ -41,7 +41,7 @@ SELECT
   COALESCE(role, 'user') AS role,
   password_hash
 FROM app_users
-WHERE LOWER(email) = LOWER($1)
+WHERE LOWER(email) = LOWER(?)
   AND is_active = TRUE
 LIMIT 1
 `
@@ -61,7 +61,7 @@ func (s *AuthStore) SaveRefreshToken(ctx context.Context, tokenID string, userID
 	const selectQuery = `
 SELECT token_id
 FROM auth_refresh_tokens
-WHERE token_id = $1
+WHERE token_id = ?
 LIMIT 1
 `
 
@@ -81,7 +81,7 @@ INSERT INTO auth_refresh_tokens (
   updated_at,
   revoked_at
 )
-VALUES ($1, $2, $3, NOW(), NOW(), NULL)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)
 `
 		_, execErr := s.db.ExecContext(ctx, insertQuery, tokenID, userID, expiresAt)
 		return execErr
@@ -89,13 +89,13 @@ VALUES ($1, $2, $3, NOW(), NOW(), NULL)
 
 	const updateQuery = `
 UPDATE auth_refresh_tokens
-SET user_id = $2,
-    expires_at = $3,
+SET user_id = ?,
+    expires_at = ?,
     revoked_at = NULL,
-    updated_at = NOW()
-WHERE token_id = $1
+    updated_at = CURRENT_TIMESTAMP
+WHERE token_id = ?
 `
-	_, execErr := s.db.ExecContext(ctx, updateQuery, tokenID, userID, expiresAt)
+	_, execErr := s.db.ExecContext(ctx, updateQuery, userID, expiresAt, tokenID)
 	return execErr
 }
 
@@ -111,7 +111,7 @@ SELECT
   expires_at,
   revoked_at
 FROM auth_refresh_tokens
-WHERE token_id = $1
+WHERE token_id = ?
 LIMIT 1
 `
 
@@ -147,9 +147,9 @@ func (s *AuthStore) RevokeRefreshToken(ctx context.Context, tokenID string) erro
 
 	const query = `
 UPDATE auth_refresh_tokens
-SET revoked_at = NOW(),
-    updated_at = NOW()
-WHERE token_id = $1
+SET revoked_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE token_id = ?
 `
 	_, err := s.db.ExecContext(ctx, query, tokenID)
 	return err
@@ -181,7 +181,7 @@ func EnsureInitialUser(ctx context.Context, db *sqlx.DB, seed InitialUserSeed) (
 	const existingUserQuery = `
 SELECT id, password_hash, COALESCE(role, 'user') AS role, is_active
 FROM app_users
-WHERE LOWER(email) = LOWER($1)
+WHERE LOWER(email) = LOWER(?)
 LIMIT 1
 `
 
@@ -208,7 +208,7 @@ LIMIT 1
 	if errors.Is(err, sql.ErrNoRows) {
 		const insertQuery = `
 INSERT INTO app_users (email, password_hash, role, is_active, created_at, updated_at)
-VALUES ($1, $2, $3, TRUE, NOW(), NOW())
+VALUES (?, ?, ?, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 `
 
 		if _, execErr := db.ExecContext(ctx, insertQuery, email, string(passwordHash), role); execErr != nil {
@@ -219,14 +219,14 @@ VALUES ($1, $2, $3, TRUE, NOW(), NOW())
 
 	const updateQuery = `
 UPDATE app_users
-SET password_hash = $2,
-    role = $3,
+SET password_hash = ?,
+    role = ?,
     is_active = TRUE,
-    updated_at = NOW()
-WHERE id = $1
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
 `
 
-	if _, execErr := db.ExecContext(ctx, updateQuery, user.ID, string(passwordHash), role); execErr != nil {
+	if _, execErr := db.ExecContext(ctx, updateQuery, string(passwordHash), role, user.ID); execErr != nil {
 		return false, fmt.Errorf("update initial user: %w", execErr)
 	}
 

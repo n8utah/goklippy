@@ -15,6 +15,7 @@ type IndexMove struct {
 	Forward       bool
 	SpeedHz       float64
 	StepsPerIndex float64 // may be fractional; the remainder carries to the next move
+	AccelHz       float64 // steps per second²; 0 moves at SpeedHz with no ramp
 	Dwell         time.Duration
 	Count         int // 0 repeats until stopped
 }
@@ -25,8 +26,8 @@ func (s *Session) StartStepperIndexing(oid int, move IndexMove) error {
 	if move.StepsPerIndex < 1 {
 		return fmt.Errorf("steps per index must be at least 1")
 	}
-	if move.Count < 0 || move.Dwell < 0 {
-		return fmt.Errorf("count and dwell can't be negative")
+	if move.Count < 0 || move.Dwell < 0 || move.AccelHz < 0 {
+		return fmt.Errorf("count, dwell and acceleration can't be negative")
 	}
 
 	s.stepperLock(oid).Lock()
@@ -80,8 +81,17 @@ func (s *Session) indexLoop(oid int, move IndexMove, state *stepperRoutineKeeper
 
 	for i := 0; move.Count == 0 || i < move.Count; i++ {
 		steps := s.nextIndexSteps(oid, move.Forward, move.StepsPerIndex)
+		moveDur := time.Duration((float64(steps)/clampJogSpeed(move.SpeedHz) + indexSettleMargin) * float64(time.Second))
 		err := s.sendIfActive(oid, state, func() error {
-			return s.stepperJogMove(oid, move.Forward, move.SpeedHz, steps)
+			if move.AccelHz <= 0 {
+				return s.stepperJogMove(oid, move.Forward, move.SpeedHz, steps)
+			}
+			d, err := s.stepperTrapezoidMove(oid, move.Forward, TrapezoidMove{
+				Steps: steps, MaxHz: move.SpeedHz, AccelHz: move.AccelHz,
+			})
+			// d already counts the scheduling margin; add the same settle time.
+			moveDur = d + time.Duration((indexSettleMargin-motionStartMarginSec)*float64(time.Second))
+			return err
 		})
 		if err == errRoutineStopped {
 			return
@@ -92,8 +102,7 @@ func (s *Session) indexLoop(oid int, move IndexMove, state *stepperRoutineKeeper
 			return
 		}
 
-		moveSec := float64(steps)/clampJogSpeed(move.SpeedHz) + indexSettleMargin
-		timer := time.NewTimer(time.Duration(moveSec*float64(time.Second)) + move.Dwell)
+		timer := time.NewTimer(moveDur + move.Dwell)
 		select {
 		case <-state.stop:
 			timer.Stop()

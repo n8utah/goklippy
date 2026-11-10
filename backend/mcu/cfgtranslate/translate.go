@@ -243,21 +243,42 @@ func (b *Builder) addServo(name string, sec klipperconfig.Section) error {
 }
 
 func (b *Builder) addEndstop(name string, opts map[string]string) error {
-	pin := opts["pin"]
+	pin, pullUp, invert := parseInputPin(opts["pin"])
 	if pin == "" {
 		return fmt.Errorf("%s: pin is required", name)
 	}
-	pullUp := 1
-	if strings.HasPrefix(strings.TrimSpace(pin), "^") {
-		pullUp = 1
-	}
 	oid := b.allocOID()
+	pullUpValue := 0
+	if pullUp {
+		pullUpValue = 1
+	}
 	b.lines = append(b.lines, fmt.Sprintf(
 		"config_endstop oid=%d pin=%s pull_up=%d",
-		oid, pin, pullUp,
+		oid, pin, pullUpValue,
 	))
-	b.addObject(name, oid, KindEndstop, map[string]string{"pin": pin})
+	// invert: the switch reads low when triggered, so homing waits for pin_value=0.
+	b.addObject(name, oid, KindEndstop, map[string]string{"pin": pin, "invert": fmt.Sprintf("%v", invert)})
 	return nil
+}
+
+// parseInputPin splits Klipper's input pin prefixes off a pin name: "^" enables the
+// pull-up, "!" inverts the reading. "~" (pull-down) has no AVR equivalent and is
+// dropped. "^!ar3" -> ("ar3", true, true).
+func parseInputPin(raw string) (pin string, pullUp, invert bool) {
+	pin = strings.TrimSpace(raw)
+	for pin != "" {
+		switch pin[0] {
+		case '^':
+			pullUp = true
+		case '!':
+			invert = true
+		case '~', ' ':
+		default:
+			return pin, pullUp, invert
+		}
+		pin = pin[1:]
+	}
+	return pin, pullUp, invert
 }
 
 func (b *Builder) buildInitCommands() []string {

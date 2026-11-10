@@ -10,9 +10,9 @@ This plan picks up after the framework scaffold (M0) and sequences work through 
 
 ## Current State (M0 — Complete)
 
-- Go backend with Gin, JWT auth, Postgres via sqlx
+- Go backend with Gin, JWT auth, SQLite via sqlx
 - React/Vite frontend with auth flow
-- Atlas migrations, mage build tasks, Playwright smoke tests
+- Atlas schema (single `schema.sql`), mage build tasks, Playwright smoke tests
 - PRD defined; hardware setup docs added; no MCU/serial code yet
 
 ---
@@ -137,7 +137,7 @@ POST   /api/klipper-config/export-from-setup  # setup → config sections
 | Layer | Source | Example |
 |-------|--------|---------|
 | Profile (static) | `ramps14.yaml` | `stepper_x` exists at pins D54/D55/D38 |
-| Setup (user) | Postgres | `stepper_x`: connected=true, label="bench motor" |
+| Setup (user) | SQLite | `stepper_x`: connected=true, label="bench motor" |
 | Runtime config | merge | Only connected slots → Klipper config objects |
 
 **RAMPS profile structure (sketch):**

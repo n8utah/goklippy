@@ -32,6 +32,21 @@ func (s *Session) stepperDriverEnableCommands(stepperOID int) []string {
 	return nil
 }
 
+// stepperStartCommands enables the driver and restarts the stepper's step clock at
+// startClock. Any in-flight move is stopped first: Klipper shuts down if
+// reset_step_clock is sent while the stepper queue is active, and queue_step is
+// silently dropped while SF_NEED_RESET is set without a prior reset. The caller
+// appends set_next_step_dir and the queue_step commands.
+func (s *Session) stepperStartCommands(oid, stopTrsyncOID int, startClock uint64) []string {
+	cmds := s.stepperDriverEnableCommands(oid)
+	return append(cmds,
+		fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID),
+		fmt.Sprintf("trsync_start oid=%d report_clock=0 report_ticks=0 expire_reason=0", stopTrsyncOID),
+		fmt.Sprintf("stepper_stop_on_trigger oid=%d trsync_oid=%d", oid, stopTrsyncOID),
+		fmt.Sprintf("reset_step_clock oid=%d clock=%d", oid, startClock),
+	)
+}
+
 // ensureMCUReady clears an earlier shutdown before new motion is sent. A shutdown has
 // already killed every move on the MCU, so anything still marked running is ended here.
 func (s *Session) ensureMCUReady() error {

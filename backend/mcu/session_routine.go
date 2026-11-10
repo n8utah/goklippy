@@ -339,14 +339,7 @@ func (s *Session) sendStepperRoutinePattern(oid int, segments []StepperRoutineSe
 
 	// A live clock read: queueEnd is counted from this, so it has to be accurate.
 	return s.sendAtMotionClock(motionStartMarginSec, func(startClock uint64) []string {
-		cmds := make([]string, 0, 10+len(segments)*3)
-		cmds = append(cmds, s.stepperDriverEnableCommands(oid)...)
-		cmds = append(cmds, fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
-		cmds = append(cmds,
-			fmt.Sprintf("trsync_start oid=%d report_clock=0 report_ticks=0 expire_reason=0", stopTrsyncOID),
-			fmt.Sprintf("stepper_stop_on_trigger oid=%d trsync_oid=%d", oid, stopTrsyncOID),
-			fmt.Sprintf("reset_step_clock oid=%d clock=%d", oid, startClock),
-		)
+		cmds := s.stepperStartCommands(oid, stopTrsyncOID, startClock)
 		return append(cmds, routineSegmentCommands(oid, segments, s.ClockFreq)...)
 	})
 }

@@ -642,12 +642,13 @@ export function MCUSessionProvider({ children }) {
 
   /** Rotate in fixed increments; count 0 repeats until stopped. */
   const startStepperIndexing = useCallback(
-    async (oid, { forward, speedHz, stepsPerIndex, dwellMs, count }) => {
+    async (oid, { forward, speedHz, stepsPerIndex, accelHz2 = 0, dwellMs, count }) => {
       if (!session?.session_id) return;
       await indexMCUStepper(session.session_id, oid, {
         forward,
         speed_hz: speedHz,
         steps_per_index: stepsPerIndex,
+        accel_hz2: accelHz2,
         dwell_ms: dwellMs,
         count,
       });

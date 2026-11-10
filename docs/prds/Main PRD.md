@@ -156,7 +156,7 @@ goklippy fills that gap: load an existing Klipper config (or start from a board 
 | FR-B1 | **Board profiles** define slots, pins, Klipper templates, **diagram SVG**, and **hotspot map** ([spec](../ui-visual-board.md)) |
 | FR-B2 | RAMPS 1.4 profile exposes all standard slots — 5 steppers, 4 thermistors, 3 MOSFET outputs, 6 endstops, 2 servos, aux GPIO — per [capabilities doc](../hardware/ramps14-capabilities.md) |
 | FR-B3 | Profiles are data-driven (YAML + SVG) and loaded by the backend without recompilation |
-| FR-B4 | **Board setups** (user-created, persisted in Postgres) reference a profile and store per-slot: `connected` bool, user label, and slot-specific options |
+| FR-B4 | **Board setups** (user-created, persisted in SQLite) reference a profile and store per-slot: `connected` bool, user label, and slot-specific options |
 | FR-B5 | **Visual setup UI** renders board diagram; hover → tooltip; click → connection modal with peripheral type + options |
 | FR-B5a | Connection modal filters types by what the pin accepts (stepper socket vs TEMP vs MOSFET, etc.) |
 | FR-B5b | Diagram shows connected / unconfigured / live / error states with distinct styling |
@@ -269,7 +269,7 @@ Hardware setup guide: [docs/hardware/ramps14-setup.md](../hardware/ramps14-setup
                            │ REST + WebSocket (JWT auth)
 ┌──────────────────────────▼──────────────────────────────────┐
 │                     Go Backend (Gin)                        │
-│  routes/  →  logic/  →  models/ (Postgres for sessions/logs)│
+│  routes/  →  logic/  →  models/ (SQLite for sessions/logs)  │
 │              │                                              │
 │              ├── mcu/        Klipper msgproto + serial I/O  │
 │              ├── discovery/  Port scan + identify probe     │
@@ -290,7 +290,7 @@ Hardware setup guide: [docs/hardware/ramps14-setup.md](../hardware/ramps14-setup
 | `backend/logic/discovery/` | Serial port enumeration and Klipper identify probing |
 | `backend/logic/mcu_manager/` | Owns active connections, routes commands, publishes events |
 | `backend/profiles/` | Static board profile definitions (RAMPS 1.4 first) |
-| `backend/models/board_setup.go` | Persist user board setups (Postgres) |
+| `backend/models/board_setup.go` | Persist user board setups (SQLite) |
 | `backend/logic/klipper_config/` | Parse, merge includes, validate, serialize Klipper `.cfg` files |
 | `backend/logic/board_setup/` | Validate setups, merge profile + setup → Klipper config; import/export with config parser |
 | `backend/models/klipper_config.go` | Track open config workspace, unsaved edits, file paths |
@@ -395,7 +395,7 @@ Docs for flashing Klipper to RAMPS, manual test checklist, demo video.
 
 | # | Question | Proposed Default |
 |---|----------|------------------|
-| 1 | Store connection history / command logs in Postgres? | Yes — audit log table for sessions and commands |
+| 1 | Store connection history / command logs in the database? | Yes — audit log table for sessions and commands (SQLite) |
 | 2 | Support Windows serial port naming (`COM3`)? | Yes — primary dev OS is Windows |
 | 3 | Custom pin overrides per slot? | Defer to v2; v1 uses profile default pins, user picks connected/not |
 | 4 | Protocol implementation source? | Port minimal subset from [Klipper-go](https://github.com/ANYCUBIC-3D/Klipper-go); pure Go serial, no CGO in v1 |
@@ -411,7 +411,7 @@ Docs for flashing Klipper to RAMPS, manual test checklist, demo video.
 
 - RAMPS 1.4 (or compatible) board with **Klipper MCU firmware** flashed (not Marlin)
 - USB connection to the host running goklippy
-- PostgreSQL for auth, board setups, and config workspace metadata
+- SQLite for auth, board setups, and config workspace metadata
 - Hardware setup: [docs/hardware/ramps14-setup.md](../hardware/ramps14-setup.md)
 - Existing Klipper config directory (optional) — e.g. `~/printer_data/config/` or a local copy of `printer.cfg`
 - Go 1.22+ and Node 20+ for development

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { INDEXING_LABEL, useMCUSession } from '../../context/MCUSessionContext';
 import { MAX_STEPPER_SPEED } from '../../helpers/stepperGroups';
+import { readLocal, useMachineSettings, useServerDocument } from '../../helpers/sorterSettings';
 import { loadStepperRoutines } from '../../helpers/stepperRoutines';
 
-const STORAGE_KEY = 'goklippy_sorter_settings';
 const ROUTINES_KEY = 'goklippy_sorter_routines';
 const FULL_STEPS_PER_REV = 200;
 const DEFAULT_MICROSTEPS = 16;
@@ -15,67 +15,7 @@ const BARE_MOTOR_STEPS_PER_REV = FULL_STEPS_PER_REV * DEFAULT_MICROSTEPS;
 export const FEEDER_IDS = ['c1', 'c2', 'c3'];
 export const CHANNEL_IDS = [...FEEDER_IDS, 'c4'];
 
-const DEFAULT_SETTINGS = {
-  feederRpm: { c1: 5, c2: 7.5, c3: 11.25 },
-  indexDegrees: 72,
-  indexRpm: 10,
-  dwellMs: 1000,
-  showSettings: true,
-  distributor: {
-    stepper: 'stepper_e1',
-    gear: 5,
-    rpm: 5,
-    layers: [
-      { servo: '', bins: 18, openAngle: 90, closedAngle: 0 },
-      { servo: '', bins: 18, openAngle: 90, closedAngle: 0 },
-      { servo: '', bins: 18, openAngle: 90, closedAngle: 0 },
-      { servo: '', bins: 12, openAngle: 90, closedAngle: 0 },
-    ],
-  },
-  channels: {
-    c1: { stepper: 'stepper_x', forward: true, gear: 1 },
-    c2: { stepper: 'stepper_y', forward: true, gear: 1 },
-    c3: { stepper: 'stepper_z', forward: true, gear: 1 },
-    c4: { stepper: 'stepper_e0', forward: true, gear: 10.8 },
-  },
-  routines: {},
-};
-
-/** Older saves stored C2 and C3 as multiples of C1. */
-function feederRpmFrom(saved) {
-  if (saved.feederRpm) return saved.feederRpm;
-  if (saved.baseRpm == null) return DEFAULT_SETTINGS.feederRpm;
-  const c2 = saved.baseRpm * (saved.c2Factor ?? 1.5);
-  return { c1: saved.baseRpm, c2, c3: c2 * (saved.c3Factor ?? 1.5) };
-}
-
-function loadSettings() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved?.channels) {
-      // eslint-disable-next-line no-unused-vars
-      const { baseRpm, c2Factor, c3Factor, ...rest } = saved;
-      return {
-        ...DEFAULT_SETTINGS,
-        ...rest,
-        feederRpm: feederRpmFrom(saved),
-        distributor: { ...DEFAULT_SETTINGS.distributor, ...saved.distributor },
-        channels: { ...DEFAULT_SETTINGS.channels, ...saved.channels },
-      };
-    }
-  } catch {
-    // fall through to defaults
-  }
-  return DEFAULT_SETTINGS;
-}
-
-function saveSettings(settings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // settings just won't persist
-  }
-}
+const normalizeRoutines = (saved) => (Array.isArray(saved) ? saved : []);
 
 export function stepsPerRotorRev(microsteps, gear) {
   return FULL_STEPS_PER_REV * microsteps * gear;
@@ -120,22 +60,9 @@ export function fromStepperRoutine(routine) {
   };
 }
 
-function loadSorterRoutines() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(ROUTINES_KEY));
-    if (Array.isArray(saved)) return saved;
-  } catch {
-    // fall through to a fresh copy
-  }
-  return loadStepperRoutines().map(fromStepperRoutine);
-}
-
-function saveSorterRoutines(routines) {
-  try {
-    localStorage.setItem(ROUTINES_KEY, JSON.stringify(routines));
-  } catch {
-    // routines just won't persist
-  }
+function localRoutines() {
+  const saved = readLocal(ROUTINES_KEY);
+  return Array.isArray(saved) ? saved : loadStepperRoutines().map(fromStepperRoutine);
 }
 
 /**
@@ -168,12 +95,6 @@ export function indexAlignment(angle, indexDegrees) {
   };
 }
 
-/** Signed shortest rotation from one angle to another, in -180..180 degrees. */
-export function shortestRotation(from, to) {
-  const delta = (((to - from) % 360) + 360) % 360;
-  return delta > 180 ? delta - 360 : delta;
-}
-
 export function useSorterPageLogic() {
   const {
     connected,
@@ -196,16 +117,17 @@ export function useSorterPageLogic() {
     setServosAtAngles,
   } = useMCUSession();
 
-  const [settings, setSettings] = useState(loadSettings);
+  const [settings, setSettings, settingsSyncError] = useMachineSettings();
   const [zeroes, setZeroes] = useState({});
-  const [routines, setRoutines] = useState(loadSorterRoutines);
+  const [routines, setRoutines, routinesSyncError] = useServerDocument(
+    'routines',
+    ROUTINES_KEY,
+    localRoutines,
+    normalizeRoutines,
+  );
   const [activeLayerChoice, setActiveLayerChoice] = useState(0);
-  const [targetBin, setTargetBin] = useState(null);
   const [actionError, setActionError] = useState('');
   const [resetting, setResetting] = useState(false);
-
-  useEffect(() => saveSettings(settings), [settings]);
-  useEffect(() => saveSorterRoutines(routines), [routines]);
 
   const motionByOid = useMemo(
     () => Object.fromEntries((motion?.steppers || []).map((m) => [m.oid, m])),
@@ -266,8 +188,6 @@ export function useSorterPageLogic() {
     const oid = object?.oid;
     const live = oid == null ? null : motionByOid[oid];
     const activeLayer = Math.min(activeLayerChoice, config.layers.length - 1);
-    const bins = config.layers[activeLayer].bins;
-    const angle = (((live?.position ?? 0) - (zeroes[oid] ?? 0)) / stepsPerRev) * 360;
     return {
       config,
       oid,
@@ -277,17 +197,14 @@ export function useSorterPageLogic() {
       speedHz: rpmToStepsPerSec(config.rpm, stepsPerRev),
       measuredRpm: live ? Math.abs(stepsToRpm(live.steps_per_sec, stepsPerRev)) : 0,
       moving: (live?.direction ?? 0) !== 0,
-      angle,
       activeLayer,
-      bins,
-      targetBin: targetBin != null && targetBin < bins ? targetBin : null,
-      alignment: indexAlignment(angle, 360 / bins),
+      sectionPitch: 360 / Math.max(1, config.sections),
       layers: config.layers.map((layer) => ({
         ...layer,
         servoObject: servoObjects.find((obj) => obj.section === layer.servo),
       })),
     };
-  }, [settings.distributor, stepperObjects, servoObjects, motionByOid, zeroes, activeLayerChoice, targetBin]);
+  }, [settings.distributor, stepperObjects, servoObjects, motionByOid, activeLayerChoice]);
 
   // What each running channel was last told, so only real changes re-command it.
   const lastSentRef = useRef({});
@@ -359,20 +276,6 @@ export function useSorterPageLogic() {
       );
     });
 
-  const pointToBin = (bin) =>
-    guard(async () => {
-      setTargetBin(bin);
-      if (distributor.oid == null) return;
-      if (distributor.moving) {
-        throw new Error('The distributor is still moving. Wait for it to stop.');
-      }
-      const rotation = shortestRotation(distributor.angle, (bin * 360) / distributor.bins);
-      const steps = Math.round((Math.abs(rotation) / 360) * distributor.stepsPerRev);
-      if (steps > 0) {
-        await jogStepper(distributor.oid, { forward: rotation > 0, speedHz: distributor.speedHz, steps });
-      }
-    });
-
   const setDistributor = (patch) =>
     setSettings((prev) => ({ ...prev, distributor: { ...prev.distributor, ...patch } }));
 
@@ -388,13 +291,6 @@ export function useSorterPageLogic() {
 
   const removeLayer = (index) =>
     setDistributor({ layers: settings.distributor.layers.filter((_, i) => i !== index) });
-
-  const zeroDistributor = () => {
-    const position = motionByOid[distributor.oid]?.position;
-    if (position != null) {
-      setZeroes((prev) => ({ ...prev, [distributor.oid]: position }));
-    }
-  };
 
   /** The channel's chosen routine, or '' for none (including one since deleted). */
   const routineIdFor = (channelId) => {
@@ -431,6 +327,7 @@ export function useSorterPageLogic() {
         forward,
         speedHz: c4.targetHz,
         stepsPerIndex: (settings.indexDegrees / 360) * c4.stepsPerRev,
+        accelHz2: rpmToStepsPerSec(settings.indexAccel, c4.stepsPerRev),
         dwellMs: settings.dwellMs,
         count,
       });
@@ -474,6 +371,7 @@ export function useSorterPageLogic() {
     stepperObjects,
     shutdownReason: motion?.shutdown_reason || '',
     error: actionError || sessionError,
+    syncError: settingsSyncError || routinesSyncError,
     resetting,
     setSetting,
     setFeederRpm,
@@ -490,12 +388,10 @@ export function useSorterPageLogic() {
     distributor,
     servoObjects,
     selectLayer,
-    pointToBin,
     setDistributor,
     setLayer,
     addLayer,
     removeLayer,
-    zeroDistributor,
     routines,
     routineIdFor,
     chooseRoutine,

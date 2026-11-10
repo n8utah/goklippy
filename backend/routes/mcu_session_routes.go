@@ -49,6 +49,7 @@ type stepperIndexRequest struct {
 	Forward       bool    `json:"forward"`
 	SpeedHz       float64 `json:"speed_hz"`
 	StepsPerIndex float64 `json:"steps_per_index"`
+	AccelHz2      float64 `json:"accel_hz2"`
 	DwellMs       int     `json:"dwell_ms"`
 	Count         int     `json:"count"`
 }
@@ -352,7 +353,8 @@ func IndexMCUStepper(c *gin.Context) {
 		Forward:       req.Forward,
 		SpeedHz:       req.SpeedHz,
 		StepsPerIndex: req.StepsPerIndex,
-		Dwell:         time.Duration(req.DwellMs) * time.Millisecond,
+		AccelHz:       req.AccelHz2,
+		Dwell:        time.Duration(req.DwellMs) * time.Millisecond,
 		Count:         req.Count,
 	}
 	if err := session.StartStepperIndexing(req.OID, move); err != nil {

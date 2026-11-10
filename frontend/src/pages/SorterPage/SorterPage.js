@@ -75,6 +75,7 @@ const SorterPage = ({ onGoBoard }) => {
         </p>
       )}
       {logic.error && <p className={appStyles.errorText}>{logic.error}</p>}
+      {logic.syncError && <p className={styles.alert}>{logic.syncError}</p>}
 
       <MachineDiagram channels={channels} indexDegrees={settings.indexDegrees} />
 
@@ -116,6 +117,7 @@ const SorterPage = ({ onGoBoard }) => {
           <div className={styles.fields}>
             <NumberField label="Per move" value={settings.indexDegrees} min={1} step={1} unit="°" onChange={(v) => setSetting('indexDegrees', v)} />
             <NumberField label="Speed" value={settings.indexRpm} min={0.1} step={1} unit="rpm" onChange={(v) => setSetting('indexRpm', v)} />
+            <NumberField label="Accel" value={settings.indexAccel} min={0} step={10} unit="rpm/s" onChange={(v) => setSetting('indexAccel', v)} />
             <NumberField label="Dwell" value={settings.dwellMs} min={0} step={100} unit="ms" onChange={(v) => setSetting('dwellMs', v)} />
           </div>
           )}

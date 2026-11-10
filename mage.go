@@ -5,7 +5,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,17 +14,11 @@ import (
 )
 
 type runtimeConfig struct {
-	Database         runtimeDatabaseConf `yaml:"database"`
-	AtlasDevDatabase runtimeDatabaseConf `yaml:"atlas_dev_database"`
+	Database runtimeDatabaseConf `yaml:"database"`
 }
 
 type runtimeDatabaseConf struct {
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Name     string `yaml:"name"`
-	SSLMode  string `yaml:"ssl_mode"`
+	Path string `yaml:"path"`
 }
 
 // Build compiles backend and frontend artifacts.
@@ -81,7 +74,9 @@ func Deploy() error {
 	return nil
 }
 
-// AtlasPush prompts for an environment and applies the shared schema to that environment's DB.
+// AtlasPush prompts for an environment and applies the shared schema to that environment's
+// SQLite database. The backend already creates new tables on startup; use this for changes
+// to existing tables (new or altered columns), which CREATE TABLE IF NOT EXISTS can't make.
 func AtlasPush() error {
 	env, configPath, err := promptEnvironment()
 	if err != nil {
@@ -93,7 +88,7 @@ func AtlasPush() error {
 		return err
 	}
 
-	fmt.Printf("Applying schema.sql to %s environment\n", env)
+	fmt.Printf("Applying schema.sql to %s environment (%s)\n", env, databaseURL)
 	fmt.Println("Atlas will now show schema changes and prompt for confirmation before applying.")
 	return sh.RunV(
 		"atlas",
@@ -104,31 +99,7 @@ func AtlasPush() error {
 		"--url",
 		databaseURL,
 		"--dev-url",
-		atlasDevURL(configPath),
-	)
-}
-
-// AtlasMigrateApply prompts for an environment and applies pending migrations.
-func AtlasMigrateApply() error {
-	env, configPath, err := promptEnvironment()
-	if err != nil {
-		return err
-	}
-
-	databaseURL, err := loadDatabaseURL(configPath)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Applying migrations to %s environment\n", env)
-	return sh.RunV(
-		"atlas",
-		"migrate",
-		"apply",
-		"--dir",
-		"file://database/migrations",
-		"--url",
-		databaseURL,
+		atlasDevURL,
 	)
 }
 
@@ -181,58 +152,25 @@ func loadRuntimeConfig(configPath string) (runtimeConfig, error) {
 	return cfg, nil
 }
 
+// atlasDevURL is the scratch database Atlas diffs against: an in-memory SQLite.
+const atlasDevURL = "sqlite://dev?mode=memory"
+
+// defaultDatabasePath matches the backend's default (config.applyDefaults).
+const defaultDatabasePath = "../private/goklippy.db"
+
+// loadDatabaseURL is the environment's SQLite file as an Atlas URL. The config path is
+// relative to backend/, where the backend runs; mage runs from the repo root.
 func loadDatabaseURL(configPath string) (string, error) {
 	cfg, err := loadRuntimeConfig(configPath)
 	if err != nil {
 		return "", err
 	}
-
-	return buildDatabaseURL(cfg.Database, configPath)
-}
-
-func buildDatabaseURL(db runtimeDatabaseConf, source string) (string, error) {
-	if db.Host == "" || db.Username == "" || db.Name == "" {
-		return "", fmt.Errorf("database block is incomplete in %s", source)
+	path := cfg.Database.Path
+	if path == "" {
+		path = defaultDatabasePath
 	}
-
-	sslMode := db.SSLMode
-	if sslMode == "" {
-		sslMode = "disable"
+	if !filepath.IsAbs(path) {
+		path = filepath.Join("backend", path)
 	}
-
-	host := db.Host
-	if db.Port != 0 {
-		host = fmt.Sprintf("%s:%d", db.Host, db.Port)
-	}
-
-	uri := &url.URL{
-		Scheme: "postgres",
-		User:   url.UserPassword(db.Username, db.Password),
-		Host:   host,
-		Path:   db.Name,
-	}
-	query := uri.Query()
-	query.Set("sslmode", sslMode)
-	uri.RawQuery = query.Encode()
-
-	return uri.String(), nil
-}
-
-func atlasDevURL(configPath string) string {
-	value := strings.TrimSpace(os.Getenv("ATLAS_DEV_URL"))
-	if value != "" {
-		return value
-	}
-
-	cfg, err := loadRuntimeConfig(configPath)
-	if err == nil {
-		if devURL, devErr := buildDatabaseURL(cfg.AtlasDevDatabase, configPath); devErr == nil {
-			return devURL
-		}
-		if appURL, appErr := buildDatabaseURL(cfg.Database, configPath); appErr == nil {
-			return appURL
-		}
-	}
-
-	return "docker://postgres/16/dev"
+	return "sqlite://" + filepath.ToSlash(filepath.Clean(path)), nil
 }

@@ -299,18 +299,8 @@ func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps i
 	}
 
 	startClock, err := s.sendAtMotionClock(motionStartMarginSec, func(startClock uint64) []string {
-		cmds := make([]string, 0, 10)
-		cmds = append(cmds, s.stepperDriverEnableCommands(oid)...)
-	// Always stop any in-flight move before reset_step_clock — Klipper shuts down if
-	// reset_step_clock is sent while the stepper queue is active, and queue_step is
-	// silently dropped while SF_NEED_RESET is set without a prior reset.
-		cmds = append(cmds, fmt.Sprintf("trsync_trigger oid=%d reason=1", stopTrsyncOID))
-		cmds = append(cmds,
-			fmt.Sprintf("trsync_start oid=%d report_clock=0 report_ticks=0 expire_reason=0", stopTrsyncOID),
-			fmt.Sprintf("stepper_stop_on_trigger oid=%d trsync_oid=%d", oid, stopTrsyncOID),
-			fmt.Sprintf("reset_step_clock oid=%d clock=%d", oid, startClock),
-			fmt.Sprintf("set_next_step_dir oid=%d dir=%d", oid, dir),
-		)
+		cmds := s.stepperStartCommands(oid, stopTrsyncOID, startClock)
+		cmds = append(cmds, fmt.Sprintf("set_next_step_dir oid=%d dir=%d", oid, dir))
 		return append(cmds, queueStepCommands(oid, interval, steps)...)
 	})
 	if err != nil {

@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -16,6 +15,14 @@ type Config struct {
 	Frontend    FrontendConfig    `yaml:"frontend"`
 	MCU         MCUConfig         `yaml:"mcu"`
 	Klipper     KlipperConfig     `yaml:"klipper"`
+	Sorter      SorterConfig      `yaml:"sorter"`
+}
+
+// SorterConfig controls the LEGO sorter's control loop.
+type SorterConfig struct {
+	// Simulate runs the sorter against simulated hardware instead of the MCU, for
+	// working on the sorter without the machine attached.
+	Simulate bool `yaml:"simulate"`
 }
 
 type MCUConfig struct {
@@ -28,13 +35,11 @@ type KlipperConfig struct {
 	ProfilesDir  string `yaml:"profiles_dir"`
 }
 
+// DatabaseConfig locates the SQLite database. Paths are relative to where the backend
+// runs (backend/).
 type DatabaseConfig struct {
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Name     string `yaml:"name"`
-	SSLMode  string `yaml:"ssl_mode"`
+	Path       string `yaml:"path"`        // the database file; created if missing
+	SchemaPath string `yaml:"schema_path"` // database/schema.sql, applied on startup
 }
 
 type JWTConfig struct {
@@ -77,13 +82,15 @@ func Load(path string) (Config, error) {
 	return cfg, nil
 }
 
-func (cfg Config) DatabaseURL() string {
-	return buildDatabaseURL(cfg.Database)
-}
-
 func applyDefaults(cfg *Config) {
 	if cfg.Port == 0 {
 		cfg.Port = 8080
+	}
+	if cfg.Database.Path == "" {
+		cfg.Database.Path = "../private/goklippy.db"
+	}
+	if cfg.Database.SchemaPath == "" {
+		cfg.Database.SchemaPath = "../database/schema.sql"
 	}
 
 	if cfg.JWT.AccessSecret == "" {
@@ -128,31 +135,4 @@ func applyDefaults(cfg *Config) {
 	if cfg.Klipper.ProfilesDir == "" {
 		cfg.Klipper.ProfilesDir = "profiles"
 	}
-}
-
-func buildDatabaseURL(db DatabaseConfig) string {
-	if db.Host == "" || db.Username == "" || db.Name == "" {
-		return ""
-	}
-
-	sslMode := db.SSLMode
-	if sslMode == "" {
-		sslMode = "disable"
-	}
-
-	host := db.Host
-	if db.Port != 0 {
-		host = fmt.Sprintf("%s:%d", db.Host, db.Port)
-	}
-
-	uri := &url.URL{
-		Scheme: "postgres",
-		User:   url.UserPassword(db.Username, db.Password),
-		Host:   host,
-		Path:   db.Name,
-	}
-	q := uri.Query()
-	q.Set("sslmode", sslMode)
-	uri.RawQuery = q.Encode()
-	return uri.String()
 }

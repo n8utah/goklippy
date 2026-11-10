@@ -148,6 +148,58 @@ export function getMCUReadings(sessionId) {
   return getJSON(`/api/v1/mcu/sessions/${sessionId}/readings`);
 }
 
+/** A sorter settings document ("machine" or "routines"): { saved, data }. */
+export function getSorterSettings(name) {
+  return getJSON(`/api/v1/sorter/settings/${name}`);
+}
+
+export function putSorterSettings(name, data) {
+  return putJSON(`/api/v1/sorter/settings/${name}`, data);
+}
+
+/** home | start | pause | resume | stop */
+export function sorterCommand(command) {
+  return postJSON('/api/v1/sorter/commands', { command });
+}
+
+/** Turn a channel ("c1".."c4", "distributor") by degrees; positive is forward. */
+export function moveSorterChannel(channel, degrees, rpm) {
+  return postJSON(`/api/v1/sorter/channels/${channel}/move`, { degrees, rpm });
+}
+
+/** The chute read from the board now, its geometry, and every bin's aim. */
+export function getSorterChute() {
+  return getJSON('/api/v1/sorter/chute');
+}
+
+export function aimSorterChute(angle) {
+  return postJSON('/api/v1/sorter/chute/aim', { angle });
+}
+
+export function zeroSorterChute() {
+  return postJSON('/api/v1/sorter/chute/zero', {});
+}
+
+export function calibrateSorterChute(firstAngle, lastAngle, binsPerSection) {
+  return postJSON('/api/v1/sorter/chute/calibrate', {
+    first_angle: firstAngle,
+    last_angle: lastAngle,
+    bins_per_section: binsPerSection,
+  });
+}
+
+export function sendToSorterBin(layer, bin) {
+  return postJSON('/api/v1/sorter/distribution/send', { layer, bin });
+}
+
+export function testSorterLayer(layer, dwellMs) {
+  return postJSON('/api/v1/sorter/distribution/test', { layer, dwell_ms: dwellMs });
+}
+
+export function cancelSorterJob() {
+  return postJSON('/api/v1/sorter/jobs/cancel', {});
+}
+
 function wsBaseUrl() {
   if (API_BASE_URL) {
     const url = new URL(API_BASE_URL, window.location.origin);
@@ -156,6 +208,22 @@ function wsBaseUrl() {
   }
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${window.location.host}`;
+}
+
+/** Open a WebSocket for the sorter's state; onState gets each snapshot. */
+export function openSorterWS({ onState, onOpen, onClose } = {}) {
+  const ws = new WebSocket(`${wsBaseUrl()}/api/v1/sorter/ws`);
+  ws.onopen = () => onOpen?.();
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'state') onState?.(msg.state);
+    } catch {
+      // ignore malformed frames
+    }
+  };
+  ws.onclose = (event) => onClose?.(event);
+  return ws;
 }
 
 /** Open a WebSocket for live MCU session telemetry. */

@@ -12,6 +12,8 @@ import (
 	"goklippy/backend/config"
 	"goklippy/backend/logic"
 	"goklippy/backend/logic/klipperconfig"
+	"goklippy/backend/logic/sorter"
+	"goklippy/backend/mcu"
 	"goklippy/backend/models"
 	"goklippy/backend/routes"
 
@@ -28,21 +30,17 @@ func main() {
 		return
 	}
 
-	if cfg.DatabaseURL() == "" {
-		slog.Error("database configuration is required")
-		return
-	}
-
-	db, err := models.OpenDB(cfg.DatabaseURL())
+	db, err := models.OpenDB(cfg.Database.Path)
 	if err != nil {
-		slog.Error("failed to initialize database connection", "error", err)
-		return
-	}
-	if db == nil {
-		slog.Error("database configuration is required")
+		slog.Error("failed to open database", "path", cfg.Database.Path, "error", err)
 		return
 	}
 	defer db.Close()
+	if err := models.ApplySchemaFile(context.Background(), db, cfg.Database.SchemaPath); err != nil {
+		slog.Error("failed to apply database schema", "error", err)
+		return
+	}
+	slog.Info("database ready", "path", cfg.Database.Path)
 
 	created, err := models.EnsureInitialUser(context.Background(), db, models.InitialUserSeed{
 		Enabled:  cfg.InitialUser.Enabled,
@@ -84,6 +82,18 @@ func main() {
 	}
 	routes.InitBoardProfilesDir(filepath.Clean(cfg.Klipper.ProfilesDir))
 	routes.InitMCUConfig(cfg.MCU)
+
+	sorterCtx, stopSorter := context.WithCancel(context.Background())
+	defer stopSorter()
+	sorterSettings := sorter.NewSettingsService(sorterCtx, models.NewSorterSettingsStore(db))
+	var sorterHW sorter.Hardware = sorter.NewMCUHardware(mcu.DefaultManager(), sorterSettings.Machine)
+	if cfg.Sorter.Simulate {
+		sorterHW = sorter.NewSimHardware(sorterSettings.Machine)
+		slog.Info("sorter running on simulated hardware")
+	}
+	sorterMachine := sorter.NewMachine(sorterHW, sorterSettings.Machine, 0)
+	go sorterMachine.Run(sorterCtx)
+	routes.InitSorter(sorterMachine, sorterSettings)
 
 	r := gin.New()
 	r.Use(routes.SlogRecovery())

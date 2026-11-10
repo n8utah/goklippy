@@ -7,7 +7,7 @@ This is the single source of truth; tool-specific files (e.g. `CLAUDE.md`, `.git
 - Monorepo layout:
   - `backend/`: Go backend application.
   - `frontend/`: React frontend (Vite).
-  - `database/`: Atlas schema and migration files.
+  - `database/`: Atlas schema (`schema.sql`, SQLite).
   - `docs/`: PRDs, implementation plans, and mockups for development.
   - `private/`: Local-only keys, logs, and configs (never committed).
   - `mage.go`: Build and deployment task runner.
@@ -25,7 +25,7 @@ This is the single source of truth; tool-specific files (e.g. `CLAUDE.md`, `.git
 - All database queries must live in `backend/models/`.
 - Use `log/slog` for backend logging (structured logs); do not introduce the legacy `log` package for application logging.
 - For HTTP logging, prefer structured middleware-based request logs with fields like `request_id`, `method`, `path`, `status`, and latency.
-- Use PostgreSQL with `sqlx`.
+- Use SQLite (`modernc.org/sqlite`, pure Go, no cgo) with `sqlx`. The database file lives in `private/` (default `private/goklippy.db`).
 - Use `testify` for Go tests (`assert`/`require`) for cleaner and more readable test code.
 - Auth is JWT-based and must support:
   - login
@@ -50,7 +50,7 @@ This is the single source of truth; tool-specific files (e.g. `CLAUDE.md`, `.git
 ## Database Rules (Atlas)
 - `database/` is the source of truth for schema.
 - Use Atlas tooling for schema management.
-- Maintain a single full SQL schema file for deploy consistency (avoid migration sprawl).
+- Maintain a single full SQL schema file (`database/schema.sql`) with no migration files. The backend runs it on startup, so every statement must be `IF NOT EXISTS`; changes to existing tables are applied with `mage atlasPush`.
 - Coordinate schema updates with matching model/query updates in `backend/models/`.
 
 ## Docs and Planning

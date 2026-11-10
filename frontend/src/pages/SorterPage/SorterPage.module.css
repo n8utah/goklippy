@@ -366,77 +366,6 @@
   border-radius: 12px;
 }
 
-.distributorBody {
-  display: grid;
-  grid-template-columns: minmax(240px, 340px) 1fr;
-  gap: 20px;
-  align-items: center;
-}
-
-.distributorSide {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.binMap {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.binGroup {
-  cursor: pointer;
-}
-
-.bin,
-.binPointed,
-.binTarget {
-  stroke-width: 1;
-}
-
-.bin {
-  fill: #f1f5f9;
-  stroke: #cbd5e1;
-}
-
-.binGroup:hover .bin {
-  fill: #e0f2fe;
-}
-
-.binPointed {
-  fill: #0284c7;
-  stroke: #0369a1;
-}
-
-.binTarget {
-  fill: #fde68a;
-  stroke: #b45309;
-}
-
-.binLabel {
-  text-anchor: middle;
-  dominant-baseline: central;
-  font-size: 11px;
-  font-weight: 600;
-  fill: #0f172a;
-  pointer-events: none;
-}
-
-.binPointed + .binLabel {
-  fill: #ffffff;
-}
-
-.chute {
-  stroke: #0f172a;
-  stroke-width: 7;
-  stroke-linecap: round;
-}
-
-.chuteHead {
-  fill: #0f172a;
-}
-
 .layerStack {
   display: flex;
   flex-direction: column;
@@ -542,10 +471,6 @@
 }
 
 @media (max-width: 640px) {
-  .distributorBody {
-    grid-template-columns: 1fr;
-  }
-
   .layerSettings {
     grid-template-columns: 1fr 1fr;
   }

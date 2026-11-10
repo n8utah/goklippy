@@ -3,6 +3,9 @@
 Branch `lego-sorter`. A page for running and measuring a [Sorter V2](https://docs.basically.website)
 style C-channel feed from a RAMPS 1.4 board instead of the project's custom electronics.
 
+The autonomous sorting loop built around this page is planned in
+[lego-sorter-server-plan.md](./lego-sorter-server-plan.md).
+
 ## Default motor mapping
 
 | Channel | Role | RAMPS socket | Motion |
@@ -11,13 +14,56 @@ style C-channel feed from a RAMPS 1.4 board instead of the project's custom elec
 | C2 | Feeder, faster than C1 | Y (`stepper_y`) | Continuous |
 | C3 | Feeder, faster than C2 | Z (`stepper_z`) | Continuous |
 | C4 | Classification carousel | E0 (`stepper_e0`) | 72° index moves, 5 slots |
-| Distributor | Rotates the chute over the bins | E1 (`stepper_e1`) | Shortest-path moves to a bin |
+| Distributor | Rotates the chute over the bins | E1 (`stepper_e1`) | Homed moves to a bin, clockwise from home |
 
 Each distribution layer has its own servo. Selecting a layer opens its servo and closes the others.
-Layer count, servo assignment, bin count (18 or 12) and open/closed angles are page settings. There
-is no homing yet: "Set position as bin 1" defines the reference, and it is lost on a reset.
+Layer count, servo assignment, bin count (18 or 12) and open/closed angles are page settings.
 
-The mapping, gear ratios, speeds and index settings are per-browser settings on the page.
+## The chute (Chute page)
+
+The chute is laid out like Sorter V2's tower: each layer is 6 sections, with 3 bins per section on
+an 18-bin layer and 2 on a 12-bin layer. Bins are numbered per layer from 1, clockwise from home.
+The **Chute** page homes, calibrates and aims it, through the backend:
+
+- **Home** turns the chute counter-clockwise until its home switch fires; that is 0°. It then
+  closes every layer and parks at bin 1. From home the chute only ever turns clockwise, up to the
+  **travel limit** (350°), so it never crosses the switch. Bins past the limit are shown red and
+  are never used. If the switch already reads triggered, the chute first turns 20° off it.
+- **Set 0° here** uses the current position instead of the switch, for working without one.
+- **Calibrate the aim**: jog to the middle of the first bin of a section and capture it, then the
+  last bin of the same section, then **Work it out** and **Use these**. That sets the section width
+  and where the first section starts, and every bin on every layer follows from them.
+- Clicking a bin selects its layer and aims the chute at it. **Test every bin** visits each
+  reachable bin on a layer in turn.
+
+The chute's angle is read from the MCU's step count from home, so jogging the distributor
+elsewhere doesn't lose it. A board reset or reconnect does, and the chute must be homed again.
+
+### Wiring the home switch
+
+Plug the switch into a free RAMPS endstop socket and add its pin to the distributor's stepper
+section on Board Setup (or in the config). For example, X-min is `ar3`:
+
+```
+[stepper_e1]
+endstop_pin: ^ar3
+```
+
+`^` turns on the pull-up. Add `!` (`^!ar3`) if the switch reads triggered when it isn't pressed.
+The other sockets are X-max `ar2`, Y-min `ar14`, Y-max `ar15`, Z-min `ar18` and Z-max `ar19`. The
+endstop shows up as `stepper_e1_endstop`, the Chute page's default **Home switch**. The Chute page
+shows whether it reads Open or Triggered, which is the quickest wiring check.
+
+If homing turns the chute clockwise, untick **Motor forward turns the chute clockwise**.
+
+The mapping, gear ratios, speeds and index settings are saved on the server
+(`sorter_settings`, document `machine`; routines are document `routines`), so every browser and
+the sorter's control loop see the same values. The first time a browser opens the page against an
+empty server, its older per-browser settings are uploaded. If the server can't be reached, the page
+says so and keeps changes in that browser only, without overwriting the server later.
+
+C4 indexing has an **Accel** setting (rpm per second, default 60; 0 turns the ramp off). Each index
+move speeds up and slows down on a trapezoid instead of starting and stopping at full speed.
 
 ## Units
 
@@ -55,4 +101,5 @@ other.
 - The Sorter V2 docs give no gear ratios or stage speeds, so the feeder defaults (1:1, C1 5 rpm, C2
   7.5 rpm, C3 11.25 rpm) are placeholders to tune on the machine. C4's 10.8 gear ratio was set on
   the machine so one forward move lands on the next slot.
-- Moves have no acceleration ramp. If the C4 carousel skips, indexing needs one.
+- C4 indexing ramps (see Accel above). Feeder runs and the distributor's bin moves still start at
+  full speed.

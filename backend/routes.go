@@ -51,5 +51,20 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	mcuGroup.POST("/sessions/:id/stepper/index", routes.IndexMCUStepper)
 	mcuGroup.POST("/sessions/:id/stepper/stop", routes.StopMCUStepper)
 
+	sorterGroup := api.Group("/sorter")
+	sorterGroup.GET("/settings/:name", routes.GetSorterSettings)
+	sorterGroup.PUT("/settings/:name", routes.PutSorterSettings)
+	sorterGroup.GET("/state", routes.GetSorterState)
+	sorterGroup.POST("/commands", routes.SorterCommand)
+	sorterGroup.POST("/channels/:channel/move", routes.MoveSorterChannel)
+	sorterGroup.GET("/ws", routes.SorterWebSocket)
+	sorterGroup.GET("/chute", routes.GetSorterChute)
+	sorterGroup.POST("/chute/aim", routes.AimSorterChute)
+	sorterGroup.POST("/chute/zero", routes.ZeroSorterChute)
+	sorterGroup.POST("/chute/calibrate", routes.CalibrateSorterChute)
+	sorterGroup.POST("/distribution/send", routes.SendToSorterBin)
+	sorterGroup.POST("/distribution/test", routes.TestSorterLayer)
+	sorterGroup.POST("/jobs/cancel", routes.CancelSorterJob)
+
 	registerFrontendHosting(r, cfg.Frontend)
 }
