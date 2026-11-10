@@ -236,6 +236,15 @@ export function resetSorterBins() {
   return postJSON('/api/v1/sorter/bins/reset', {});
 }
 
+/** Sends 1–8 photos of one piece to Brickognize and routes the best match (dry run). */
+export async function identifySorterPiece(files, pieceMm) {
+  const form = new FormData();
+  for (const file of files) form.append('image', file);
+  if (pieceMm) form.append('piece_mm', String(pieceMm));
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/identify`, { method: 'POST', body: form });
+  return parseJSON(response);
+}
+
 /** Where a piece would go now; nothing is saved. */
 export function routeSorterPiece(partId, colorId, pieceMm) {
   return postJSON('/api/v1/sorter/route', { part_id: partId, color_id: colorId, piece_mm: pieceMm || 0 });

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"goklippy/backend/logic/brickognize"
 	"goklippy/backend/logic/sorter"
 	"goklippy/backend/logic/sorter/profile"
 
@@ -15,11 +16,66 @@ import (
 // Hive's compiled profiles carry the whole part map and run to tens of MB.
 const maxProfileBytes = 128 << 20
 
-var sorterSorting *sorter.SortingService
+var (
+	sorterSorting    *sorter.SortingService
+	sorterIdentifier sorter.Identifier
+)
 
-// InitSorting wires the sorting profiles and bins into the routes.
-func InitSorting(svc *sorter.SortingService) {
+// InitSorting wires the sorting profiles, bins and part identification into the
+// routes.
+func InitSorting(svc *sorter.SortingService, identifier sorter.Identifier) {
 	sorterSorting = svc
+	sorterIdentifier = identifier
+}
+
+const maxIdentifyPhotoBytes = 15 << 20
+
+// IdentifySorterPiece POST /sorter/identify, multipart: up to 8 "image" files (JPEG
+// or PNG) of one piece and an optional "piece_mm". Sends them to Brickognize and
+// says where the active profile would send the best match. Nothing is saved.
+func IdentifySorterPiece(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, brickognize.MaxImages*maxIdentifyPhotoBytes+1<<20)
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "send the photos as multipart form files named image"})
+		return
+	}
+	files := form.File["image"]
+	if len(files) == 0 || len(files) > brickognize.MaxImages {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "send 1 to 8 photos"})
+		return
+	}
+	images := make([][]byte, 0, len(files))
+	for _, fh := range files {
+		if fh.Size > maxIdentifyPhotoBytes {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": fh.Filename + " is larger than 15 MB"})
+			return
+		}
+		f, err := fh.Open()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not read " + fh.Filename})
+			return
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not read " + fh.Filename})
+			return
+		}
+		images = append(images, data)
+	}
+	pieceMm, _ := strconv.ParseFloat(c.PostForm("piece_mm"), 64)
+
+	res, err := sorter.IdentifyAndRoute(c.Request.Context(), sorterIdentifier, sorterSorting, images, pieceMm)
+	if errors.Is(err, sorter.ErrBadImage) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
 
 // ListSortingProfiles GET /sorter/profiles

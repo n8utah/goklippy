@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { ROUTE_REASONS, useBinsPageLogic } from './BinsPage.logic';
 import BinEditor from './components/BinEditor';
+import IdentifyPanel from './components/IdentifyPanel';
 
 import styles from './BinsPage.module.css';
 import appStyles from '../../styles/app.module.css';
@@ -170,6 +171,7 @@ const BinsPage = () => {
       ))}
 
       <RouteTester route={logic.route} setRoute={logic.setRoute} onTry={logic.tryRoute} canTry={Boolean(view.profile)} />
+      <IdentifyPanel />
     </section>
   );
 };

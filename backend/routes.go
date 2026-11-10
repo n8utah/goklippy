@@ -73,6 +73,7 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	sorterGroup.PUT("/bins/:layer/:bin", routes.SetSorterBin)
 	sorterGroup.POST("/bins/reset", routes.ResetSorterBins)
 	sorterGroup.POST("/route", routes.RouteSorterPiece)
+	sorterGroup.POST("/identify", routes.IdentifySorterPiece)
 
 	registerFrontendHosting(r, cfg.Frontend)
 }

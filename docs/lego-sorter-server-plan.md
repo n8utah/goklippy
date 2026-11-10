@@ -286,6 +286,17 @@ flags.
 
 ### Phase 5: Classification platter (C4)
 
+**Status (2026-11-09): the Brickognize part is built; the platter waits on the cameras.**
+
+- `logic/brickognize`: the client below, tested against a fake server and checked once against
+  the live API.
+- `sorter.IdentifyAndRoute` and `POST /sorter/identify`: up to 8 photos (JPEG, or PNG converted to
+  JPEG) go to Brickognize, and the best match is routed under the active profile as a dry run.
+  The Bins page's **Identify from photos** panel uses it, so identification and routing can be
+  tried with phone photos before the cameras are in.
+
+Original scope:
+
 - 5 sectors at 72°, forward only. Sector states: free, occupied, handoff, exit.
 - When a new track enters the drop zone: take a burst of crops (around 8, sharpest kept), create a
   piece, send the burst to Brickognize on a worker. Reject a multi-drop (two separate boxes in the
