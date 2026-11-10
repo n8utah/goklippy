@@ -65,6 +65,14 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	sorterGroup.POST("/distribution/send", routes.SendToSorterBin)
 	sorterGroup.POST("/distribution/test", routes.TestSorterLayer)
 	sorterGroup.POST("/jobs/cancel", routes.CancelSorterJob)
+	sorterGroup.GET("/profiles", routes.ListSortingProfiles)
+	sorterGroup.POST("/profiles", routes.ImportSortingProfile)
+	sorterGroup.POST("/profiles/:id/activate", routes.ActivateSortingProfile)
+	sorterGroup.DELETE("/profiles/:id", routes.DeleteSortingProfile)
+	sorterGroup.GET("/bins", routes.GetSorterBins)
+	sorterGroup.PUT("/bins/:layer/:bin", routes.SetSorterBin)
+	sorterGroup.POST("/bins/reset", routes.ResetSorterBins)
+	sorterGroup.POST("/route", routes.RouteSorterPiece)
 
 	registerFrontendHosting(r, cfg.Frontend)
 }

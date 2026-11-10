@@ -30,6 +30,9 @@ export const DEFAULT_SORTER_SETTINGS = {
     firstSectionOffset: 8.25,
     maxAngle: 350,
     doorSettleMs: 300,
+    // Let a category share a bin once every bin is taken, instead of going to misc.
+    sharedBins: false,
+    // Each layer may also carry disabled, disabledSections (from 1) and maxPieceMm.
     layers: [
       { servo: '', bins: 18, openAngle: 90, closedAngle: 0 },
       { servo: '', bins: 18, openAngle: 90, closedAngle: 0 },

@@ -99,7 +99,7 @@ func channelAccel(settings MachineSettings, ch Channel) float64 {
 // moveDuration estimates how long a rotor move takes with a trapezoid ramp.
 func moveDuration(deg, rpm, accelRpmPerSec float64) time.Duration {
 	dist := math.Abs(deg) / 360 // rotor turns
-	speed := rpm / 60          // turns per second
+	speed := rpm / 60           // turns per second
 	if dist == 0 || speed <= 0 {
 		return 0
 	}

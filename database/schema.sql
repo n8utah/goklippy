@@ -32,3 +32,30 @@ CREATE TABLE IF NOT EXISTS sorter_settings (
   data TEXT NOT NULL CHECK (json_valid(data)),
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Sorting profiles in Hive's sorting_profile.json format. `data` is the file as
+-- uploaded (it can run to tens of MB); `summary` is what the lists show, so they
+-- never parse `data`. At most one profile is active.
+CREATE TABLE IF NOT EXISTS sorting_profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'upload',
+  summary TEXT NOT NULL CHECK (json_valid(summary)),
+  data TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sorting_profiles_one_active ON sorting_profiles(active) WHERE active;
+
+-- Which categories each bin takes, per profile, so switching profiles keeps each
+-- profile's bins. Layer and bin count from 1; position keeps a bin's categories in
+-- the order they were given.
+CREATE TABLE IF NOT EXISTS bin_categories (
+  profile_id INTEGER NOT NULL REFERENCES sorting_profiles(id) ON DELETE CASCADE,
+  layer INTEGER NOT NULL,
+  bin INTEGER NOT NULL,
+  category_id TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (profile_id, layer, bin, category_id)
+);

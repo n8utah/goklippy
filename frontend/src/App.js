@@ -7,6 +7,8 @@ import BoardSetupPage from './pages/BoardSetupPage/BoardSetupPage';
 import BoardEditorPage from './pages/BoardEditorPage/BoardEditorPage';
 import SorterPage from './pages/SorterPage/SorterPage';
 import ChutePage from './pages/ChutePage/ChutePage';
+import BinsPage from './pages/BinsPage/BinsPage';
+import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
 import styles from './styles/app.module.css';
 
 const App = () => {
@@ -27,6 +29,8 @@ const App = () => {
           {page === 'editor' && <BoardEditorPage />}
           {page === 'sorter' && <SorterPage onGoBoard={() => setPage('board')} />}
           {page === 'chute' && <ChutePage />}
+          {page === 'bins' && <BinsPage />}
+          {page === 'profiles' && <ProfilesPage />}
         </div>
       </div>
     </MCUSessionProvider>

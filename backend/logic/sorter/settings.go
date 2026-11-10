@@ -60,17 +60,26 @@ type DistributorSettings struct {
 	FirstOffset  float64 `json:"firstSectionOffset"` // home to section 1's start
 	MaxAngle     float64 `json:"maxAngle"`           // the chute's clockwise travel limit
 	DoorSettleMs int     `json:"doorSettleMs"`       // wait after moving the layer servos
+	// SharedBins lets a category share a bin with others once every bin is taken,
+	// instead of going to misc.
+	SharedBins bool `json:"sharedBins"`
 
 	Layers []LayerSettings `json:"layers"`
 }
 
-// LayerSettings is one distribution layer's servo. The selected layer's servo goes to
-// OpenAngle and the others to ClosedAngle.
+// LayerSettings is one distribution layer: its servo (the selected layer's servo goes
+// to OpenAngle and the others to ClosedAngle), its bins, and what it takes.
 type LayerSettings struct {
 	Servo       string  `json:"servo"`
 	Bins        int     `json:"bins"`
 	OpenAngle   float64 `json:"openAngle"`
 	ClosedAngle float64 `json:"closedAngle"`
+	// Disabled layers, and disabled sections (from 1) of a layer, get no pieces.
+	Disabled         bool  `json:"disabled"`
+	DisabledSections []int `json:"disabledSections"`
+	// MaxPieceMm is the longest piece this layer's funnels take; 0 uses the
+	// default for its bin count (see LayerMaxPieceMm).
+	MaxPieceMm float64 `json:"maxPieceMm"`
 }
 
 // DefaultMachineSettings matches the bench page's defaults.

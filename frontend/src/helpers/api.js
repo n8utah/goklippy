@@ -200,6 +200,47 @@ export function cancelSorterJob() {
   return postJSON('/api/v1/sorter/jobs/cancel', {});
 }
 
+export function listSortingProfiles() {
+  return getJSON('/api/v1/sorter/profiles');
+}
+
+/** Uploads a sorting_profile.json, sent as-is (it can be tens of MB). */
+export async function importSortingProfile(text) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/profiles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: text,
+  });
+  return parseJSON(response);
+}
+
+/** mode: keep | reset | preassign */
+export function activateSortingProfile(id, mode) {
+  return postJSON(`/api/v1/sorter/profiles/${id}/activate`, { mode });
+}
+
+export async function deleteSortingProfile(id) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/profiles/${id}`, { method: 'DELETE' });
+  return parseJSON(response);
+}
+
+export function getSorterBins() {
+  return getJSON('/api/v1/sorter/bins');
+}
+
+export function setSorterBin(layer, bin, categories) {
+  return putJSON(`/api/v1/sorter/bins/${layer}/${bin}`, { categories });
+}
+
+export function resetSorterBins() {
+  return postJSON('/api/v1/sorter/bins/reset', {});
+}
+
+/** Where a piece would go now; nothing is saved. */
+export function routeSorterPiece(partId, colorId, pieceMm) {
+  return postJSON('/api/v1/sorter/route', { part_id: partId, color_id: colorId, piece_mm: pieceMm || 0 });
+}
+
 function wsBaseUrl() {
   if (API_BASE_URL) {
     const url = new URL(API_BASE_URL, window.location.origin);

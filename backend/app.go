@@ -94,6 +94,7 @@ func main() {
 	sorterMachine := sorter.NewMachine(sorterHW, sorterSettings.Machine, 0)
 	go sorterMachine.Run(sorterCtx)
 	routes.InitSorter(sorterMachine, sorterSettings)
+	routes.InitSorting(sorter.NewSortingService(sorterCtx, models.NewSortingStore(db), sorterSettings.Machine))
 
 	r := gin.New()
 	r.Use(routes.SlogRecovery())

@@ -304,6 +304,31 @@ recorded.
 
 ### Phase 6: Profiles and bins
 
+**Status (2026-11-09): built (done before phases 2–5, which wait on the cameras).** What landed:
+
+- `logic/sorter/profile`: parses Hive's `sorting_profile.json` (schema 1) in both formats, the
+  compiled `program` (rules, kits, `fallback` by category or color, `default`) and the flat
+  `part_to_category` map. Base-part stripping, and their routing tests ported as table tests.
+  Kits take parts with no limit until piece records exist to count them (phase 8).
+- `logic/sorter/bins.go`: `ChooseBin` after their `_findOrAssignBinForCategory`: a category's own
+  bins (random among several), else the first empty usable bin, else a shared bin if
+  `sharedBins`, else a misc bin, else the bucket. Misc never claims a bin by itself; pieces over
+  80 mm, or over a layer's limit (18-bin layers 50 mm, 12-bin 80 mm), skip it. Disabled layers and
+  sections and unreachable bins are skipped.
+- `logic/sorter/sorting.go`: import, list, activate (keep / reset / pre-assign in rule order),
+  delete, the bins view, setting a bin's categories (moving them from other bins), and `Route`,
+  which saves a newly given bin when committing. Each profile keeps its own bins.
+- Tables `sorting_profiles` (file plus a summary, at most one active) and `bin_categories`.
+- Routes: `GET/POST /sorter/profiles`, `POST /sorter/profiles/:id/activate`,
+  `DELETE /sorter/profiles/:id`, `GET /sorter/bins`, `PUT /sorter/bins/:layer/:bin`,
+  `POST /sorter/bins/reset`, `POST /sorter/route` (a dry run: "where would this go?").
+- **Profiles** and **Bins** pages. Layer and section switches, per-layer size limits and
+  `sharedBins` are machine settings.
+- Not done yet: the "no bin" incident (phase 8), full bins (needs piece counts), auto-assign by
+  recent counts, high-value and not-in-inventory routing, and local profiles without Hive.
+
+Original scope:
+
 - Profile import: Hive's `sorting_profile.json` (schema version 1, `program.rules` or the older
   flat `part_to_category`), so profiles built in Hive work here. Also a minimal local profile:
   "by BrickLink category" or "by colour", with no Hive needed.
