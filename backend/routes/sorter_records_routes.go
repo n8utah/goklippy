@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"goklippy/backend/logic/sorter"
 
@@ -125,4 +126,29 @@ func ResolveSorterIncident(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, sorterMachine.Snapshot())
+}
+
+// ReviewSorterPiece PUT /sorter/pieces/:id/review
+// {"part_correct": true, "color_correct": false, "color_id": "5", "issues": ["blurry"]}
+func ReviewSorterPiece(c *gin.Context) {
+	var review sorter.PieceReview
+	if err := c.ShouldBindJSON(&review); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid review"})
+		return
+	}
+	if err := review.Check(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	review.ReviewedAt = time.Now().UTC()
+	ctx := c.Request.Context()
+	if err := sorterRecords.Store().SaveReview(ctx, c.Param("id"), review); err != nil {
+		if errors.Is(err, sorter.ErrPieceNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		sorterError(c, err)
+		return
+	}
+	GetSorterPiece(c)
 }

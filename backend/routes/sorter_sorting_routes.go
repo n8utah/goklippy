@@ -227,3 +227,24 @@ func sortingError(c *gin.Context, err error) {
 		sorterError(c, err)
 	}
 }
+
+// EmptySorterBin POST /sorter/bins/:layer/:bin/empty: the bin was emptied, so it
+// counts from zero and takes pieces again.
+func EmptySorterBin(c *gin.Context) {
+	layer, err1 := strconv.Atoi(c.Param("layer"))
+	bin, err2 := strconv.Atoi(c.Param("bin"))
+	if err1 != nil || err2 != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "layer and bin must be numbers"})
+		return
+	}
+	if err := sorterSorting.EmptyBin(c.Request.Context(), sorter.BinKey{Layer: layer, Bin: bin}); err != nil {
+		sortingError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, sorterSorting.Bins())
+}
+
+// GetSorterKits GET /sorter/kits: how far each kit of the active profile has got.
+func GetSorterKits(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"kits": sorterSorting.KitProgress()})
+}

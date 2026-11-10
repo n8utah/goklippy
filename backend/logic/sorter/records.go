@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -77,6 +78,31 @@ type Piece struct {
 	Problems   []Problem       `json:"problems"`
 	Prediction json.RawMessage `json:"prediction,omitempty"`
 	Images     []PieceImage    `json:"images,omitempty"`
+	Review     *PieceReview    `json:"review,omitempty"`
+}
+
+// Issue flags a reviewer can set on a piece's photos.
+var ReviewIssues = []string{"not_lego", "multiple_pieces", "no_piece", "assembly", "entangled", "blurry"}
+
+var ErrBadReview = errors.New("invalid review")
+
+// PieceReview is a person's check of a piece's identification.
+type PieceReview struct {
+	PartCorrect  *bool     `json:"part_correct"`
+	ColorCorrect *bool     `json:"color_correct"`
+	ColorID      string    `json:"color_id,omitempty"` // the right color, when it was wrong
+	Issues       []string  `json:"issues"`
+	ReviewedAt   time.Time `json:"reviewed_at"`
+}
+
+// Check reports a review with unknown issue flags.
+func (r PieceReview) Check() error {
+	for _, issue := range r.Issues {
+		if !slices.Contains(ReviewIssues, issue) {
+			return fmt.Errorf("%w: unknown issue %q", ErrBadReview, issue)
+		}
+	}
+	return nil
 }
 
 // AddProblem notes something that went wrong with the piece.
@@ -150,6 +176,7 @@ type RecordsStore interface {
 	ResolveIncident(ctx context.Context, id int64, resolution string, at time.Time) error
 	ListIncidents(ctx context.Context, limit int) ([]Incident, error)
 	Stats(ctx context.Context) (Stats, error)
+	SaveReview(ctx context.Context, pieceID string, r PieceReview) error
 }
 
 // Records saves what the machine does without holding up the control loop: writes go

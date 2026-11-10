@@ -293,6 +293,9 @@ func (s *RecordsStore) GetPiece(ctx context.Context, id string) (sorter.Piece, e
 	for _, r := range imgs {
 		p.Images = append(p.Images, r.image())
 	}
+	if p.Review, err = s.review(ctx, id); err != nil {
+		return sorter.Piece{}, err
+	}
 	return p, nil
 }
 
@@ -390,4 +393,122 @@ func utcOrNil(t *time.Time) any {
 		return nil
 	}
 	return t.UTC()
+}
+
+// BinCounts is the pieces delivered to each bin since it was last emptied.
+func (s *RecordsStore) BinCounts(ctx context.Context) (sorter.BinCounts, error) {
+	if s.db == nil {
+		return nil, ErrDBNotConfigured
+	}
+	const query = `
+SELECT p.bin_layer AS layer, p.bin_number AS bin, COUNT(*) AS n
+FROM pieces p
+LEFT JOIN bin_empties e ON e.layer = p.bin_layer AND e.bin = p.bin_number
+WHERE p.status = 'distributed' AND p.bin_layer > 0
+  AND (e.emptied_at IS NULL OR p.distributed_at > e.emptied_at)
+GROUP BY p.bin_layer, p.bin_number
+`
+	var rows []struct {
+		Layer int `db:"layer"`
+		Bin   int `db:"bin"`
+		N     int `db:"n"`
+	}
+	if err := s.db.SelectContext(ctx, &rows, query); err != nil {
+		return nil, err
+	}
+	out := sorter.BinCounts{}
+	for _, r := range rows {
+		out[sorter.BinKey{Layer: r.Layer, Bin: r.Bin}] = r.N
+	}
+	return out, nil
+}
+
+// EmptyBin records that a bin was emptied now.
+func (s *RecordsStore) EmptyBin(ctx context.Context, bin sorter.BinKey, at time.Time) error {
+	if s.db == nil {
+		return ErrDBNotConfigured
+	}
+	const query = `
+INSERT INTO bin_empties (layer, bin, emptied_at) VALUES (?, ?, ?)
+ON CONFLICT (layer, bin) DO UPDATE SET emptied_at = excluded.emptied_at
+`
+	_, err := s.db.ExecContext(ctx, query, bin.Layer, bin.Bin, at.UTC())
+	return err
+}
+
+// KitPieces lists delivered pieces in these categories from runs under the profile.
+func (s *RecordsStore) KitPieces(ctx context.Context, profileID int64, categories []string) ([]sorter.KitPiece, error) {
+	if s.db == nil {
+		return nil, ErrDBNotConfigured
+	}
+	if len(categories) == 0 {
+		return nil, nil
+	}
+	query, args, err := sqlx.In(`
+SELECT p.category, p.part_id, p.color_id
+FROM pieces p JOIN sort_runs r ON r.id = p.run_id
+WHERE r.profile_id = ? AND p.status = 'distributed' AND p.category IN (?)
+ORDER BY p.seen_at`, profileID, categories)
+	if err != nil {
+		return nil, err
+	}
+	var out []sorter.KitPiece
+	if err := s.db.SelectContext(ctx, &out, s.db.Rebind(query), args...); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SaveReview stores a person's check of a piece, replacing any earlier one.
+func (s *RecordsStore) SaveReview(ctx context.Context, pieceID string, r sorter.PieceReview) error {
+	if s.db == nil {
+		return ErrDBNotConfigured
+	}
+	issues := r.Issues
+	if issues == nil {
+		issues = []string{}
+	}
+	raw, err := json.Marshal(issues)
+	if err != nil {
+		return err
+	}
+	const query = `
+INSERT INTO piece_reviews (piece_id, part_correct, color_correct, color_id, issues, reviewed_at)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (piece_id) DO UPDATE SET part_correct = excluded.part_correct, color_correct = excluded.color_correct,
+  color_id = excluded.color_id, issues = excluded.issues, reviewed_at = excluded.reviewed_at
+`
+	_, err = s.db.ExecContext(ctx, query, pieceID, r.PartCorrect, r.ColorCorrect, r.ColorID, string(raw), r.ReviewedAt.UTC())
+	if err != nil && strings.Contains(err.Error(), "FOREIGN KEY") {
+		return sorter.ErrPieceNotFound
+	}
+	return err
+}
+
+func (s *RecordsStore) review(ctx context.Context, pieceID string) (*sorter.PieceReview, error) {
+	var row struct {
+		PartCorrect  sql.NullBool `db:"part_correct"`
+		ColorCorrect sql.NullBool `db:"color_correct"`
+		ColorID      string       `db:"color_id"`
+		Issues       string       `db:"issues"`
+		ReviewedAt   time.Time    `db:"reviewed_at"`
+	}
+	err := s.db.GetContext(ctx, &row, `SELECT part_correct, color_correct, color_id, issues, reviewed_at FROM piece_reviews WHERE piece_id = ?`, pieceID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	r := &sorter.PieceReview{ColorID: row.ColorID, ReviewedAt: row.ReviewedAt, Issues: []string{}}
+	if row.PartCorrect.Valid {
+		v := row.PartCorrect.Bool
+		r.PartCorrect = &v
+	}
+	if row.ColorCorrect.Valid {
+		v := row.ColorCorrect.Bool
+		r.ColorCorrect = &v
+	}
+	_ = json.Unmarshal([]byte(row.Issues), &r.Issues)
+	return r, nil
 }

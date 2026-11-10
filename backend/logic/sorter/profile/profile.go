@@ -59,6 +59,7 @@ type Profile struct {
 
 	program *program
 	partMap map[string]string // flat format: "{color}-{part}" -> category
+	kits    map[string][]KitLine
 }
 
 // file is the on-disk shape, only the parts the sorter uses.
@@ -142,6 +143,11 @@ func Parse(data []byte) (*Profile, error) {
 	}
 
 	p := &Profile{names: make(map[string]string)}
+	var kitNames map[string]string
+	p.kits, kitNames = parseKits(f.SetInventories)
+	for id, name := range kitNames {
+		p.names[id] = name
+	}
 	for id, c := range f.Categories {
 		p.names[id] = c.Name
 	}

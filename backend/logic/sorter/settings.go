@@ -145,6 +145,9 @@ type LayerSettings struct {
 	// MaxPieceMm is the longest piece this layer's funnels take; 0 uses the
 	// default for its bin count (see LayerMaxPieceMm).
 	MaxPieceMm float64 `json:"maxPieceMm"`
+	// MaxPieces is how many pieces a bin of this layer holds before it's full and
+	// takes no more until emptied; 0 is no limit.
+	MaxPieces int `json:"maxPieces"`
 }
 
 // DefaultMachineSettings matches the bench page's defaults.

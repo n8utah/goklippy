@@ -64,12 +64,85 @@ type SortingService struct {
 	mu     sync.Mutex
 	active *activeProfile
 	rng    *rand.Rand
+	// What's in each bin, when AttachCounts was called.
+	counts    CountsStore
+	binCounts BinCounts
 }
 
 type activeProfile struct {
 	stored  StoredProfile
 	profile *profile.Profile
 	bins    Assignments
+	kits    *kitTracker
+}
+
+// CountsStore answers how full bins and kits are, from the piece records.
+type CountsStore interface {
+	// BinCounts is the pieces delivered to each bin since it was last emptied.
+	BinCounts(ctx context.Context) (BinCounts, error)
+	EmptyBin(ctx context.Context, bin BinKey, at time.Time) error
+	// KitPieces lists the pieces delivered under a profile into its kit categories,
+	// oldest first, to count kits up again after a restart.
+	KitPieces(ctx context.Context, profileID int64, categories []string) ([]KitPiece, error)
+}
+
+// KitPiece is one delivered piece a kit took.
+type KitPiece struct {
+	Category string `db:"category"`
+	Part     string `db:"part_id"`
+	Color    string `db:"color_id"`
+}
+
+// AttachCounts loads bin and kit counts, so full bins and full kits take no more.
+func (s *SortingService) AttachCounts(ctx context.Context, counts CountsStore) error {
+	bins, err := counts.BinCounts(ctx)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.counts, s.binCounts = counts, bins
+	active := s.active
+	s.mu.Unlock()
+	if active != nil {
+		return s.load(ctx, active.stored.ID)
+	}
+	return nil
+}
+
+// NoteDelivered counts a piece that dropped into a bin.
+func (s *SortingService) NoteDelivered(bin BinKey) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.binCounts == nil {
+		s.binCounts = BinCounts{}
+	}
+	s.binCounts[bin]++
+}
+
+// EmptyBin records that a bin was emptied: it counts from zero again.
+func (s *SortingService) EmptyBin(ctx context.Context, bin BinKey) error {
+	s.mu.Lock()
+	counts := s.counts
+	s.mu.Unlock()
+	if counts != nil {
+		if err := counts.EmptyBin(ctx, bin, time.Now().UTC()); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
+	delete(s.binCounts, bin)
+	s.mu.Unlock()
+	return nil
+}
+
+// KitProgress is how far each kit of the active profile has got.
+func (s *SortingService) KitProgress() []KitProgress {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		return []KitProgress{}
+	}
+	return s.active.kits.progress(s.active.profile.CategoryName)
 }
 
 // NewSortingService loads the active profile, if any. A profile that can't be read
@@ -102,9 +175,26 @@ func (s *SortingService) load(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
+	kits := newKitTracker(p.Kits())
+	s.mu.Lock()
+	counts := s.counts
+	s.mu.Unlock()
+	if counts != nil && len(p.Kits()) > 0 {
+		categories := make([]string, 0, len(p.Kits()))
+		for c := range p.Kits() {
+			categories = append(categories, c)
+		}
+		taken, err := counts.KitPieces(ctx, id, categories)
+		if err != nil {
+			return err
+		}
+		for _, k := range taken {
+			kits.record(k.Category, k.Part, k.Color)
+		}
+	}
 	stored.Active = true
 	s.mu.Lock()
-	s.active = &activeProfile{stored: stored, profile: p, bins: bins}
+	s.active = &activeProfile{stored: stored, profile: p, bins: bins, kits: kits}
 	s.mu.Unlock()
 	return nil
 }
@@ -185,7 +275,7 @@ func (s *SortingService) Activate(ctx context.Context, id int64, mode Activation
 // preassign gives each category of the profile, in rule order, the next usable bin.
 func (s *SortingService) preassign(p *profile.Profile) Assignments {
 	bins := Assignments{}
-	usable := s.settings().Distributor.usableBins(0)
+	usable := s.settings().Distributor.usableBins(0, nil)
 	for i, c := range p.Summary().Categories {
 		if i >= len(usable) {
 			break
@@ -205,6 +295,8 @@ type CategoryRef struct {
 type BinView struct {
 	BinPosition
 	Categories []CategoryRef `json:"categories"`
+	Count      int           `json:"count"` // pieces since it was last emptied
+	Full       bool          `json:"full"`
 }
 
 type SectionView struct {
@@ -218,6 +310,7 @@ type LayerView struct {
 	Bins       int           `json:"bins"`
 	Disabled   bool          `json:"disabled"`
 	MaxPieceMm float64       `json:"max_piece_mm"`
+	MaxPieces  int           `json:"max_pieces"`
 	Sections   []SectionView `json:"sections"`
 }
 
@@ -238,6 +331,10 @@ func (s *SortingService) Bins() BinsView {
 	var assigned Assignments
 	if active != nil {
 		assigned = active.bins.Clone() // Route may add to the live map
+	}
+	counts := BinCounts{}
+	for k, v := range s.binCounts {
+		counts[k] = v
 	}
 	s.mu.Unlock()
 
@@ -268,14 +365,16 @@ func (s *SortingService) Bins() BinsView {
 	}
 	for l, layerBins := range d.LayerBins() {
 		layer := d.Layers[l]
-		lv := LayerView{Layer: l + 1, Bins: layer.Bins, Disabled: layer.Disabled, MaxPieceMm: layer.LayerMaxPieceMm(), Sections: []SectionView{}}
+		lv := LayerView{Layer: l + 1, Bins: layer.Bins, Disabled: layer.Disabled, MaxPieceMm: layer.LayerMaxPieceMm(), MaxPieces: layer.MaxPieces, Sections: []SectionView{}}
 		for _, pos := range layerBins {
 			if len(lv.Sections) < pos.Section {
 				lv.Sections = append(lv.Sections, SectionView{
 					Section: pos.Section, Disabled: slices.Contains(layer.DisabledSections, pos.Section), Bins: []BinView{},
 				})
 			}
-			bv := BinView{BinPosition: pos, Categories: []CategoryRef{}}
+			key := BinKey{pos.Layer, pos.Bin}
+			bv := BinView{BinPosition: pos, Categories: []CategoryRef{}, Count: counts[key]}
+			bv.Full = layer.MaxPieces > 0 && bv.Count >= layer.MaxPieces
 			if active != nil {
 				for _, id := range assigned[BinKey{pos.Layer, pos.Bin}] {
 					bv.Categories = append(bv.Categories, CategoryRef{id, active.profile.CategoryName(id)})
@@ -378,7 +477,13 @@ func (s *SortingService) Route(ctx context.Context, part, color string, pieceMm 
 	if s.active == nil {
 		return RouteResult{}, ErrNoActiveProfile
 	}
-	return s.routeLocked(ctx, s.active.profile.Route(part, color, nil), pieceMm, commit)
+	kits := s.active.kits
+	category := s.active.profile.Route(part, color, kits.full)
+	res, err := s.routeLocked(ctx, category, pieceMm, commit)
+	if err == nil && commit {
+		kits.record(category, part, color)
+	}
+	return res, err
 }
 
 // RouteCategory finds the bin for a category directly, such as misc for a piece that
@@ -394,7 +499,7 @@ func (s *SortingService) RouteCategory(ctx context.Context, category string, pie
 
 func (s *SortingService) routeLocked(ctx context.Context, category string, pieceMm float64, commit bool) (RouteResult, error) {
 	d := s.settings().Distributor
-	choice, newCats := d.ChooseBin(s.active.bins, category, pieceMm, s.rng.IntN)
+	choice, newCats := d.ChooseBin(s.active.bins, s.binCounts, category, pieceMm, s.rng.IntN)
 	result := RouteResult{Category: category, CategoryName: s.active.profile.CategoryName(category), Choice: choice}
 	if !commit || !choice.Assigned {
 		return result, nil

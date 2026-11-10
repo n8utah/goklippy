@@ -97,6 +97,18 @@ CREATE TABLE IF NOT EXISTS piece_images (
   PRIMARY KEY (piece_id, idx)
 );
 
+-- A person's check of a piece's identification. part_correct and color_correct are
+-- NULL until answered; color_id is the right color when the predicted one was wrong;
+-- issues is a JSON array of flags about the photos.
+CREATE TABLE IF NOT EXISTS piece_reviews (
+  piece_id TEXT PRIMARY KEY REFERENCES pieces(id) ON DELETE CASCADE,
+  part_correct BOOLEAN NULL,
+  color_correct BOOLEAN NULL,
+  color_id TEXT NOT NULL DEFAULT '',
+  issues TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(issues)),
+  reviewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Problems the machine stopped for, and how each was dealt with.
 CREATE TABLE IF NOT EXISTS incidents (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,6 +122,16 @@ CREATE TABLE IF NOT EXISTS incidents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_incidents_opened ON incidents(opened_at);
+
+-- When each bin was last emptied; its count is the pieces delivered since.
+CREATE TABLE IF NOT EXISTS bin_empties (
+  layer INTEGER NOT NULL,
+  bin INTEGER NOT NULL,
+  emptied_at DATETIME NOT NULL,
+  PRIMARY KEY (layer, bin)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pieces_bin ON pieces(bin_layer, bin_number, distributed_at);
 
 -- Which categories each bin takes, per profile, so switching profiles keeps each
 -- profile's bins. Layer and bin count from 1; position keeps a bin's categories in

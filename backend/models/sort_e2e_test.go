@@ -264,3 +264,79 @@ func abs(v float64) float64 {
 	}
 	return v
 }
+
+const kitProfile = `{
+  "name": "Order 42", "schema_version": 1, "profile_type": "set",
+  "categories": {"kit": {"name": "Order 42"}, "r-bricks": {"name": "Bricks"}},
+  "program": {"rules": [
+    {"category": "kit", "kit": {"3001": ["5"]}},
+    {"category": "r-bricks", "parts": ["3001"], "colors": null}
+  ], "default": "misc"},
+  "set_inventories": {"kit": {"name": "Order 42", "parts": [{"part_num": "3001", "color_id": 5, "quantity": 1}]}}
+}`
+
+func TestSortingKitsAndFullBins(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	settings := func() sorter.MachineSettings {
+		s := testSettings()
+		s.Distributor.Layers[0].MaxPieces = 2
+		return s
+	}
+	records := NewRecordsStore(db)
+	svc := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	require.NoError(t, svc.AttachCounts(ctx, records))
+	p, err := svc.Import(ctx, []byte(kitProfile))
+	require.NoError(t, err)
+	require.NoError(t, svc.Activate(ctx, p.ID, sorter.ActivateKeep))
+	runID, err := records.StartRun(ctx, &p.ID, p.Name, time.Now())
+	require.NoError(t, err)
+
+	// deliver routes a red 3001 and records it as delivered where it was sent.
+	deliver := func() sorter.RouteResult {
+		t.Helper()
+		res, err := svc.Route(ctx, "3001", "5", 0, true)
+		require.NoError(t, err)
+		now := time.Now().UTC()
+		piece := sorter.Piece{ID: sorter.NewPieceID(), RunID: runID, Status: sorter.PieceDistributed, SeenAt: now,
+			DistributedAt: &now, PartID: "3001", ColorID: "5", Category: res.Category}
+		if res.Choice.Bin != nil {
+			piece.BinLayer, piece.BinNumber = res.Choice.Bin.Layer, res.Choice.Bin.Bin
+			svc.NoteDelivered(sorter.BinKey{Layer: piece.BinLayer, Bin: piece.BinNumber})
+		}
+		require.NoError(t, records.SavePiece(ctx, piece))
+		return res
+	}
+
+	first := deliver()
+	assert.Equal(t, "kit", first.Category, "the kit needs one red brick")
+	assert.Equal(t, []sorter.KitProgress{{Category: "kit", Name: "Order 42", Need: 1, Found: 1}}, svc.KitProgress())
+	second := deliver()
+	assert.Equal(t, "r-bricks", second.Category, "the kit is full, so the next rule")
+	third := deliver()
+	assert.Equal(t, second.Choice.Bin.Bin, third.Choice.Bin.Bin)
+	fourth := deliver()
+	assert.NotEqual(t, second.Choice.Bin.Bin, fourth.Choice.Bin.Bin, "bricks' bin is full (2), so a new one")
+
+	view := svc.Bins()
+	brickBin := view.Layers[0].Sections[0].Bins[second.Choice.Bin.Bin-1]
+	assert.Equal(t, 2, brickBin.Count)
+	assert.True(t, brickBin.Full)
+
+	// A restart counts the bins and the kit up again from the records.
+	svc2 := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	require.NoError(t, svc2.AttachCounts(ctx, records))
+	assert.Equal(t, 1, svc2.KitProgress()[0].Found)
+	res, err := svc2.Route(ctx, "3001", "5", 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, "r-bricks", res.Category)
+	assert.Equal(t, fourth.Choice.Bin.Bin, res.Choice.Bin.Bin, "still skipping the full bin")
+
+	// Emptying the bin lets it take pieces again.
+	require.NoError(t, svc2.EmptyBin(ctx, sorter.BinKey{Layer: 1, Bin: second.Choice.Bin.Bin}))
+	assert.Equal(t, 0, svc2.Bins().Layers[0].Sections[0].Bins[second.Choice.Bin.Bin-1].Count)
+	time.Sleep(10 * time.Millisecond)
+	svc3 := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	require.NoError(t, svc3.AttachCounts(ctx, records))
+	assert.Equal(t, 0, svc3.Bins().Layers[0].Sections[0].Bins[second.Choice.Bin.Bin-1].Count, "emptied stays emptied")
+}

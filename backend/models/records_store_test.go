@@ -105,3 +105,35 @@ func TestRecordsPiecesRunsAndIncidents(t *testing.T) {
 
 	assert.FileExists(t, filepath.Join(records.DataDir(), "pieces", p.ID[:2], p.ID, "00.jpg"))
 }
+
+func TestPieceReviews(t *testing.T) {
+	store := NewRecordsStore(openTestDB(t))
+	ctx := context.Background()
+	p := sorter.Piece{ID: sorter.NewPieceID(), Status: sorter.PieceDistributed, SeenAt: time.Now()}
+	require.NoError(t, store.SavePiece(ctx, p))
+
+	got, err := store.GetPiece(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Nil(t, got.Review, "not reviewed yet")
+
+	yes, no := true, false
+	require.NoError(t, store.SaveReview(ctx, p.ID, sorter.PieceReview{PartCorrect: &yes, ColorCorrect: &no, ColorID: "5", Issues: []string{"blurry"}, ReviewedAt: time.Now()}))
+	got, err = store.GetPiece(ctx, p.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.Review)
+	assert.True(t, *got.Review.PartCorrect)
+	assert.False(t, *got.Review.ColorCorrect)
+	assert.Equal(t, "5", got.Review.ColorID)
+	assert.Equal(t, []string{"blurry"}, got.Review.Issues)
+
+	// A review replaces the last one whole: the page always sends every answer.
+	require.NoError(t, store.SaveReview(ctx, p.ID, sorter.PieceReview{PartCorrect: &no, ReviewedAt: time.Now()}))
+	got, err = store.GetPiece(ctx, p.ID)
+	require.NoError(t, err)
+	assert.False(t, *got.Review.PartCorrect)
+	assert.Nil(t, got.Review.ColorCorrect)
+	assert.Empty(t, got.Review.Issues)
+
+	assert.ErrorIs(t, store.SaveReview(ctx, "missing", sorter.PieceReview{ReviewedAt: time.Now()}), sorter.ErrPieceNotFound)
+	assert.ErrorIs(t, sorter.PieceReview{Issues: []string{"sticky"}}.Check(), sorter.ErrBadReview)
+}

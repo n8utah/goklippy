@@ -65,9 +65,13 @@ func (l LayerSettings) LayerMaxPieceMm() float64 {
 	return layerMaxPieceDefaults[l.Bins]
 }
 
+// BinCounts is how many pieces each bin holds since it was last emptied.
+type BinCounts map[BinKey]int
+
 // usableBins lists the bins a piece of pieceMm (0 = unknown) can go to: enabled
-// layers and sections, reachable by the chute, with funnels wide enough.
-func (d DistributorSettings) usableBins(pieceMm float64) []BinPosition {
+// layers and sections, reachable by the chute, with funnels wide enough, and not full
+// (a layer's MaxPieces, when set).
+func (d DistributorSettings) usableBins(pieceMm float64, counts BinCounts) []BinPosition {
 	var out []BinPosition
 	for l, layerBins := range d.LayerBins() {
 		layer := d.Layers[l]
@@ -78,7 +82,8 @@ func (d DistributorSettings) usableBins(pieceMm float64) []BinPosition {
 			continue
 		}
 		for _, pos := range layerBins {
-			if pos.Reachable && !slices.Contains(layer.DisabledSections, pos.Section) {
+			full := layer.MaxPieces > 0 && counts[BinKey{pos.Layer, pos.Bin}] >= layer.MaxPieces
+			if pos.Reachable && !full && !slices.Contains(layer.DisabledSections, pos.Section) {
 				out = append(out, pos)
 			}
 		}
@@ -90,11 +95,12 @@ func (d DistributorSettings) usableBins(pieceMm float64) []BinPosition {
 // categories. pick(n) returns a number in [0, n); it chooses among several bins a
 // category has, so they fill evenly. When the choice gives a bin a new category,
 // newCategories is that bin's full category list for the caller to save.
-func (d DistributorSettings) ChooseBin(assigned Assignments, category string, pieceMm float64, pick func(n int) int) (choice BinChoice, newCategories []string) {
+// counts makes full bins take nothing; nil when not counting.
+func (d DistributorSettings) ChooseBin(assigned Assignments, counts BinCounts, category string, pieceMm float64, pick func(n int) int) (choice BinChoice, newCategories []string) {
 	if pieceMm > MaxPieceMm {
 		return BinChoice{Reason: RouteTooBig}, nil
 	}
-	usable := d.usableBins(pieceMm)
+	usable := d.usableBins(pieceMm, counts)
 
 	var matching []BinPosition
 	var firstEmpty *BinPosition
@@ -140,7 +146,7 @@ func (d DistributorSettings) ChooseBin(assigned Assignments, category string, pi
 		return BinChoice{Bin: &pos, Reason: RouteSharedBin, Assigned: true}, cats
 	}
 	// No bin for the category: a misc bin if there is one, else the bucket.
-	if choice, _ := d.ChooseBin(assigned, profile.Misc, pieceMm, pick); choice.Bin != nil {
+	if choice, _ := d.ChooseBin(assigned, counts, profile.Misc, pieceMm, pick); choice.Bin != nil {
 		return choice, nil
 	}
 	return BinChoice{Reason: RouteNoBin}, nil

@@ -18,7 +18,7 @@ func tinyTower() DistributorSettings {
 
 func TestChooseBinGivesNewCategoriesTheFirstEmptyBin(t *testing.T) {
 	d := tinyTower()
-	choice, cats := d.ChooseBin(Assignments{}, "bricks", 0, firstPick)
+	choice, cats := d.ChooseBin(Assignments{}, nil, "bricks", 0, firstPick)
 	require.NotNil(t, choice.Bin)
 	assert.Equal(t, RouteNewBin, choice.Reason)
 	assert.True(t, choice.Assigned)
@@ -26,10 +26,10 @@ func TestChooseBinGivesNewCategoriesTheFirstEmptyBin(t *testing.T) {
 	assert.Equal(t, []string{"bricks"}, cats)
 
 	assigned := Assignments{{1, 1}: {"bricks"}}
-	choice, _ = d.ChooseBin(assigned, "plates", 0, firstPick)
+	choice, _ = d.ChooseBin(assigned, nil, "plates", 0, firstPick)
 	assert.Equal(t, BinKey{1, 2}, BinKey{choice.Bin.Layer, choice.Bin.Bin})
 
-	choice, cats = d.ChooseBin(assigned, "bricks", 0, firstPick)
+	choice, cats = d.ChooseBin(assigned, nil, "bricks", 0, firstPick)
 	assert.Equal(t, RouteAssignedBin, choice.Reason)
 	assert.False(t, choice.Assigned)
 	assert.Nil(t, cats)
@@ -44,7 +44,7 @@ func TestChooseBinSpreadsACategoryOverItsBins(t *testing.T) {
 		seen = append(seen, n)
 		return n - 1
 	}
-	choice, _ := d.ChooseBin(assigned, "bricks", 0, pick)
+	choice, _ := d.ChooseBin(assigned, nil, "bricks", 0, pick)
 	assert.Equal(t, []int{2}, seen, "chose among both bins")
 	assert.Equal(t, BinKey{2, 5}, BinKey{choice.Bin.Layer, choice.Bin.Bin})
 }
@@ -52,16 +52,16 @@ func TestChooseBinSpreadsACategoryOverItsBins(t *testing.T) {
 func TestChooseBinSkipsDisabledUnreachableAndSmall(t *testing.T) {
 	d := tinyTower()
 	d.Layers[0].DisabledSections = []int{1}
-	choice, _ := d.ChooseBin(Assignments{}, "bricks", 0, firstPick)
+	choice, _ := d.ChooseBin(Assignments{}, nil, "bricks", 0, firstPick)
 	assert.Equal(t, BinKey{1, 3}, BinKey{choice.Bin.Layer, choice.Bin.Bin}, "section 1 is off")
 
 	d.Layers[0].Disabled = true
-	choice, _ = d.ChooseBin(Assignments{}, "bricks", 0, firstPick)
+	choice, _ = d.ChooseBin(Assignments{}, nil, "bricks", 0, firstPick)
 	assert.Equal(t, 2, choice.Bin.Layer, "layer 1 is off")
 
 	d = tinyTower()
 	d.Layers[0].MaxPieceMm = 30
-	choice, _ = d.ChooseBin(Assignments{}, "bricks", 40, firstPick)
+	choice, _ = d.ChooseBin(Assignments{}, nil, "bricks", 40, firstPick)
 	assert.Equal(t, 2, choice.Bin.Layer, "40 mm is too long for layer 1")
 
 	d = tinyTower()
@@ -71,17 +71,17 @@ func TestChooseBinSkipsDisabledUnreachableAndSmall(t *testing.T) {
 	for b := 1; b <= 10; b++ {
 		assigned[BinKey{1, b}] = []string{"x"}
 	}
-	choice, _ = d.ChooseBin(assigned, "bricks", 0, firstPick)
+	choice, _ = d.ChooseBin(assigned, nil, "bricks", 0, firstPick)
 	assert.Equal(t, BinKey{2, 1}, BinKey{choice.Bin.Layer, choice.Bin.Bin}, "layer 1's last section can't be reached")
 }
 
 func TestChooseBinBucketCases(t *testing.T) {
 	d := tinyTower()
-	choice, _ := d.ChooseBin(Assignments{}, "bricks", 90, firstPick)
+	choice, _ := d.ChooseBin(Assignments{}, nil, "bricks", 90, firstPick)
 	assert.Nil(t, choice.Bin)
 	assert.Equal(t, RouteTooBig, choice.Reason)
 
-	choice, _ = d.ChooseBin(Assignments{}, "misc", 0, firstPick)
+	choice, _ = d.ChooseBin(Assignments{}, nil, "misc", 0, firstPick)
 	assert.Nil(t, choice.Bin, "misc never claims a bin")
 	assert.Equal(t, RouteMisc, choice.Reason)
 
@@ -91,12 +91,12 @@ func TestChooseBinBucketCases(t *testing.T) {
 			full[BinKey{l, b}] = []string{"other"}
 		}
 	}
-	choice, _ = d.ChooseBin(full, "bricks", 0, firstPick)
+	choice, _ = d.ChooseBin(full, nil, "bricks", 0, firstPick)
 	assert.Nil(t, choice.Bin)
 	assert.Equal(t, RouteNoBin, choice.Reason)
 
 	full[BinKey{2, 12}] = []string{"misc"}
-	choice, _ = d.ChooseBin(full, "bricks", 0, firstPick)
+	choice, _ = d.ChooseBin(full, nil, "bricks", 0, firstPick)
 	require.NotNil(t, choice.Bin)
 	assert.Equal(t, RouteMiscBin, choice.Reason)
 	assert.Equal(t, BinKey{2, 12}, BinKey{choice.Bin.Layer, choice.Bin.Bin})
@@ -112,7 +112,7 @@ func TestChooseBinSharesWhenAllowed(t *testing.T) {
 		}
 	}
 	full[BinKey{2, 4}] = []string{"a"}
-	choice, cats := d.ChooseBin(full, "bricks", 0, firstPick)
+	choice, cats := d.ChooseBin(full, nil, "bricks", 0, firstPick)
 	require.NotNil(t, choice.Bin)
 	assert.Equal(t, RouteSharedBin, choice.Reason)
 	assert.Equal(t, BinKey{2, 4}, BinKey{choice.Bin.Layer, choice.Bin.Bin}, "the bin with the fewest categories")

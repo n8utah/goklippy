@@ -494,6 +494,9 @@ func (p *Platter) finishIndex(now time.Time, ps PlatterSettings) {
 		fallen.piece.Status = PieceDistributed
 		fallen.piece.DistributedAt = &now
 		p.deps.Records.SavePiece(fallen.piece)
+		if fallen.piece.BinLayer > 0 {
+			p.deps.Sorting.NoteDelivered(BinKey{fallen.piece.BinLayer, fallen.piece.BinNumber})
+		}
 		p.recent = append([]Piece{fallen.piece.Clone()}, p.recent...)
 		if len(p.recent) > recentPieces {
 			p.recent = p.recent[:recentPieces]
