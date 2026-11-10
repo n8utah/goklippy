@@ -23,6 +23,8 @@ type SorterConfig struct {
 	// Simulate runs the sorter against simulated hardware instead of the MCU, for
 	// working on the sorter without the machine attached.
 	Simulate bool `yaml:"simulate"`
+	// DataDir holds piece photos, relative to where the backend runs (backend/).
+	DataDir string `yaml:"data_dir"`
 }
 
 type MCUConfig struct {
@@ -88,6 +90,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Database.Path == "" {
 		cfg.Database.Path = "../private/goklippy.db"
+	}
+	if cfg.Sorter.DataDir == "" {
+		cfg.Sorter.DataDir = "../private/data"
 	}
 	if cfg.Database.SchemaPath == "" {
 		cfg.Database.SchemaPath = "../database/schema.sql"

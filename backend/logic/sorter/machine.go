@@ -44,6 +44,13 @@ type Snapshot struct {
 	Job      *JobStatus     `json:"job,omitempty"`      // the task running now
 	LastJob  *JobStatus     `json:"last_job,omitempty"` // the last one to finish
 	Ticks    uint64         `json:"ticks"`              // control-loop ticks spent running
+
+	// Sorting, once AttachSorting is called.
+	Incident *IncidentHold              `json:"incident,omitempty"`
+	RunID    int64                      `json:"run_id,omitempty"`
+	Aboard   []Piece                    `json:"aboard"`
+	Recent   []Piece                    `json:"recent"`
+	Channels map[Channel]ChannelSummary `json:"channels,omitempty"`
 }
 
 // JobStatus is a task the machine runs off the loop: homing, aiming, sending to a bin.
@@ -116,6 +123,8 @@ type Machine struct {
 	chute    ChuteStatus
 	job      *job
 	lastJob  *JobStatus
+	sort     *sortStations
+	incident *IncidentHold
 	changed  bool
 	lastSent time.Time
 }
@@ -160,7 +169,11 @@ func (m *Machine) Run(ctx context.Context) {
 			}
 			return
 		case req := <-m.requests:
-			req.reply <- m.handle(req)
+			// Publish before replying, so a caller sees what its request changed.
+			err := m.handle(req)
+			m.publish()
+			req.reply <- err
+			continue
 		case p := <-m.progress:
 			if p.job == m.job {
 				m.job.status.Step, m.job.status.Total, m.job.status.Detail = p.step, p.total, p.detail
@@ -349,6 +362,12 @@ func (m *Machine) handle(req request) error {
 		if m.job != nil {
 			return ErrBusy
 		}
+		if m.state != StateReady {
+			return fmt.Errorf("%w: can't start while %s", ErrInvalidTransition, m.state)
+		}
+		if err := m.startRun(time.Now().UTC()); err != nil {
+			return err
+		}
 		return m.transition(req.command, StateRunning, StateReady)
 	case CommandPause:
 		return m.transition(req.command, StatePaused, StateRunning)
@@ -361,6 +380,7 @@ func (m *Machine) handle(req request) error {
 		if err := m.transition(req.command, StateReady, StateRunning, StatePaused); err != nil {
 			return err
 		}
+		m.endRun(time.Now().UTC())
 		if err := m.hw.StopAll(); err != nil {
 			slog.Warn("sorter stop: motors did not all stop", "error", err)
 			return fmt.Errorf("stopped, but the motors did not all stop: %w", err)
@@ -544,6 +564,7 @@ func (m *Machine) checkHealth() {
 func (m *Machine) stopForError(msg string) {
 	if m.state == StateRunning || m.state == StatePaused {
 		_ = m.hw.StopAll()
+		m.endRun(time.Now().UTC())
 	}
 	m.setState(StateError, msg)
 }
@@ -566,13 +587,13 @@ func chuteStatusEqual(a, b ChuteStatus) bool {
 	return a.Angle == nil || *a.Angle == *b.Angle
 }
 
-// step is one control-loop tick. The stations (distribution, platter, feeder) plug
-// in here in later phases.
+// step is one control-loop tick: while running, the sorting stations take a step.
 func (m *Machine) step() {
 	if m.state != StateRunning {
 		return
 	}
 	m.ticks++
+	m.stepSorting(time.Now())
 }
 
 func (m *Machine) setState(next State, errMsg string) {
@@ -595,6 +616,7 @@ func (m *Machine) snapshot() Snapshot {
 		status := m.job.status
 		snap.Job = &status
 	}
+	m.sortSnapshot(&snap)
 	return snap
 }
 

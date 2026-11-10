@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+
+	"goklippy/backend/logic/vision"
 )
 
 // Settings documents. "machine" holds the mapping, gearing and speeds; "routines" holds
@@ -34,6 +36,64 @@ type MachineSettings struct {
 	DwellMs      int                        `json:"dwellMs"`
 	Distributor  DistributorSettings        `json:"distributor"`
 	Channels     map[string]ChannelSettings `json:"channels"`
+	Feeder       FeederSettings             `json:"feeder"`
+	Platter      PlatterSettings            `json:"platter"`
+	Cameras      CameraSettings             `json:"cameras"`
+}
+
+// CameraSettings say which camera watches each channel (c2, c3, c4) and where that
+// channel's zones are in its picture.
+type CameraSettings struct {
+	// Devices maps a channel to a capture device name (DirectShow on Windows).
+	Devices map[string]string `json:"devices"`
+	// Zones maps a channel to its ring and zones in that camera's frame.
+	Zones  map[string]vision.ChannelZones `json:"zones"`
+	Width  int                            `json:"width"`
+	Height int                            `json:"height"`
+	Fps    int                            `json:"fps"`
+	// Ffmpeg is the ffmpeg executable; empty uses the one on PATH.
+	Ffmpeg string `json:"ffmpeg"`
+}
+
+// FeederSettings tune the pulsing feeder (C1–C3), after Sorter V2's "Feeder simple
+// pulse" page. Distances are rotor degrees; speeds come from feederRpm.
+type FeederSettings struct {
+	DropPulseDeg float64 `json:"dropPulseDeg"` // nudge for a piece short of the exit
+	DropPauseMs  int     `json:"dropPauseMs"`  // look again after a drop-zone nudge
+	ExitPulseDeg float64 `json:"exitPulseDeg"` // nudge for a piece at the exit
+	ExitPauseMs  int     `json:"exitPauseMs"`
+	// HoldAfterFallMs is how long an exit pushes nothing after a piece falls off it,
+	// so the next channel sees it land before another can follow.
+	HoldAfterFallMs int     `json:"holdAfterFallMs"`
+	MinMoveDeg      float64 `json:"minMoveDeg"` // smaller moves are skipped
+	MaxMoveDeg      float64 `json:"maxMoveDeg"` // no single pulse is longer
+	// C1 has no camera: it advances the bulk pile by this much whenever C2's drop
+	// zone is clear, then waits.
+	BulkPulseDeg float64 `json:"bulkPulseDeg"`
+	BulkPauseMs  int     `json:"bulkPauseMs"`
+	// StaleMs: a camera frame older than this is no information.
+	StaleMs int `json:"staleMs"`
+}
+
+// PlatterSettings tune the classification platter (C4).
+type PlatterSettings struct {
+	Sectors int `json:"sectors"` // equal sectors; one index turns one sector
+	// ExitSector is how many sectors forward of the drop sector the exit is: a
+	// piece dropped onto the platter leaves after this many indexes.
+	ExitSector int `json:"exitSector"`
+	// IdentifyTimeoutMs: a piece still waiting for Brickognize when it reaches the
+	// exit goes to misc.
+	IdentifyTimeoutMs int `json:"identifyTimeoutMs"`
+	// SettleMs is the wait after an index before photographing or trusting the
+	// camera.
+	SettleMs int `json:"settleMs"`
+	// BurstFrames is how many photos of each piece go to Brickognize (≤ 8).
+	BurstFrames int `json:"burstFrames"`
+	// StallMs: no progress for this long with a piece aboard raises an incident.
+	StallMs int `json:"stallMs"`
+	// IdleIndexMs: with pieces aboard and none landing for this long, index anyway
+	// so they still get delivered.
+	IdleIndexMs int `json:"idleIndexMs"`
 }
 
 // ChannelSettings maps one rotating channel to its stepper.
@@ -117,6 +177,24 @@ func DefaultMachineSettings() MachineSettings {
 			"c2": {Stepper: "stepper_y", Forward: true, Gear: 1},
 			"c3": {Stepper: "stepper_z", Forward: true, Gear: 1},
 			"c4": {Stepper: "stepper_e0", Forward: true, Gear: 10.8},
+		},
+		// Sorter V2's defaults ("Conservative" exit pulses).
+		Feeder: FeederSettings{
+			DropPulseDeg: 30, DropPauseMs: 100,
+			ExitPulseDeg: 2, ExitPauseMs: 100,
+			HoldAfterFallMs: 800,
+			MinMoveDeg:      0.1, MaxMoveDeg: 120,
+			BulkPulseDeg: 10, BulkPauseMs: 1500,
+			StaleMs: 1000,
+		},
+		Platter: PlatterSettings{
+			Sectors: 5, ExitSector: 2,
+			IdentifyTimeoutMs: 20000, SettleMs: 250, BurstFrames: 6, StallMs: 30000, IdleIndexMs: 1500,
+		},
+		Cameras: CameraSettings{
+			Devices: map[string]string{},
+			Zones:   map[string]vision.ChannelZones{},
+			Width:   640, Height: 480, Fps: 10,
 		},
 	}
 }

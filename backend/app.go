@@ -11,10 +11,7 @@ import (
 
 	"goklippy/backend/config"
 	"goklippy/backend/logic"
-	"goklippy/backend/logic/brickognize"
 	"goklippy/backend/logic/klipperconfig"
-	"goklippy/backend/logic/sorter"
-	"goklippy/backend/mcu"
 	"goklippy/backend/models"
 	"goklippy/backend/routes"
 
@@ -86,16 +83,10 @@ func main() {
 
 	sorterCtx, stopSorter := context.WithCancel(context.Background())
 	defer stopSorter()
-	sorterSettings := sorter.NewSettingsService(sorterCtx, models.NewSorterSettingsStore(db))
-	var sorterHW sorter.Hardware = sorter.NewMCUHardware(mcu.DefaultManager(), sorterSettings.Machine)
-	if cfg.Sorter.Simulate {
-		sorterHW = sorter.NewSimHardware(sorterSettings.Machine)
-		slog.Info("sorter running on simulated hardware")
+	if _, err := startSorter(sorterCtx, cfg.Sorter, db); err != nil {
+		slog.Error("failed to start the sorter", "error", err)
+		return
 	}
-	sorterMachine := sorter.NewMachine(sorterHW, sorterSettings.Machine, 0)
-	go sorterMachine.Run(sorterCtx)
-	routes.InitSorter(sorterMachine, sorterSettings)
-	routes.InitSorting(sorter.NewSortingService(sorterCtx, models.NewSortingStore(db), sorterSettings.Machine), brickognize.NewClient())
 
 	r := gin.New()
 	r.Use(routes.SlogRecovery())

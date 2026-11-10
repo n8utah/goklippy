@@ -74,6 +74,13 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	sorterGroup.POST("/bins/reset", routes.ResetSorterBins)
 	sorterGroup.POST("/route", routes.RouteSorterPiece)
 	sorterGroup.POST("/identify", routes.IdentifySorterPiece)
+	sorterGroup.GET("/pieces", routes.ListSorterPieces)
+	sorterGroup.GET("/pieces/:id", routes.GetSorterPiece)
+	sorterGroup.GET("/pieces/:id/images/:idx", routes.GetSorterPieceImage)
+	sorterGroup.GET("/runs", routes.ListSorterRuns)
+	sorterGroup.GET("/incidents", routes.ListSorterIncidents)
+	sorterGroup.GET("/stats", routes.GetSorterStats)
+	sorterGroup.POST("/incident/resolve", routes.ResolveSorterIncident)
 
 	registerFrontendHosting(r, cfg.Frontend)
 }

@@ -19,6 +19,24 @@ type SimHardware struct {
 	connected bool
 	homed     bool
 	moves     []SimMove
+	onMove    func(ch Channel, from, to float64)
+}
+
+// OnMove calls fn after every move with the channel's rotor angle before and after
+// (the chute's angle for the distributor), so a simulated world can move pieces.
+func (h *SimHardware) OnMove(fn func(ch Channel, from, to float64)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onMove = fn
+}
+
+func (h *SimHardware) moved(ch Channel, from, to float64) {
+	h.mu.Lock()
+	fn := h.onMove
+	h.mu.Unlock()
+	if fn != nil {
+		fn(ch, from, to)
+	}
 }
 
 // SimMove records one MoveChannel call.
@@ -53,13 +71,16 @@ func (h *SimHardware) MoveChannel(ch Channel, deg, rpm float64) (<-chan error, e
 		return nil, fmt.Errorf("%s: speed must be positive", ch)
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if !h.connected {
+		h.mu.Unlock()
 		return nil, ErrNoBoard
 	}
+	from := h.positions[ch]
 	h.positions[ch] += deg
 	h.moves = append(h.moves, SimMove{Channel: ch, Degrees: deg, Rpm: rpm})
 	d := moveDuration(deg, rpm, channelAccel(h.settings(), ch))
+	h.mu.Unlock()
+	h.moved(ch, from, from+deg)
 	return doneAfter(seconds(d.Seconds() * h.TimeScale)), nil
 }
 
@@ -126,19 +147,24 @@ func (h *SimHardware) ZeroChute() error {
 func (h *SimHardware) AimChute(angle float64) (<-chan error, error) {
 	d := h.settings().Distributor
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if !h.connected {
+		h.mu.Unlock()
 		return nil, ErrNoBoard
 	}
 	if !h.homed {
+		h.mu.Unlock()
 		return nil, ErrChuteNotHomed
 	}
 	if angle < 0 || angle > d.MaxAngle {
+		h.mu.Unlock()
 		return nil, fmt.Errorf("%.1f° is outside the chute's travel (0–%.0f°)", angle, d.MaxAngle)
 	}
-	delta := angle - h.positions[ChannelDistributor]
+	from := h.positions[ChannelDistributor]
+	delta := angle - from
 	h.positions[ChannelDistributor] = angle
 	h.moves = append(h.moves, SimMove{Channel: ChannelDistributor, Degrees: delta, Rpm: d.Rpm})
+	h.mu.Unlock()
+	h.moved(ChannelDistributor, from, angle)
 	return doneAfter(seconds(moveDuration(delta, d.Rpm, d.Accel).Seconds() * h.TimeScale)), nil
 }
 

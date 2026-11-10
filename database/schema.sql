@@ -48,6 +48,69 @@ CREATE TABLE IF NOT EXISTS sorting_profiles (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sorting_profiles_one_active ON sorting_profiles(active) WHERE active;
 
+-- A sort run: from Start to Stop.
+CREATE TABLE IF NOT EXISTS sort_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  profile_id INTEGER NULL REFERENCES sorting_profiles(id) ON DELETE SET NULL,
+  profile_name TEXT NOT NULL DEFAULT '',
+  started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ended_at DATETIME NULL
+);
+
+-- Every piece the machine saw. id is a UUID made when the piece first appears.
+-- problems is a JSON array of {kind, message, at}; prediction is Brickognize's answer.
+CREATE TABLE IF NOT EXISTS pieces (
+  id TEXT PRIMARY KEY,
+  run_id INTEGER NULL REFERENCES sort_runs(id) ON DELETE SET NULL,
+  status TEXT NOT NULL,
+  seen_at DATETIME NOT NULL,
+  identified_at DATETIME NULL,
+  distributed_at DATETIME NULL,
+  part_id TEXT NOT NULL DEFAULT '',
+  part_name TEXT NOT NULL DEFAULT '',
+  part_category TEXT NOT NULL DEFAULT '',
+  part_score REAL NOT NULL DEFAULT 0,
+  color_id TEXT NOT NULL DEFAULT '',
+  color_name TEXT NOT NULL DEFAULT '',
+  color_score REAL NOT NULL DEFAULT 0,
+  category TEXT NOT NULL DEFAULT '',
+  category_name TEXT NOT NULL DEFAULT '',
+  bin_layer INTEGER NOT NULL DEFAULT 0,
+  bin_number INTEGER NOT NULL DEFAULT 0,
+  route_reason TEXT NOT NULL DEFAULT '',
+  piece_mm REAL NOT NULL DEFAULT 0,
+  problems TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(problems)),
+  prediction TEXT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pieces_run ON pieces(run_id, seen_at);
+CREATE INDEX IF NOT EXISTS idx_pieces_seen ON pieces(seen_at);
+
+-- Photos of a piece, as files under the data folder. used marks the ones sent to
+-- Brickognize.
+CREATE TABLE IF NOT EXISTS piece_images (
+  piece_id TEXT NOT NULL REFERENCES pieces(id) ON DELETE CASCADE,
+  idx INTEGER NOT NULL,
+  path TEXT NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT FALSE,
+  taken_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (piece_id, idx)
+);
+
+-- Problems the machine stopped for, and how each was dealt with.
+CREATE TABLE IF NOT EXISTS incidents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL DEFAULT '',
+  piece_id TEXT NULL,
+  opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_at DATETIME NULL,
+  resolution TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidents_opened ON incidents(opened_at);
+
 -- Which categories each bin takes, per profile, so switching profiles keeps each
 -- profile's bins. Layer and bin count from 1; position keeps a bin's categories in
 -- the order they were given.

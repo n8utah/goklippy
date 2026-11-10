@@ -109,6 +109,17 @@ func (s *SortingService) load(ctx context.Context, id int64) error {
 	return nil
 }
 
+// Active is the active profile, or nil.
+func (s *SortingService) Active() *StoredProfile {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		return nil
+	}
+	p := s.active.stored
+	return &p
+}
+
 // Profiles lists the saved profiles.
 func (s *SortingService) Profiles(ctx context.Context) ([]StoredProfile, error) {
 	return s.store.ListProfiles(ctx)
@@ -362,13 +373,27 @@ type RouteResult struct {
 // given the category is saved; without, nothing changes (for "where would this
 // go?").
 func (s *SortingService) Route(ctx context.Context, part, color string, pieceMm float64, commit bool) (RouteResult, error) {
-	d := s.settings().Distributor
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.active == nil {
 		return RouteResult{}, ErrNoActiveProfile
 	}
-	category := s.active.profile.Route(part, color, nil)
+	return s.routeLocked(ctx, s.active.profile.Route(part, color, nil), pieceMm, commit)
+}
+
+// RouteCategory finds the bin for a category directly, such as misc for a piece that
+// couldn't be identified (so a bin given misc by hand catches it).
+func (s *SortingService) RouteCategory(ctx context.Context, category string, pieceMm float64, commit bool) (RouteResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		return RouteResult{}, ErrNoActiveProfile
+	}
+	return s.routeLocked(ctx, category, pieceMm, commit)
+}
+
+func (s *SortingService) routeLocked(ctx context.Context, category string, pieceMm float64, commit bool) (RouteResult, error) {
+	d := s.settings().Distributor
 	choice, newCats := d.ChooseBin(s.active.bins, category, pieceMm, s.rng.IntN)
 	result := RouteResult{Category: category, CategoryName: s.active.profile.CategoryName(category), Choice: choice}
 	if !commit || !choice.Assigned {
