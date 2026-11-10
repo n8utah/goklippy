@@ -1,10 +1,11 @@
 import { CHANNEL_NAMES, STATE_LABELS, useDashboardPageLogic } from './DashboardPage.logic';
 import PieceCard from './components/PieceCard';
+import CameraView from '../../components/CameraView/CameraView';
 
 import styles from './DashboardPage.module.css';
 import appStyles from '../../styles/app.module.css';
 
-function ChannelTile({ id, summary }) {
+function ChannelTile({ id, summary, simulated }) {
   const live = summary?.valid && summary.age_ms < 2000;
   const zones = [
     summary?.in_drop && 'drop',
@@ -17,6 +18,7 @@ function ChannelTile({ id, summary }) {
         <strong>{CHANNEL_NAMES[id]}</strong>
         <span className={`${styles.badge} ${live ? styles.good : styles.muted}`}>{live ? 'Live' : summary?.valid ? 'Stale' : 'No camera'}</span>
       </div>
+      {(simulated || summary?.valid) && <CameraView channel={id} compact />}
       <span className={styles.muted}>
         {live
           ? `${summary.pieces} piece${summary.pieces === 1 ? '' : 's'}${zones.length ? ` · in ${zones.join(', ')}` : ''}`
@@ -103,7 +105,7 @@ const DashboardPage = ({ onOpenPiece }) => {
 
       <div className={styles.channels}>
         {['c2', 'c3', 'c4'].map((id) => (
-          <ChannelTile key={id} id={id} summary={state?.channels?.[id]} />
+          <ChannelTile key={id} id={id} summary={state?.channels?.[id]} simulated={state?.hardware?.simulated} />
         ))}
       </div>
 

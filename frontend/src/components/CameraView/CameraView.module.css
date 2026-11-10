@@ -1,0 +1,78 @@
+.view,
+.viewCompact {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #0f172a;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.stream {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ring {
+  fill: none;
+  stroke: #22d3ee;
+  stroke-width: 2;
+}
+
+.drop {
+  fill: rgba(59, 130, 246, 0.25);
+  stroke: #3b82f6;
+  stroke-width: 2;
+}
+
+.precise {
+  fill: rgba(217, 70, 239, 0.25);
+  stroke: #d946ef;
+  stroke-width: 2;
+}
+
+.exit {
+  fill: rgba(249, 115, 22, 0.25);
+  stroke: #f97316;
+  stroke-width: 2;
+}
+
+.center {
+  fill: #22d3ee;
+}
+
+.box {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 3;
+}
+
+.label {
+  fill: #22c55e;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.empty,
+.emptyCompact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 13px;
+}

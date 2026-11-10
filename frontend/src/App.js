@@ -11,6 +11,7 @@ import BinsPage from './pages/BinsPage/BinsPage';
 import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
 import DashboardPage from './pages/DashboardPage/DashboardPage';
 import RecordsPage from './pages/RecordsPage/RecordsPage';
+import CamerasPage from './pages/CamerasPage/CamerasPage';
 import styles from './styles/app.module.css';
 
 const App = () => {
@@ -33,6 +34,7 @@ const App = () => {
           <AppNav page={page} onChange={setPage} />
           {page === 'dashboard' && <DashboardPage onOpenPiece={openPiece} />}
           {page === 'records' && <RecordsPage key={pieceId || 'records'} initialPieceId={pieceId} />}
+          {page === 'cameras' && <CamerasPage />}
           {page === 'home' && <HomePage />}
           {page === 'devices' && <DevicesPage onGoBoard={() => setPage('board')} />}
           {page === 'board' && <BoardSetupPage />}

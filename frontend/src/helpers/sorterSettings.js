@@ -47,6 +47,8 @@ export const DEFAULT_SORTER_SETTINGS = {
     c4: { stepper: 'stepper_e0', forward: true, gear: 10.8 },
   },
   routines: {},
+  // Which camera watches each channel (c2, c3, c4) and where its zones are.
+  cameras: { devices: {}, zones: {}, width: 640, height: 480, fps: 10, ffmpeg: '', threshold: 0, minArea: 0 },
 };
 
 /** Older saves stored C2 and C3 as multiples of C1. */
@@ -68,6 +70,7 @@ export function normalizeSorterSettings(saved) {
     feederRpm: feederRpmFrom(saved),
     distributor: { ...DEFAULT_SORTER_SETTINGS.distributor, ...saved.distributor },
     channels: { ...DEFAULT_SORTER_SETTINGS.channels, ...saved.channels },
+    cameras: { ...DEFAULT_SORTER_SETTINGS.cameras, ...saved.cameras },
   };
 }
 

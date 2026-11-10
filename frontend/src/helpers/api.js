@@ -278,6 +278,27 @@ export function resolveSorterIncident(action) {
   return postJSON('/api/v1/sorter/incident/resolve', { action });
 }
 
+export function getSorterCameras() {
+  return getJSON('/api/v1/sorter/cameras');
+}
+
+export function listSorterCameraDevices() {
+  return getJSON('/api/v1/sorter/cameras/devices');
+}
+
+export function getSorterCameraObservation(channel) {
+  return getJSON(`/api/v1/sorter/cameras/${channel}/observation`);
+}
+
+export function captureSorterBackground(channel) {
+  return postJSON(`/api/v1/sorter/cameras/${channel}/background`, {});
+}
+
+/** MJPEG stream URL for an <img>. */
+export function sorterCameraStreamURL(channel) {
+  return `${API_BASE_URL}/api/v1/sorter/cameras/${channel}/stream`;
+}
+
 /** Where a piece would go now; nothing is saved. */
 export function routeSorterPiece(partId, colorId, pieceMm) {
   return postJSON('/api/v1/sorter/route', { part_id: partId, color_id: colorId, piece_mm: pieceMm || 0 });

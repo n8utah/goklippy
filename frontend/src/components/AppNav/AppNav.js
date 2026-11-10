@@ -8,6 +8,7 @@ const AppNav = ({ page, onChange }) => {
     { id: 'editor', label: 'Overlay Editor' },
     { id: 'sorter', label: 'LEGO Sorter' },
     { id: 'chute', label: 'Chute' },
+    { id: 'cameras', label: 'Cameras' },
     { id: 'bins', label: 'Bins' },
     { id: 'profiles', label: 'Profiles' },
     { id: 'records', label: 'Records' },

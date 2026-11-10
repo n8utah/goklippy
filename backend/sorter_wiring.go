@@ -43,11 +43,14 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 		world := sorter.NewSimWorld(sim, machineSettings, nil)
 		world.Random = true
 		hw, deps.Vision, deps.Identifier = sim, world, world
+		routes.InitCameras(sorter.SimFeed{World: world}, nil)
 		slog.Info("sorter running on simulated hardware with pretend LEGO")
 	} else {
 		hw = sorter.NewMCUHardware(mcu.DefaultManager(), settings.Machine)
-		// Cameras come later (phase 2); until then the stations see no frames.
-		deps.Vision, deps.Identifier = sorter.NoVision{}, identifier
+		perception := sorter.NewPerception(settings.Machine, dataDir)
+		go perception.Run(ctx)
+		deps.Vision, deps.Identifier = perception, identifier
+		routes.InitCameras(perception, perception)
 	}
 
 	machine := sorter.NewMachine(hw, machineSettings, 0)

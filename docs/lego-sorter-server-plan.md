@@ -165,6 +165,29 @@ Feature folders per `AGENTS.md`. Each page builds its own components first.
 
 Each phase ends with something we can run on the bench. Phases 1 and 2 can go in parallel.
 
+### Where things stand (2026-11-09)
+
+Everything below is built and tested in software; none of it has run on the machine yet.
+`sorter.simulate: true` runs the whole sort against pretend LEGO (`logic/sorter/sim_world.go`),
+and `models/sort_e2e_test.go` sorts known pieces end to end on SQLite and checks every bin.
+
+| Phase | State |
+|---|---|
+| 0 Foundations | Built. Bench check: C4 index with acceleration. |
+| 1 Distribution | Built. Needs the chute's home switch fitted, then homing, calibration and test-every-bin. |
+| 2 Cameras and zones | Built: `logic/camera` (ffmpeg per camera, MJPEG split into frames, device list), live streams, the **Cameras** page with the zone editor and empty-channel capture. Tested with ffmpeg's test picture. Needs the three cameras and a current ffmpeg. |
+| 3 Perception | Built: `logic/vision` (zones, observations, box merging, angular tracker, background-difference detector) and `sorter.Perception`. Needs real frames to tune the detector's sensitivity. |
+| 4 Feeder | Built: `logic/sorter/feeder.go`. Tuning values are in the machine settings (`feeder`); no tuning page yet. |
+| 5 Platter (C4) | Built: `logic/sorter/platter.go`, a slot model of the 5-sector carousel. Brickognize built and checked live. |
+| 6 Profiles and bins | Built. |
+| 7 Coordinator and dashboard | Built: the machine runs platter then feeder each tick, with runs and the **Dashboard** page. |
+| 8 Records and incidents | Partly: pieces, photos, runs, incidents and the **Records** page. The stall incident is the only kind raised. |
+
+Still to do: a feeder tuning page; automatic recovery (shake profiles) and the other incident kinds
+(no bin, piece circling, stuck at a landing); checking a piece really fell off C4; full bins and
+auto-assign (need piece counts); kit limits; piece review buttons; turn and shake buttons on the
+Dashboard.
+
 ### Phase 0: Foundations
 
 **Status (2026-11-09): built, waiting on the bench check.** What landed:

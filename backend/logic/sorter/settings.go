@@ -53,6 +53,11 @@ type CameraSettings struct {
 	Fps    int                            `json:"fps"`
 	// Ffmpeg is the ffmpeg executable; empty uses the one on PATH.
 	Ffmpeg string `json:"ffmpeg"`
+	// The detector: a pixel is a piece when |ΔR|+|ΔG|+|ΔB| from the empty channel
+	// reaches Threshold, and pieces smaller than MinArea pixels are noise. 0 uses the
+	// defaults.
+	Threshold int `json:"threshold"`
+	MinArea   int `json:"minArea"`
 }
 
 // FeederSettings tune the pulsing feeder (C1–C3), after Sorter V2's "Feeder simple

@@ -81,6 +81,12 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	sorterGroup.GET("/incidents", routes.ListSorterIncidents)
 	sorterGroup.GET("/stats", routes.GetSorterStats)
 	sorterGroup.POST("/incident/resolve", routes.ResolveSorterIncident)
+	sorterGroup.GET("/cameras", routes.GetSorterCameras)
+	sorterGroup.GET("/cameras/devices", routes.ListSorterCameraDevices)
+	sorterGroup.GET("/cameras/:channel/frame", routes.GetSorterCameraFrame)
+	sorterGroup.GET("/cameras/:channel/stream", routes.StreamSorterCamera)
+	sorterGroup.GET("/cameras/:channel/observation", routes.GetSorterCameraObservation)
+	sorterGroup.POST("/cameras/:channel/background", routes.CaptureSorterBackground)
 
 	registerFrontendHosting(r, cfg.Frontend)
 }
