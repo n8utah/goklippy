@@ -1,3 +1,5 @@
+import GearCalibration from './GearCalibration';
+
 import styles from '../SorterPage.module.css';
 import appStyles from '../../../styles/app.module.css';
 
@@ -159,10 +161,6 @@ const Distributor = ({ logic, showSettings, connected }) => {
               </select>
             </label>
             <label className={styles.field}>
-              <span className={styles.fieldLabel}>Gear ratio (motor:rotor)</span>
-              <input type="number" min="0.1" step="0.5" value={config.gear} onChange={(e) => Number(e.target.value) > 0 && logic.setDistributor({ gear: Number(e.target.value) })} />
-            </label>
-            <label className={styles.field}>
               <span className={styles.fieldLabel}>Speed (rpm)</span>
               <input type="number" min="0.1" step="1" value={config.rpm} onChange={(e) => Number(e.target.value) > 0 && logic.setDistributor({ rpm: Number(e.target.value) })} />
             </label>
@@ -170,6 +168,16 @@ const Distributor = ({ logic, showSettings, connected }) => {
               Set position as bin 1
             </button>
           </div>
+          <GearCalibration
+            config={config}
+            microsteps={distributor.microsteps}
+            microstepsAssumed={distributor.microstepsAssumed}
+            stepsPerRev={distributor.stepsPerRev}
+            slot={{ degrees: 360 / bins, name: 'bin' }}
+            canTurn={oid != null && !moving}
+            onChange={logic.setDistributor}
+            onTurn={logic.turnDistributorRev}
+          />
           {distributor.layers.map((layer, index) => (
             <LayerSettings
               key={index}

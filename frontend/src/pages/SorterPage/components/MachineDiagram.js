@@ -41,14 +41,17 @@ function FeederRotor({ cx, radius }) {
   );
 }
 
+// Dividers sit between slots, so at angle 0 slot 1 is centered in the gap. The dot marks slot 1.
 function CarouselRotor({ cx, radius, slots }) {
+  const [dotX, dotY] = polar(cx, radius - 36, 0);
   return (
     <>
       <circle cx={cx} cy={CY} r={radius - 12} className={styles.rotor} />
       {Array.from({ length: slots }, (_, i) => {
-        const [x, y] = polar(cx, radius - 12, (360 / slots) * i);
-        return <line key={i} x1={cx} y1={CY} x2={x} y2={y} className={i === 0 ? styles.rotorMark : styles.rotorSpoke} />;
+        const [x, y] = polar(cx, radius - 12, (360 / slots) * (i + 0.5));
+        return <line key={i} x1={cx} y1={CY} x2={x} y2={y} className={styles.rotorSpoke} />;
       })}
+      <circle cx={dotX} cy={dotY} r={7} className={styles.rotorSlotDot} />
     </>
   );
 }

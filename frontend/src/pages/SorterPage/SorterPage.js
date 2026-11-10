@@ -2,6 +2,7 @@ import { CHANNEL_IDS, FEEDER_IDS, useSorterPageLogic } from './SorterPage.logic'
 import ChannelCard from './components/ChannelCard';
 import Distributor from './components/Distributor';
 import MachineDiagram from './components/MachineDiagram';
+import RoutineEditor from './components/RoutineEditor';
 
 import styles from './SorterPage.module.css';
 import appStyles from '../../styles/app.module.css';
@@ -82,9 +83,17 @@ const SorterPage = ({ onGoBoard }) => {
           <h3 className={styles.groupTitle}>Feeder speeds</h3>
           {showSettings && (
           <div className={styles.fields}>
-            <NumberField label="C1 rotor" value={settings.baseRpm} min={0.1} step={0.5} unit="rpm" onChange={(v) => setSetting('baseRpm', v)} />
-            <NumberField label="C2 vs C1" value={settings.c2Factor} min={0.1} step={0.1} unit="×" onChange={(v) => setSetting('c2Factor', v)} />
-            <NumberField label="C3 vs C2" value={settings.c3Factor} min={0.1} step={0.1} unit="×" onChange={(v) => setSetting('c3Factor', v)} />
+            {FEEDER_IDS.map((id) => (
+              <NumberField
+                key={id}
+                label={id.toUpperCase()}
+                value={settings.feederRpm[id]}
+                min={0.1}
+                step={0.5}
+                unit="rpm"
+                onChange={(v) => logic.setFeederRpm(id, v)}
+              />
+            ))}
           </div>
           )}
           <p className={speedsOrdered ? styles.orderOk : styles.orderBad}>
@@ -116,7 +125,7 @@ const SorterPage = ({ onGoBoard }) => {
                 Stop indexing
               </button>
             ) : (
-              <button type="button" className={appStyles.button} disabled={channels.c4.oid == null} onClick={() => logic.runIndex(0)}>
+              <button type="button" className={appStyles.button} disabled={channels.c4.oid == null || channels.c4.running} onClick={() => logic.runIndex(0)}>
                 Auto index
               </button>
             )}
@@ -139,6 +148,7 @@ const SorterPage = ({ onGoBoard }) => {
             onStop={() => logic.stopChannel(channels[id])}
             onZero={() => logic.zeroChannel(channels[id])}
             onForwardSlot={() => logic.runIndex(1, true)}
+            onTurnRev={() => logic.turnChannelRev(channels[id])}
             routines={logic.routines}
             routineId={logic.routineIdFor(id)}
             onChooseRoutine={(routineId) => logic.chooseRoutine(id, routineId)}
@@ -146,6 +156,8 @@ const SorterPage = ({ onGoBoard }) => {
           />
         ))}
       </div>
+
+      {showSettings && <RoutineEditor routines={logic.routines} onChange={logic.setRoutines} />}
 
       <Distributor logic={logic} showSettings={showSettings} connected={connected} />
 

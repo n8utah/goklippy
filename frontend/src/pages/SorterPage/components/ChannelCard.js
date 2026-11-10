@@ -1,4 +1,5 @@
 import { indexAlignment } from '../SorterPage.logic';
+import GearCalibration from './GearCalibration';
 import SpeedTrace from './SpeedTrace';
 
 import styles from '../SorterPage.module.css';
@@ -38,6 +39,7 @@ const ChannelCard = ({
   onStop,
   onZero,
   onForwardSlot,
+  onTurnRev,
 }) => {
   const isCarousel = channel.id === 'c4';
   const missing = channel.oid == null;
@@ -64,39 +66,34 @@ const ChannelCard = ({
 
       {showSettings && (
         <>
-      <div className={styles.configRow}>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Motor</span>
-          <select value={channel.config.stepper} onChange={(e) => onConfig({ stepper: e.target.value })}>
-            {!stepperObjects.some((obj) => obj.section === channel.config.stepper) && (
-              <option value={channel.config.stepper}>{channel.config.stepper}</option>
-            )}
-            {stepperObjects.map((obj) => (
-              <option key={obj.oid} value={obj.section}>
-                {obj.section}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Gear ratio (motor:rotor)</span>
-          <input
-            type="number"
-            min="0.1"
-            step="0.1"
-            value={channel.config.gear}
-            onChange={(e) => {
-              const gear = Number(e.target.value);
-              if (gear > 0) onConfig({ gear });
-            }}
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Motor</span>
+            <select value={channel.config.stepper} onChange={(e) => onConfig({ stepper: e.target.value })}>
+              {!stepperObjects.some((obj) => obj.section === channel.config.stepper) && (
+                <option value={channel.config.stepper}>{channel.config.stepper}</option>
+              )}
+              {stepperObjects.map((obj) => (
+                <option key={obj.oid} value={obj.section}>
+                  {obj.section}
+                </option>
+              ))}
+            </select>
+          </label>
+          <GearCalibration
+            config={channel.config}
+            microsteps={channel.microsteps}
+            microstepsAssumed={channel.microstepsAssumed}
+            stepsPerRev={channel.stepsPerRev}
+            slot={isCarousel ? { degrees: indexDegrees, name: 'slot' } : null}
+            canTurn={!missing && channel.direction === 0 && !channel.running && !channel.indexing && !channel.routineRunning}
+            onChange={onConfig}
+            onTurn={onTurnRev}
           />
-        </label>
-      </div>
 
           <label className={styles.field}>
             <span className={styles.fieldLabel}>Routine</span>
             <select value={routineId} disabled={routines.length === 0} onChange={(e) => onChooseRoutine(e.target.value)}>
-              {routines.length === 0 && <option value="">No saved routines</option>}
+              <option value="">{routines.length === 0 ? 'No saved routines' : 'None'}</option>
               {routines.map((routine) => (
                 <option key={routine.id} value={routine.id}>
                   {routine.name}
@@ -128,22 +125,22 @@ const ChannelCard = ({
             Forward 1 slot ({indexDegrees}°)
           </button>
         )}
-        {!isCarousel &&
-          (channel.running ? (
-            <button type="button" className={appStyles.button} onClick={onStop}>
-              Stop
-            </button>
-          ) : (
-            <button type="button" className={appStyles.button} disabled={missing} onClick={onStart}>
-              Run
-            </button>
-          ))}
-        {channel.routineRunning ? (
+        {channel.running ? (
+          <button type="button" className={appStyles.button} onClick={onStop}>
+            Stop
+          </button>
+        ) : (
+          <button type="button" className={appStyles.button} disabled={missing || channel.indexing || channel.routineRunning} onClick={onStart}>
+            Run
+          </button>
+        )}
+        {channel.routineRunning && (
           <button type="button" className={appStyles.button} onClick={onStop}>
             Stop routine
           </button>
-        ) : (
-          <button type="button" className={appStyles.buttonSecondary} disabled={missing || !routineId} onClick={onRunRoutine}>
+        )}
+        {!channel.routineRunning && routineId && (
+          <button type="button" className={appStyles.buttonSecondary} disabled={missing} onClick={onRunRoutine}>
             Run routine
           </button>
         )}

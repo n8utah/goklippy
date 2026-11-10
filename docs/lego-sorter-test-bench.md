@@ -19,17 +19,40 @@ is no homing yet: "Set position as bin 1" defines the reference, and it is lost 
 
 The mapping, gear ratios, speeds and index settings are per-browser settings on the page.
 
+## Units
+
+Everything on the page is in rotor terms: rpm, degrees, slots and bins. Each motor's **Gearing**
+block is the one place that ties those to the motor:
+
+- Enter motor turns per rotor turn, or the motor and rotor gear tooth counts.
+- Microsteps come from the board config (16 is assumed if the motor isn't in it).
+- The block shows the result as steps per rotor rev, and per slot or bin.
+- **Calibrate** turns what the page thinks is one rotor rev. Enter how far the rotor really turned
+  and the ratio is corrected (360° means it was already right).
+
+C1–C3 speeds are set as plain rpm. The page still flags them if they don't increase from C1 to C3.
+
+## Routines
+
+The page keeps its own routines (`goklippy_sorter_routines`), made of moves in rotor degrees and
+rpm. They repeat in order until stopped. A move's "forward" is the channel's forward direction,
+so the same routine is the same physical motion on any channel. The first time the page opens it
+copies the Steppers-page routines, reading their steps as a bare 1:1 motor at 16 microsteps, so a
+routine like jitter keeps the motion it was tuned with. Later edits on either page don't affect the
+other.
+
 ## What the numbers mean
 
 - All readings come from `stepper_get_position`, sampled every 50 ms and sent to the UI five
   times a second over the session WebSocket (`type: "motion"`).
-- **Jitter** on this page is a motion, not a measurement: any saved stepper routine can be run on a
-  channel, and one named "jitter" is selected by default.
+- **Jitter** on this page is a motion, not a measurement: any routine can be chosen for a channel.
+  Routines are optional and every channel starts with none.
 - The steppers are open-loop. These figures show what the MCU issued; skipped steps on the shaft
   are not visible.
 
 ## Open questions
 
-- The Sorter V2 docs give no gear ratios or stage speeds, so the defaults (1:1, C1 at 5 rpm, each
-  stage 1.5× the last) are placeholders to tune on the machine.
+- The Sorter V2 docs give no gear ratios or stage speeds, so the feeder defaults (1:1, C1 5 rpm, C2
+  7.5 rpm, C3 11.25 rpm) are placeholders to tune on the machine. C4's 10.8 gear ratio was set on
+  the machine so one forward move lands on the next slot.
 - Moves have no acceleration ramp. If the C4 carousel skips, indexing needs one.

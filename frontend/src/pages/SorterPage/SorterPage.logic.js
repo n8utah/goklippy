@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { INDEXING_LABEL, useMCUSession } from '../../context/MCUSessionContext';
+import { MAX_STEPPER_SPEED } from '../../helpers/stepperGroups';
 import { loadStepperRoutines } from '../../helpers/stepperRoutines';
 
 const STORAGE_KEY = 'goklippy_sorter_settings';
+const ROUTINES_KEY = 'goklippy_sorter_routines';
 const FULL_STEPS_PER_REV = 200;
 const DEFAULT_MICROSTEPS = 16;
 const RETUNE_DEBOUNCE_MS = 150;
+// Steppers-page routines were tuned on bare motors, so they are read as a 1:1 motor at 16 microsteps.
+const BARE_MOTOR_STEPS_PER_REV = FULL_STEPS_PER_REV * DEFAULT_MICROSTEPS;
 
 export const FEEDER_IDS = ['c1', 'c2', 'c3'];
 export const CHANNEL_IDS = [...FEEDER_IDS, 'c4'];
 
 const DEFAULT_SETTINGS = {
-  baseRpm: 5,
-  c2Factor: 1.5,
-  c3Factor: 1.5,
+  feederRpm: { c1: 5, c2: 7.5, c3: 11.25 },
   indexDegrees: 72,
   indexRpm: 10,
   dwellMs: 1000,
@@ -34,17 +36,29 @@ const DEFAULT_SETTINGS = {
     c1: { stepper: 'stepper_x', forward: true, gear: 1 },
     c2: { stepper: 'stepper_y', forward: true, gear: 1 },
     c3: { stepper: 'stepper_z', forward: true, gear: 1 },
-    c4: { stepper: 'stepper_e0', forward: true, gear: 1 },
+    c4: { stepper: 'stepper_e0', forward: true, gear: 10.8 },
   },
+  routines: {},
 };
+
+/** Older saves stored C2 and C3 as multiples of C1. */
+function feederRpmFrom(saved) {
+  if (saved.feederRpm) return saved.feederRpm;
+  if (saved.baseRpm == null) return DEFAULT_SETTINGS.feederRpm;
+  const c2 = saved.baseRpm * (saved.c2Factor ?? 1.5);
+  return { c1: saved.baseRpm, c2, c3: c2 * (saved.c3Factor ?? 1.5) };
+}
 
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved?.channels) {
+      // eslint-disable-next-line no-unused-vars
+      const { baseRpm, c2Factor, c3Factor, ...rest } = saved;
       return {
         ...DEFAULT_SETTINGS,
-        ...saved,
+        ...rest,
+        feederRpm: feederRpmFrom(saved),
         distributor: { ...DEFAULT_SETTINGS.distributor, ...saved.distributor },
         channels: { ...DEFAULT_SETTINGS.channels, ...saved.channels },
       };
@@ -75,9 +89,72 @@ export function stepsToRpm(stepsPerSec, stepsPerRev) {
   return (stepsPerSec / stepsPerRev) * 60;
 }
 
-export function targetRpms({ baseRpm, c2Factor, c3Factor }) {
-  const c2 = baseRpm * c2Factor;
-  return { c1: baseRpm, c2, c3: c2 * c3Factor };
+function roundTo(value, places) {
+  const factor = 10 ** places;
+  return Math.round(value * factor) / factor;
+}
+
+function newId(prefix) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export function newMove() {
+  return { id: newId('mv'), forward: true, degrees: 10, rpm: 5 };
+}
+
+export function newSorterRoutine() {
+  return { id: newId('rtn'), name: 'New routine', moves: [newMove()] };
+}
+
+/** Converts a Steppers-page routine (motor steps) to rotor degrees and rpm. */
+export function fromStepperRoutine(routine) {
+  return {
+    id: routine.id,
+    name: routine.name,
+    moves: routine.segments.map((seg) => ({
+      id: seg.id,
+      forward: seg.forward,
+      degrees: roundTo((seg.steps / BARE_MOTOR_STEPS_PER_REV) * 360, 2),
+      rpm: roundTo(stepsToRpm(seg.speedHz, BARE_MOTOR_STEPS_PER_REV), 2),
+    })),
+  };
+}
+
+function loadSorterRoutines() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ROUTINES_KEY));
+    if (Array.isArray(saved)) return saved;
+  } catch {
+    // fall through to a fresh copy
+  }
+  return loadStepperRoutines().map(fromStepperRoutine);
+}
+
+function saveSorterRoutines(routines) {
+  try {
+    localStorage.setItem(ROUTINES_KEY, JSON.stringify(routines));
+  } catch {
+    // routines just won't persist
+  }
+}
+
+/**
+ * Turns a routine's rotor moves into motor step segments for one channel.
+ * Forward means the channel's forward direction, so a reversed channel runs it mirrored.
+ */
+export function routineSegmentsFor(routine, { config, stepsPerRev }, label) {
+  const maxRpm = stepsToRpm(MAX_STEPPER_SPEED, stepsPerRev);
+  return routine.moves.map((move, i) => {
+    const steps = Math.round((move.degrees / 360) * stepsPerRev);
+    const where = `${routine.name}, move ${i + 1}`;
+    if (steps < 1) {
+      throw new Error(`${where}: ${move.degrees}° is too small a turn for ${label}.`);
+    }
+    if (move.rpm > maxRpm) {
+      throw new Error(`${where}: ${move.rpm} rpm is faster than ${label} can go (max ${maxRpm.toFixed(1)} rpm).`);
+    }
+    return { forward: move.forward === config.forward, steps, speedHz: rpmToStepsPerSec(move.rpm, stepsPerRev) };
+  });
 }
 
 /** Which of the 72° carousel slots the rotor is nearest, and how far off it is. */
@@ -121,22 +198,21 @@ export function useSorterPageLogic() {
 
   const [settings, setSettings] = useState(loadSettings);
   const [zeroes, setZeroes] = useState({});
-  const [routines] = useState(loadStepperRoutines);
+  const [routines, setRoutines] = useState(loadSorterRoutines);
   const [activeLayerChoice, setActiveLayerChoice] = useState(0);
   const [targetBin, setTargetBin] = useState(null);
-  const defaultRoutineId = (routines.find((r) => /jitter/i.test(r.name)) || routines[0])?.id ?? '';
-  const [routineChoice, setRoutineChoice] = useState({});
   const [actionError, setActionError] = useState('');
   const [resetting, setResetting] = useState(false);
 
   useEffect(() => saveSettings(settings), [settings]);
+  useEffect(() => saveSorterRoutines(routines), [routines]);
 
   const motionByOid = useMemo(
     () => Object.fromEntries((motion?.steppers || []).map((m) => [m.oid, m])),
     [motion],
   );
 
-  const targets = useMemo(() => targetRpms(settings), [settings]);
+  const targets = settings.feederRpm;
 
   const channels = useMemo(() => {
     const out = {};
@@ -155,6 +231,7 @@ export function useSorterPageLogic() {
         object,
         oid,
         microsteps,
+        microstepsAssumed: !object?.meta?.microsteps,
         stepsPerRev,
         targetRpm,
         targetHz: rpmToStepsPerSec(targetRpm, stepsPerRev),
@@ -174,8 +251,10 @@ export function useSorterPageLogic() {
     setActionError('');
     try {
       await fn();
+      return true;
     } catch (err) {
       setActionError(err.message);
+      return false;
     }
   }, []);
 
@@ -192,6 +271,8 @@ export function useSorterPageLogic() {
     return {
       config,
       oid,
+      microsteps,
+      microstepsAssumed: !object?.meta?.microsteps,
       stepsPerRev,
       speedHz: rpmToStepsPerSec(config.rpm, stepsPerRev),
       measuredRpm: live ? Math.abs(stepsToRpm(live.steps_per_sec, stepsPerRev)) : 0,
@@ -225,10 +306,10 @@ export function useSorterPageLogic() {
     [guard, jogStepper],
   );
 
-  // Retune feeders that are already running when their speed or direction changes.
+  // Retune channels that are already running when their speed or direction changes.
   useEffect(() => {
     const timer = setTimeout(() => {
-      for (const id of FEEDER_IDS) {
+      for (const id of CHANNEL_IDS) {
         const channel = channels[id];
         if (channel.running && lastSentRef.current[id] !== commandKey(channel)) {
           startChannel(channel);
@@ -315,18 +396,33 @@ export function useSorterPageLogic() {
     }
   };
 
-  const routineIdFor = (channelId) => routineChoice[channelId] ?? defaultRoutineId;
+  /** The channel's chosen routine, or '' for none (including one since deleted). */
+  const routineIdFor = (channelId) => {
+    const id = settings.routines[channelId];
+    return routines.some((r) => r.id === id) ? id : '';
+  };
 
   const chooseRoutine = (channelId, routineId) =>
-    setRoutineChoice((prev) => ({ ...prev, [channelId]: routineId }));
+    setSettings((prev) => ({ ...prev, routines: { ...prev.routines, [channelId]: routineId } }));
 
   const runRoutine = (channel) =>
     guard(async () => {
       const routine = routines.find((r) => r.id === routineIdFor(channel.id));
       if (routine) {
-        await startStepperRoutine(channel.oid, routine.segments, routine.name);
+        const segments = routineSegmentsFor(routine, channel, channel.id.toUpperCase());
+        await startStepperRoutine(channel.oid, segments, routine.name);
       }
     });
+
+  /** Turns one rotor revolution by the current gearing, for checking the ratio against a mark. */
+  const turnOneRev = (oid, forward, speedHz, stepsPerRev) =>
+    guard(() => jogStepper(oid, { forward, speedHz, steps: Math.round(stepsPerRev) }));
+
+  const turnChannelRev = (channel) =>
+    turnOneRev(channel.oid, channel.config.forward, channel.targetHz, channel.stepsPerRev);
+
+  const turnDistributorRev = () =>
+    turnOneRev(distributor.oid, true, distributor.speedHz, distributor.stepsPerRev);
 
   const runIndex = (count, forward = channels.c4.config.forward) =>
     guard(() => {
@@ -348,6 +444,9 @@ export function useSorterPageLogic() {
   };
 
   const setSetting = (key, value) => setSettings((prev) => ({ ...prev, [key]: value }));
+
+  const setFeederRpm = (id, rpm) =>
+    setSettings((prev) => ({ ...prev, feederRpm: { ...prev.feederRpm, [id]: rpm } }));
 
   const setChannelConfig = (id, patch) =>
     setSettings((prev) => ({
@@ -377,7 +476,11 @@ export function useSorterPageLogic() {
     error: actionError || sessionError,
     resetting,
     setSetting,
+    setFeederRpm,
     setChannelConfig,
+    turnChannelRev,
+    turnDistributorRev,
+    setRoutines,
     startChannel,
     stopChannel,
     startFeeders,

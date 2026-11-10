@@ -74,6 +74,10 @@
   stroke-width: 2;
 }
 
+.rotorSlotDot {
+  fill: #0f172a;
+}
+
 .rotorMark {
   stroke: #0f172a;
   stroke-width: 4;
@@ -485,6 +489,58 @@
   align-self: flex-end;
 }
 
+.gearBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  min-width: 0;
+  width: 100%;
+  max-width: 640px;
+  box-sizing: border-box;
+}
+
+.gearFields {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+
+.calibrateRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.routineEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.moveRow {
+  display: grid;
+  grid-template-columns: 24px 140px auto auto auto;
+  gap: 10px;
+  align-items: end;
+  max-width: 640px;
+}
+
+.moveNumber {
+  padding-bottom: 8px;
+  font-weight: 700;
+  color: #64748b;
+}
+
 @media (max-width: 640px) {
   .distributorBody {
     grid-template-columns: 1fr;
@@ -492,5 +548,13 @@
 
   .layerSettings {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .gearFields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .moveRow {
+    grid-template-columns: 24px 1fr 1fr;
   }
 }
