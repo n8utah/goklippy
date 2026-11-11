@@ -45,6 +45,19 @@ func TestOutputPinInverted(t *testing.T) {
 	assert.Equal(t, "ar10", result.Objects[0].Meta["pin"])
 }
 
+func TestOutputPinMaximumMCUDuration(t *testing.T) {
+	result, err := buildText(t, "[output_pin leds]\npin: ar10\nmaximum_mcu_duration: 5\n")
+	require.NoError(t, err)
+	// 5 s at the AVR's 16 MHz.
+	assert.Equal(t, []string{"config_digital_out oid=0 pin=ar10 value=0 default_value=0 max_duration=80000000"}, result.Commands)
+	assert.Equal(t, "5", result.Objects[0].Meta["max_duration"])
+
+	_, err = buildText(t, "[output_pin leds]\npin: ar10\nmaximum_mcu_duration: 6\n")
+	assert.ErrorContains(t, err, "between 0 and 5")
+	_, err = buildText(t, "[output_pin leds]\npin: ar10\nvalue: 1\nmaximum_mcu_duration: 5\n")
+	assert.ErrorContains(t, err, "value must equal shutdown_value")
+}
+
 func TestOutputPinRejectsPWMValues(t *testing.T) {
 	_, err := buildText(t, "[output_pin leds]\npin: ar10\nvalue: 0.5\n")
 	assert.ErrorContains(t, err, "value must be 0 or 1")

@@ -236,9 +236,15 @@ export function useBoardSetupPageLogic() {
         let sectionName = configSectionName(slotId, slot);
         let options = configOptionsForSlot(slotId, slot, patch);
         if (isOnOffSlot(slot) && existing?.name.startsWith('output_pin ')) {
-          // Keep its name (e.g. [output_pin leds], which the sorter looks for) and settings.
+          // Keep its name (e.g. [output_pin leds], which the sorter looks for) and its
+          // settings, apart from the safety timeout just chosen.
           sectionName = existing.name;
-          options = { ...options, ...existing.options };
+          // eslint-disable-next-line no-unused-vars
+          const { maximum_mcu_duration: _old, ...kept } = existing.options;
+          options = {
+            ...kept,
+            ...(options.maximum_mcu_duration ? { maximum_mcu_duration: options.maximum_mcu_duration } : {}),
+          };
         }
         let ws = await updateKlipperSection(sectionName, options);
         if (existing && existing.name !== sectionName) {

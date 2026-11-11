@@ -38,6 +38,14 @@ export function isOnOffSlot(slot) {
   return ['heater', 'fan', 'relay'].includes(slot?.type);
 }
 
+/**
+ * An on/off output's safety timeout (Klipper's maximum_mcu_duration, 0–5 s): if the
+ * backend stops refreshing it for this long, the board shuts down and the output goes
+ * off. 0 turns it off.
+ */
+export const DEFAULT_OUTPUT_TIMEOUT_S = 5;
+export const MAX_OUTPUT_TIMEOUT_S = 5;
+
 /** Preferred Klipper section name for a board profile slot. */
 export function configSectionName(slotId, slot) {
   switch (slot?.type) {
@@ -73,8 +81,15 @@ export function configOptionsForSlot(slotId, slot, patch = {}) {
       };
     case 'fan':
     case 'heater':
-    case 'relay':
-      return { pin: slot.pins.pin, value: '0', shutdown_value: '0' };
+    case 'relay': {
+      const timeout = Number(patch.maxMcuDuration ?? DEFAULT_OUTPUT_TIMEOUT_S);
+      return {
+        pin: slot.pins.pin,
+        value: '0',
+        shutdown_value: '0',
+        ...(timeout > 0 ? { maximum_mcu_duration: String(timeout) } : {}),
+      };
+    }
     case 'thermistor':
       return {
         sensor_pin: slot.pins.sensor,

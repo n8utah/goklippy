@@ -2,6 +2,7 @@ package mcu
 
 import (
 	"testing"
+	"time"
 
 	"goklippy/backend/mcu/cfgtranslate"
 
@@ -49,6 +50,29 @@ func TestOutputPinFollowsLevelsSet(t *testing.T) {
 	s.forgetOutputLevels()
 	on, _ = s.OutputPinOn(0)
 	assert.True(t, on, "a reset reconfigures it to value: 1")
+}
+
+func TestTimedOutputIsRefreshedOnlyWhileOn(t *testing.T) {
+	s := &Session{Objects: []cfgtranslate.ObjectSpec{
+		{OID: 4, Section: "output_pin leds", Kind: cfgtranslate.KindDigitalOut,
+			Meta: map[string]string{"pin": "ar10", "invert": "false", "value": "0", "shutdown_level": "0", "max_duration": "3"}},
+	}}
+	t0 := time.Now()
+	assert.Empty(t, s.outputRefreshes(t0), "never set: at its shutdown value")
+
+	s.mu.Lock()
+	s.outputLevels = map[int]bool{4: true}
+	s.outputSent = map[int]time.Time{4: t0}
+	s.mu.Unlock()
+	assert.Empty(t, s.outputRefreshes(t0.Add(900*time.Millisecond)), "not due before a third of 3 s")
+	assert.Equal(t, []string{"update_digital_out oid=4 value=1"}, s.outputRefreshes(t0.Add(time.Second)))
+	assert.Empty(t, s.outputRefreshes(t0.Add(1500*time.Millisecond)), "just sent")
+	assert.Len(t, s.outputRefreshes(t0.Add(2*time.Second)), 1)
+
+	s.mu.Lock()
+	s.outputLevels[4] = false
+	s.mu.Unlock()
+	assert.Empty(t, s.outputRefreshes(t0.Add(time.Hour)), "off needs no refresh")
 }
 
 func TestOutputPinRefusesStepperEnables(t *testing.T) {

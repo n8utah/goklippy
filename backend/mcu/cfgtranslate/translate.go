@@ -2,6 +2,7 @@ package cfgtranslate
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"goklippy/backend/klipperconfig"
@@ -194,6 +195,13 @@ func (b *Builder) addDigitalOut(name string, sec klipperconfig.Section) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", name, err)
 	}
+	maxDuration, err := maxMCUDuration(sec.Options)
+	if err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	if maxDuration > 0 && start != shutdown {
+		return fmt.Errorf("%s: value must equal shutdown_value when maximum_mcu_duration is set", name)
+	}
 	level := func(on bool) int {
 		if on != invert {
 			return 1
@@ -202,16 +210,39 @@ func (b *Builder) addDigitalOut(name string, sec klipperconfig.Section) error {
 	}
 	oid := b.allocOID()
 	b.lines = append(b.lines, fmt.Sprintf(
-		"config_digital_out oid=%d pin=%s value=%d default_value=%d max_duration=0",
-		oid, pin, level(start), level(shutdown),
+		"config_digital_out oid=%d pin=%s value=%d default_value=%d max_duration=%d",
+		oid, pin, level(start), level(shutdown), b.cycleTicks(maxDuration),
 	))
-	b.addObject(name, oid, KindDigitalOut, map[string]string{
+	meta := map[string]string{
 		"pin":            pin,
 		"invert":         fmt.Sprintf("%v", invert),
 		"value":          fmt.Sprintf("%d", boolInt(start)),
 		"shutdown_level": fmt.Sprintf("%d", level(shutdown)),
-	})
+	}
+	if maxDuration > 0 {
+		meta["max_duration"] = strconv.FormatFloat(maxDuration, 'f', -1, 64)
+	}
+	b.addObject(name, oid, KindDigitalOut, meta)
 	return nil
+}
+
+// maxMCUDurationLimit is Klipper's ceiling for maximum_mcu_duration.
+const maxMCUDurationLimit = 5.0
+
+// maxMCUDuration reads Klipper's maximum_mcu_duration: how long, in seconds, the
+// board keeps an output away from its shutdown value without hearing from the host.
+// Past that the board shuts down, which puts every output to its shutdown value. The
+// host refreshes the output well inside it (see mcu/session_output.go). 0 is off.
+func maxMCUDuration(opts map[string]string) (float64, error) {
+	raw := strings.TrimSpace(opts["maximum_mcu_duration"])
+	if raw == "" {
+		return 0, nil
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v < 0 || v > maxMCUDurationLimit {
+		return 0, fmt.Errorf("maximum_mcu_duration must be between 0 and %g seconds, not %q", maxMCUDurationLimit, raw)
+	}
+	return v, nil
 }
 
 // onOffOption reads an output's 0/1 option; missing is off. Klipper allows a PWM

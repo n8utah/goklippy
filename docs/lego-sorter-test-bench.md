@@ -81,6 +81,13 @@ For safety the light starts off (`value: 0`) and goes off whenever the machine s
 when an error stops it, when the backend exits, and on an MCU shutdown (`shutdown_value: 0`). A
 board reset also puts it back to `value`.
 
+`maximum_mcu_duration: 5` covers a backend that dies without cleaning up (killed, crashed, USB
+cable out). While the light is on, the backend resends its state every third of that time; if
+the board hears nothing for 5 s it shuts down, which turns the light off and stops every motor.
+Reconnect or reset the board on Board Setup to clear it. The option takes 0–5 s (Klipper's
+limit), and `value` must equal `shutdown_value` when it's set. Board Setup asks for it as
+**Safety timeout** on each MOSFET output, 5 s by default.
+
 The **Light** button on the Dashboard switches it, at any time, sorting included. Starting or
 resuming a sort turns it on if **Turn on when sorting starts** is ticked on the Tuning page (the
 default). Pausing leaves it as it is. The Tuning page also holds the section name,

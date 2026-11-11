@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useMCUSession } from '../../../../context/MCUSessionContext';
-import { isOnOffSlot } from '../../../../helpers/boardSlotConfig';
+import { DEFAULT_OUTPUT_TIMEOUT_S, MAX_OUTPUT_TIMEOUT_S, isOnOffSlot } from '../../../../helpers/boardSlotConfig';
 
 import styles from './ConnectionPanel.module.css';
 
@@ -65,6 +65,8 @@ const ConnectionPanel = ({
 
   const state = slotStates[slotId] || { connected: false, label: slot.label || hotspot.label };
 
+  const timeout = state.maxMcuDuration ?? DEFAULT_OUTPUT_TIMEOUT_S;
+
 
 
   const handleConnect = () => {
@@ -76,6 +78,8 @@ const ConnectionPanel = ({
       label: state.label || slot.label || hotspot.label,
 
       type: slot.type,
+
+      maxMcuDuration: timeout,
 
     });
 
@@ -144,6 +148,33 @@ const ConnectionPanel = ({
           />
 
 
+
+          {isOnOffSlot(slot) && (
+            <>
+              <label className={styles.label} htmlFor="slot-timeout">
+                Safety timeout (seconds, 0 = off)
+              </label>
+              <input
+                id="slot-timeout"
+                className={styles.input}
+                type="number"
+                min="0"
+                max={MAX_OUTPUT_TIMEOUT_S}
+                step="0.5"
+                value={timeout}
+                onChange={(event) => {
+                  const v = Number(event.target.value);
+                  if (event.target.value !== '' && v >= 0 && v <= MAX_OUTPUT_TIMEOUT_S) {
+                    onUpdate(slotId, { ...state, maxMcuDuration: v, localOnly: true });
+                  }
+                }}
+              />
+              <p className={styles.meta}>
+                If the backend stops refreshing this output for this long (it crashed, or the USB cable came out), the board shuts down: the
+                output and every motor stop. Up to {MAX_OUTPUT_TIMEOUT_S} s.
+              </p>
+            </>
+          )}
 
           {slot.defaults?.sensor_type && !isOnOffSlot(slot) && (
 

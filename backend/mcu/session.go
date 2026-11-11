@@ -55,7 +55,9 @@ type Session struct {
 
 	readings       map[int]Reading
 	stepperJogging map[int]bool
-	outputLevels   map[int]bool // digital out OID -> level last set (see session_output.go)
+	outputLevels   map[int]bool      // digital out OID -> level last set (see session_output.go)
+	outputSent     map[int]time.Time // digital out OID -> when its level was last sent
+	outputStop     chan struct{}     // stops the output keeper; nil when not running
 	err            string
 }
 
@@ -98,6 +100,7 @@ func NewSession(id, port string, baud int, conn *Conn, objects []cfgtranslate.Ob
 // Close shuts down the serial connection.
 func (s *Session) Close() error {
 	s.StopTelemetry()
+	s.stopOutputKeeper()
 	s.stopMotion()
 	s.stopAllJogKeepers()
 	s.stopAllStepperRoutines()
