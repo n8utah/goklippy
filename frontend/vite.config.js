@@ -1,8 +1,15 @@
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig, transformWithEsbuild } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  resolve: {
+    // "@/components/ui/button" is frontend/src/components/ui/button (shadcn's convention).
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   plugins: [
+    tailwindcss(),
     {
       name: 'load-js-files-as-jsx',
       async transform(code, id) {

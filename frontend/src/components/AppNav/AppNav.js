@@ -14,6 +14,7 @@ const AppNav = ({ page, onChange }) => {
     { id: 'profiles', label: 'Profiles' },
     { id: 'records', label: 'Records' },
     { id: 'journeys', label: 'Piece journeys' },
+    { id: 'uikit', label: 'UI kit' },
     { id: 'home', label: 'Auth / Dev' },
   ];
 

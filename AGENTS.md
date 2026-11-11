@@ -42,6 +42,13 @@ This is the single source of truth; tool-specific files (e.g. `CLAUDE.md`, `.git
   - `PageName.module.css`
   - local `components/`
 - Keep concerns separated using the page structure above.
+- Design system (see `docs/ui-ux-spec.md`):
+  - Tailwind CSS v4 + shadcn/ui. Theme tokens live in `src/styles/globals.css`; use token classes (`bg-card`, `text-muted-foreground`, `text-primary-text`), never raw hex colors in components.
+  - shadcn components live in `src/components/ui/` (add with `npx shadcn@latest add <name>`, then fix imports to `@/lib/utils`). Edit them freely; they are our code.
+  - Tailwind's reset is scoped: new-UI markup must sit inside an element with the `ds` class (portal content in `components/ui` already has it). Old pages without `ds` keep their CSS modules until they are rebuilt.
+  - Prefer Tailwind classes in new pages; use `PageName.module.css` only for what utilities can't express cleanly.
+  - Theme (light/dark/system) comes from `src/helpers/theme.js` (`useTheme`).
+  - Import with the `@/` alias (`@/components/ui/button`).
 - Local first, shared later policy:
   - build page-specific components locally first.
   - promote to shared only when used by 2+ pages.

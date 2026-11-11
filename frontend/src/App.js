@@ -14,6 +14,7 @@ import RecordsPage from './pages/RecordsPage/RecordsPage';
 import CamerasPage from './pages/CamerasPage/CamerasPage';
 import TuningPage from './pages/TuningPage/TuningPage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
+import UiKitPage from './pages/UiKitPage/UiKitPage';
 import styles from './styles/app.module.css';
 
 const App = () => {
@@ -43,6 +44,7 @@ const App = () => {
           {page === 'cameras' && <CamerasPage />}
           {page === 'tuning' && <TuningPage />}
           {page === 'journeys' && <JourneysPage />}
+          {page === 'uikit' && <UiKitPage />}
           {page === 'home' && <HomePage />}
           {page === 'devices' && <DevicesPage onGoBoard={() => setPage('board')} />}
           {page === 'board' && <BoardSetupPage />}
