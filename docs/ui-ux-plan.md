@@ -49,14 +49,17 @@ How the menu is shown.
   control-room screen.
 - **C. Icon rail + task hub home.** Slim icons, a home page of tasks with the setup checklist
   first. Friendliest for occasional use; icons alone need labels to be learnable.
-- **Decided (2026-11-11): C, the icon rail with a home hub.** Next: how a group's pages are
-  reached from the rail (tabs under the page header, a flyout from the rail, or a hub page per
-  group); mocked on the canvas.
+- **Decided (2026-11-11): C, the icon rail with a home hub.** The rail holds Home and the five
+  groups. A group's pages are reached both ways: clicking or hovering a rail icon opens a flyout
+  of its pages (each with what it's for and, in Machine, a setup tick), and inside a group its
+  pages are tabs under the page title.
 
 ### 3. Always-visible machine status
-What's on every page. Recommendation: state (and run), board, motor power, light, the running
-job with Cancel, and Home / Start / Pause / Stop, in the frame's top bar. Open question: does Stop
-stay one click, or confirm while sorting?
+**Decided (2026-11-11): a compact top bar that opens to the full status.** Every page's top bar
+holds search, one status pill (state, and run while sorting) and Stop. Clicking the pill opens a
+panel with the full status and controls: board, motor power, light, the running task with
+Cancel, and Home / Start / Pause / Resume. Stop is one click, never confirmed: it's the safety
+action, and stopping is safe (pieces aboard are recorded).
 
 ### 4. Design system and components
 - **shadcn/ui** (Radix primitives + Tailwind, components copied into the repo): accessible
@@ -67,7 +70,8 @@ stay one click, or confirm while sorting?
   palette, dialogs and focus handling ourselves.
 - **A component library** (Mantine, Chakra): fastest to full coverage, heavier, harder to make
   our own.
-- Recommendation: **shadcn/ui**. Needs an AGENTS.md update for Tailwind.
+- **Decided (2026-11-11): shadcn/ui.** Needs an AGENTS.md update for Tailwind and the
+  `components/ui/` folder.
 
 ### 5. Look: color, theme, type, density
 - Light, dark, or both (dark suits a machine room and camera views; light suits setup forms).
@@ -76,8 +80,11 @@ stay one click, or confirm while sorting?
 - Type: Inter for UI, a mono for live numbers.
 - Density: compact (tables, many controls) vs comfortable (touch at the machine).
 - The canvas shows three: neutral light (A), dark with amber (B), warm light with orange (C);
-  each has an accent tweak. Recommendation: neutral light and dark both, following the system
-  setting, with a toggle.
+  each has an accent tweak.
+- **Decided (2026-11-11): light and dark, following the system setting, with a toggle** (in
+  System). Direction C's warm palette: warm off-white ground and white cards in light, warm
+  charcoal in dark, one orange accent in both. Type, density and the exact tokens are still to
+  settle.
 
 ### 6. Page layout template
 One shape for every page so they read alike. Recommendation: header (group › page title, one
