@@ -24,7 +24,7 @@ directions" canvas.
 
 ## Decisions, in order
 
-Each decision has options; the recommendation is a starting point to argue with. We go through
+All ten are decided (2026-11-11); the full UX is in `docs/ui-ux-spec.md`. Each decision had options; the recommendation was a starting point to argue with. We went through
 them one at a time, generate ideas where needed, decide, and record the decision here.
 
 ### 1. Menu structure (information architecture)
@@ -83,8 +83,10 @@ action, and stopping is safe (pieces aboard are recorded).
   each has an accent tweak.
 - **Decided (2026-11-11): light and dark, following the system setting, with a toggle** (in
   System). Direction C's warm palette: warm off-white ground and white cards in light, warm
-  charcoal in dark, one orange accent in both. Type, density and the exact tokens are still to
-  settle.
+  charcoal in dark, one orange accent in both.
+- **Decided (2026-11-11): comfortable density** (40–44 px controls, room to tap at the machine)
+  and **Space Grotesk for titles, Inter for UI text, JetBrains Mono for live numbers** (rpm,
+  volts, fps).
 
 ### 6. Page layout template
 One shape for every page so they read alike. **Decided (2026-11-11): tabs per part.** Header:
@@ -100,8 +102,9 @@ for the selected thing where it helps (a bin, a board slot).
 quick editor) and **actions** (home, start/pause, blink the light, shake a channel, capture
 empty, find cameras). Actions that move the machine say so and follow the same rules as their
 buttons (refused while sorting, and so on). Pieces and runs are found on Records and Diagnose,
-not in search. Still to settle in the spec: a ">" prefix for actions only, and recent items when
-the box is empty.
+not in search. Opened empty, it shows recent pages and settings, then a few actions that fit the
+machine's state (Start when ready, Resume when paused, Blink when the light is off). A ">" prefix
+limits it to actions.
 
 ### 8. Settings model
 **Decided (2026-11-11): one registry, three doors.** Every setting is defined once in a registry
@@ -116,8 +119,10 @@ registry also drives search, defaults and reset, so they can't drift apart.
 link to the page that does it, in no forced order; Home shows the progress.
 
 ### 10. Screens and devices
-Laptop at the machine is the main screen. Recommendation: work down to tablet width (sidebar
-collapses to icons); phone gets status + Stop + records, not setup.
+**Decided (2026-11-11): fully responsive.** Every page works from laptop to phone. On a phone
+the rail becomes a bottom bar (Home, Run, Rules, Machine, More, with Diagnose and System under
+More), tabs scroll sideways, cards stack, the status pill and Stop stay in the top bar, and
+search opens full screen.
 
 ## From decisions to a full UX
 
