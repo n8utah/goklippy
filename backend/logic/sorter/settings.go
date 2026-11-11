@@ -117,6 +117,23 @@ type ChannelSettings struct {
 	Stepper string  `json:"stepper"`
 	Forward bool    `json:"forward"`
 	Gear    float64 `json:"gear"` // motor turns per rotor turn
+	// Sections is how many identical sections the rotor is divided into, so its
+	// look repeats every 360/Sections degrees (C1–C3: 10). 0 means unknown. C4 uses
+	// the platter's sectors.
+	Sections int `json:"sections"`
+}
+
+// RotorPeriod is how far a channel's rotor turns before it looks the same again:
+// one section, or a whole turn if that's unknown.
+func (s MachineSettings) RotorPeriod(ch Channel) float64 {
+	n := s.Channels[string(ch)].Sections
+	if ch == ChannelC4 && s.Platter.Sectors > 0 {
+		n = s.Platter.Sectors
+	}
+	if n <= 0 {
+		return 360
+	}
+	return 360 / float64(n)
 }
 
 // DistributorSettings is the chute stepper, its home switch and aiming geometry (see
@@ -197,9 +214,9 @@ func DefaultMachineSettings() MachineSettings {
 		},
 		Channels: map[string]ChannelSettings{
 			// Every channel: a 12t motor gear drives the rotor's 130t gear through a 24t idler.
-			"c1": {Stepper: "stepper_x", Forward: true, Gear: ChannelGear},
-			"c2": {Stepper: "stepper_y", Forward: true, Gear: ChannelGear},
-			"c3": {Stepper: "stepper_z", Forward: true, Gear: ChannelGear},
+			"c1": {Stepper: "stepper_x", Forward: true, Gear: ChannelGear, Sections: 10},
+			"c2": {Stepper: "stepper_y", Forward: true, Gear: ChannelGear, Sections: 10},
+			"c3": {Stepper: "stepper_z", Forward: true, Gear: ChannelGear, Sections: 10},
 			"c4": {Stepper: "stepper_e0", Forward: true, Gear: ChannelGear},
 		},
 		// Sorter V2's defaults ("Conservative" exit pulses).

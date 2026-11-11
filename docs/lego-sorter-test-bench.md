@@ -151,6 +151,17 @@ no camera saw anything move, it says to check motor power instead of guessing. E
 something visible that turns with it: a piece or a strip of tape. It runs as a sorter job, so
 Cancel stops it, and every channel is turned back.
 
+**Patterned rotors.** C1–C3's cones have 10 facets and C4's platter 5 sectors, and they turn
+with the rotor, so a single empty-channel picture only matches where it was taken: elsewhere the
+facet edges look like pieces. **Capture empty across a section** (each channel's tab) turns the
+clear channel across one section (36° on C1–C3, 72° on C4, from each channel's **sections**
+setting) and captures it every degree. The detector compares each frame with whichever of those
+pictures it looks most like, chosen by picture rather than motor position, so it survives a board
+reset. A pixel counts as changed only if it differs from every pixel within a few pixels of the
+matched picture, which covers the rotor standing between two pictures; real pieces differ from
+all of them. Against 180 pictures, detection takes about 7 ms a frame at 640×480. On C3 on
+2026-11-11 this took the facets from several false pieces a turn to none over 12 positions.
+
 A camera is opened once and shared: a channel using it and a preview of it watch the same
 capture, so previewing an assigned camera doesn't disturb it. A preview stops 15 s after the page
 stops watching it.

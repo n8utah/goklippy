@@ -215,10 +215,11 @@ const CamerasPage = () => {
             <div className={styles.panel}>
               <h3 className={styles.panelTitle}>Empty all the way round</h3>
               <p className={styles.hint}>
-                For a rotor with a pattern on it (the cone&apos;s facets): turns the channel once
-                round, capturing it empty every few degrees, so its pattern turning isn&apos;t taken
-                for pieces. Clear the channel first. It replaces the single picture above, and that
-                one replaces it.
+                For a rotor with a pattern on it (the cone&apos;s facets): turns the channel across
+                one section ({logic.roundPeriod.toFixed(0)}°, after which the rotor looks the same
+                again), capturing it empty every few degrees, so its pattern turning isn&apos;t
+                taken for pieces. Clear the channel first. It replaces the single picture above, and
+                that one replaces it.
               </p>
               <div className={styles.buttonRow}>
                 <label className={styles.field}>
@@ -242,13 +243,13 @@ const CamerasPage = () => {
                   disabled={!device || logic.simulated || Boolean(logic.roundJob)}
                   onClick={logic.captureRound}
                 >
-                  Capture all the way round
+                  Capture empty across a section
                 </button>
               </div>
               <p className={styles.hint}>
                 {logic.roundJob
                   ? `${logic.roundJob.detail} (${logic.roundJob.step} of ${logic.roundJob.total})`
-                  : `${Math.round(360 / logic.roundStep)} pictures, about ${Math.ceil(((360 / logic.roundStep) * 0.8) / 60)} min.`}
+                  : `${Math.max(1, Math.round(logic.roundPeriod / logic.roundStep))} pictures, about ${Math.ceil((logic.roundPeriod / logic.roundStep) * 0.8)} s.`}
               </p>
             </div>
 

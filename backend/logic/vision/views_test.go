@@ -58,7 +58,7 @@ func TestViewsCancelATurningPattern(t *testing.T) {
 		views = append(views, rotorFrame(a))
 	}
 	d := NewBackgroundDetector()
-	require.NoError(t, d.SetViews(views))
+	require.NoError(t, d.SetViews(views, 2))
 	assert.Equal(t, 180, d.Views())
 	assert.True(t, d.HasBackground())
 	boxes, err = d.Detect(frame, z)
@@ -71,9 +71,24 @@ func TestViewsCancelATurningPattern(t *testing.T) {
 	assert.Equal(t, 36.0, math.Mod(float64(d.LastView())*2, 60))
 }
 
+func TestViewsOfOneRepeatCoverEveryAngle(t *testing.T) {
+	// The synthetic rotor repeats every 60°: views across 0–58° are enough for a
+	// frame at 217°.
+	var views []image.Image
+	for a := 0.0; a < 60; a += 2 {
+		views = append(views, rotorFrame(a))
+	}
+	d := NewBackgroundDetector()
+	require.NoError(t, d.SetViews(views, 2))
+	boxes, err := d.Detect(withPiece(rotorFrame(217), at(300, 20)), testZones())
+	require.NoError(t, err)
+	require.Len(t, boxes, 1, "only the piece")
+	assert.Equal(t, 18, d.LastView(), "217° looks like 36°")
+}
+
 func TestSingleBackgroundReplacesViews(t *testing.T) {
 	d := NewBackgroundDetector()
-	require.NoError(t, d.SetViews([]image.Image{rotorFrame(0), rotorFrame(2)}))
+	require.NoError(t, d.SetViews([]image.Image{rotorFrame(0), rotorFrame(2)}, 2))
 	d.SetBackground(rotorFrame(0))
 	assert.Zero(t, d.Views())
 	assert.Equal(t, -1, d.LastView())
@@ -83,8 +98,8 @@ func TestSingleBackgroundReplacesViews(t *testing.T) {
 func TestViewsMustMatchTheFrameSize(t *testing.T) {
 	d := NewBackgroundDetector()
 	small := image.NewRGBA(image.Rect(0, 0, 320, 240))
-	assert.Error(t, d.SetViews([]image.Image{rotorFrame(0), small}))
-	require.NoError(t, d.SetViews([]image.Image{small}))
+	assert.Error(t, d.SetViews([]image.Image{rotorFrame(0), small}, 2))
+	require.NoError(t, d.SetViews([]image.Image{small}, 2))
 	_, err := d.Detect(rotorFrame(0), testZones())
 	assert.Error(t, err)
 }

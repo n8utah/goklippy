@@ -43,9 +43,9 @@ export const DEFAULT_SORTER_SETTINGS = {
   // Every channel: a 12t motor gear drives the rotor's 130t gear through a 24t idler,
   // so 130/12 motor turns per rotor turn.
   channels: {
-    c1: { stepper: 'stepper_x', forward: true, gear: 130 / 12 },
-    c2: { stepper: 'stepper_y', forward: true, gear: 130 / 12 },
-    c3: { stepper: 'stepper_z', forward: true, gear: 130 / 12 },
+    c1: { stepper: 'stepper_x', forward: true, gear: 130 / 12, sections: 10 },
+    c2: { stepper: 'stepper_y', forward: true, gear: 130 / 12, sections: 10 },
+    c3: { stepper: 'stepper_z', forward: true, gear: 130 / 12, sections: 10 },
     c4: { stepper: 'stepper_e0', forward: true, gear: 130 / 12 },
   },
   routines: {},
@@ -74,7 +74,17 @@ export const DEFAULT_SORTER_SETTINGS = {
   // Which camera watches each channel (c2, c3, c4) and where its zones are.
   // devices maps a channel to its camera's id (device path); deviceNames keeps a label
   // for each, to name a camera that's unplugged.
-  cameras: { devices: {}, deviceNames: {}, zones: {}, width: 1280, height: 720, fps: 10, ffmpeg: '', threshold: 0, minArea: 0 },
+  cameras: {
+    devices: {},
+    deviceNames: {},
+    zones: {},
+    width: 1280,
+    height: 720,
+    fps: 10,
+    ffmpeg: '',
+    threshold: 0,
+    minArea: 0,
+  },
   // The machine's light: an [output_pin] in the board config (RAMPS D10).
   lights: { output: 'output_pin leds', onWhenSorting: true },
 };
@@ -97,7 +107,13 @@ export function normalizeSorterSettings(saved) {
     ...rest,
     feederRpm: feederRpmFrom(saved),
     distributor: { ...DEFAULT_SORTER_SETTINGS.distributor, ...saved.distributor },
-    channels: { ...DEFAULT_SORTER_SETTINGS.channels, ...saved.channels },
+    // Per channel, so a field added later (sections) gets its default in old saves.
+    channels: Object.fromEntries(
+      Object.entries({ ...DEFAULT_SORTER_SETTINGS.channels, ...saved.channels }).map(([ch, c]) => [
+        ch,
+        { ...DEFAULT_SORTER_SETTINGS.channels[ch], ...c },
+      ]),
+    ),
     cameras: { ...DEFAULT_SORTER_SETTINGS.cameras, ...saved.cameras },
     feeder: { ...DEFAULT_SORTER_SETTINGS.feeder, ...saved.feeder },
     platter: { ...DEFAULT_SORTER_SETTINGS.platter, ...saved.platter },
@@ -187,5 +203,10 @@ const localMachineSettings = () => normalizeSorterSettings(readLocal(MACHINE_STO
 
 /** The sorter's "machine" settings document. */
 export function useMachineSettings() {
-  return useServerDocument('machine', MACHINE_STORAGE_KEY, localMachineSettings, normalizeSorterSettings);
+  return useServerDocument(
+    'machine',
+    MACHINE_STORAGE_KEY,
+    localMachineSettings,
+    normalizeSorterSettings,
+  );
 }

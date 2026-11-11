@@ -13,7 +13,7 @@ func BenchmarkDetectViews(b *testing.B) {
 		views = append(views, rotorFrame(a))
 	}
 	d := NewBackgroundDetector()
-	if err := d.SetViews(views); err != nil {
+	if err := d.SetViews(views, 2); err != nil {
 		b.Fatal(err)
 	}
 	frame := withPiece(rotorFrame(37), at(230, 20))

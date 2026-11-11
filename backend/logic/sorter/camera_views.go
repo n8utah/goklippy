@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -22,11 +23,11 @@ import (
 // ViewCapturer takes a channel's pictures and keeps the finished set.
 type ViewCapturer interface {
 	ChannelFrameAfter(ctx context.Context, ch Channel, t time.Time) (image.Image, []byte, error)
-	SetViews(ch Channel, jpegs [][]byte) error
+	SetViews(ch Channel, jpegs [][]byte, spacing float64) error
 }
 
 const (
-	defaultViewStep = 2.0 // degrees between pictures
+	defaultViewStep = 1.0 // degrees between pictures
 	minViewStep     = 0.5
 	maxViewStep     = 30.0
 	viewSettle      = 600 * time.Millisecond // after each step, before the picture
@@ -44,8 +45,11 @@ func (m *Machine) CaptureViews(ctx context.Context, ch Channel, capturer ViewCap
 	if step < minViewStep || step > maxViewStep {
 		return fmt.Errorf("%w: take a picture every %g to %g degrees", ErrInvalidSettings, minViewStep, maxViewStep)
 	}
-	n := int(math.Round(360 / step))
-	step = 360 / float64(n) // so the round ends where it began
+	// The rotor looks the same again after one section, so one section's worth of
+	// pictures covers every way it can stand.
+	period := m.settings().RotorPeriod(ch)
+	n := max(1, int(math.Round(period/step)))
+	step = period / float64(n) // so the pictures end where the next section begins
 	return m.send(ctx, request{do: func() error {
 		if err := m.handsOff(); err != nil {
 			return err
@@ -54,6 +58,9 @@ func (m *Machine) CaptureViews(ctx context.Context, ch Channel, capturer ViewCap
 			return ErrNoBoard
 		}
 		name := fmt.Sprintf("Capture %s empty all the way round", strings.ToUpper(string(ch)))
+		if period < 360 {
+			name = fmt.Sprintf("Capture %s empty across a section (%.0f°)", strings.ToUpper(string(ch)), period)
+		}
 		return m.startJob(name, func(ctx context.Context, report reportFunc) error {
 			rpm := findRpm(m.settings(), ch)
 			jpegs := make([][]byte, 0, n)
@@ -76,7 +83,7 @@ func (m *Machine) CaptureViews(ctx context.Context, ch Channel, capturer ViewCap
 					return fmt.Errorf("turn %s: %w", ch, err)
 				}
 			}
-			return capturer.SetViews(ch, jpegs)
+			return capturer.SetViews(ch, jpegs, step)
 		}, nil)
 	}})
 }
@@ -99,9 +106,9 @@ func (p *Perception) ChannelFrameAfter(ctx context.Context, ch Channel, t time.T
 	return p.FrameAfter(ctx, device, t)
 }
 
-// SetViews gives the channel's detector its all-the-way-round pictures and keeps them
-// on disk for the next start, replacing a single empty-channel picture.
-func (p *Perception) SetViews(ch Channel, jpegs [][]byte) error {
+// SetViews gives the channel's detector its pictures, spacing degrees apart, and keeps
+// them on disk for the next start, replacing a single empty-channel picture.
+func (p *Perception) SetViews(ch Channel, jpegs [][]byte, spacing float64) error {
 	imgs, err := decodeAll(jpegs)
 	if err != nil {
 		return err
@@ -112,7 +119,7 @@ func (p *Perception) SetViews(ch Channel, jpegs [][]byte) error {
 		p.mu.Unlock()
 		return ErrNoCamera
 	}
-	err = pc.detector.SetViews(imgs)
+	err = pc.detector.SetViews(imgs, spacing)
 	pc.tracker.Reset()
 	p.mu.Unlock()
 	if err != nil {
@@ -130,6 +137,10 @@ func (p *Perception) SetViews(ch Channel, jpegs [][]byte) error {
 			return err
 		}
 	}
+	spacingText := strconv.FormatFloat(spacing, 'f', -1, 64)
+	if err := os.WriteFile(filepath.Join(dir, "spacing.txt"), []byte(spacingText), 0o644); err != nil {
+		return err
+	}
 	_ = os.Remove(p.backgroundPath(ch)) // the views replace it
 	return nil
 }
@@ -138,20 +149,28 @@ func (p *Perception) viewsDir(ch Channel) string {
 	return filepath.Join(p.dataDir, "backgrounds", string(ch)+"-views")
 }
 
-// loadViews reads a channel's saved views, in order; none is not an error.
-func (p *Perception) loadViews(ch Channel) ([]image.Image, error) {
+// loadViews reads a channel's saved views, in order, and their spacing; none is not
+// an error. Views saved before the spacing was kept covered a whole turn.
+func (p *Perception) loadViews(ch Channel) ([]image.Image, float64, error) {
 	paths, err := filepath.Glob(filepath.Join(p.viewsDir(ch), "view-*.jpg"))
 	if err != nil || len(paths) == 0 {
-		return nil, err
+		return nil, 0, err
 	}
 	sort.Strings(paths)
 	jpegs := make([][]byte, len(paths))
 	for i, path := range paths {
 		if jpegs[i], err = os.ReadFile(path); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
-	return decodeAll(jpegs)
+	spacing := 360 / float64(len(paths))
+	if raw, err := os.ReadFile(filepath.Join(p.viewsDir(ch), "spacing.txt")); err == nil {
+		if v, err := strconv.ParseFloat(strings.TrimSpace(string(raw)), 64); err == nil && v > 0 {
+			spacing = v
+		}
+	}
+	imgs, err := decodeAll(jpegs)
+	return imgs, spacing, err
 }
 
 func decodeAll(jpegs [][]byte) ([]image.Image, error) {

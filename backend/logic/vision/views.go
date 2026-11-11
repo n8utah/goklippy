@@ -26,13 +26,18 @@ const (
 
 var errViewSize = errors.New("the empty-channel pictures are a different size from the camera's; capture them again")
 
-// SetViews takes frames of the empty channel all the way round as the backgrounds,
-// replacing any single background picture.
-func (d *BackgroundDetector) SetViews(frames []image.Image) error {
+// SetViews takes frames of the empty channel, spacing degrees of rotor apart, as the
+// backgrounds, replacing any single background picture. They need only cover one
+// repeat of the rotor's pattern (one section of a sectioned rotor).
+func (d *BackgroundDetector) SetViews(frames []image.Image, spacing float64) error {
 	if len(frames) == 0 {
 		d.views = nil
 		return nil
 	}
+	if spacing <= 0 {
+		return errors.New("the pictures' spacing must be positive")
+	}
+	d.viewSpacing = spacing
 	views := make([][]uint8, len(frames))
 	var w, h int
 	for i, f := range frames {
@@ -143,7 +148,7 @@ func (d *BackgroundDetector) detectViews(frame image.Image, z ChannelZones) ([]B
 // viewSlack is how many sample cells the pattern can be off from the nearest view:
 // half the angle between views, at the ring's outer edge, plus a pixel.
 func (d *BackgroundDetector) viewSlack(z ChannelZones) int {
-	spacing := 360 / float64(len(d.views)) * math.Pi / 180
+	spacing := d.viewSpacing * math.Pi / 180
 	px := z.Ring.OuterRadius*spacing/2 + 1
 	return max(1, int(math.Ceil(px/float64(max(1, d.Step)))))
 }

@@ -38,8 +38,9 @@ type BackgroundDetector struct {
 
 	// views are empty-channel pictures all the way round (see views.go); when set
 	// they're used instead of bg.
-	views    [][]uint8
-	lastView int
+	views       [][]uint8
+	viewSpacing float64 // rotor degrees between views
+	lastView    int
 }
 
 // NewBackgroundDetector has defaults for a 640×480 camera.

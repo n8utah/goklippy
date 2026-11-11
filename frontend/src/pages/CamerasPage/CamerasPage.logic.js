@@ -73,13 +73,16 @@ export function useCamerasPageLogic() {
   const channel = view === 'setup' ? 'c2' : view;
   const [devices, setDevices] = useState({ ...NO_DEVICES, loading: true });
   const [previewing, setPreviewing] = useState({}); // device id -> shown
-  const [roundStep, setRoundStep] = useState(2);
+  const [roundStep, setRoundStep] = useState(1);
   const sorter = useSorterState();
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   const cams = settings.cameras;
+  // How far the channel's rotor turns before it looks the same again: one section.
+  const sections = view === 'c4' ? settings.platter?.sectors : settings.channels?.[view]?.sections;
+  const roundPeriod = sections > 0 ? 360 / sections : 360;
 
   useEffect(() => {
     let cancelled = false;
@@ -243,6 +246,7 @@ export function useCamerasPageLogic() {
     simulated: status?.simulated,
     roundStep,
     setRoundStep,
+    roundPeriod,
     captureRound,
     roundJob,
     view,

@@ -180,8 +180,8 @@ func (p *Perception) reconcile(ctx context.Context) {
 		cctx, cancel := context.WithCancel(ctx)
 		pc := &perceptionChannel{cfg: want, cam: p.pool.acquire(want), cancel: cancel, detector: vision.NewBackgroundDetector(), tracker: vision.NewTracker()}
 		pc.detector.Threshold, pc.detector.MinArea, pc.detector.Step = detectorParams(cs)
-		if views, err := p.loadViews(ch); err == nil && len(views) > 0 {
-			if err := pc.detector.SetViews(views); err != nil {
+		if views, spacing, err := p.loadViews(ch); err == nil && len(views) > 0 {
+			if err := pc.detector.SetViews(views, spacing); err != nil {
 				slog.Warn("saved empty-channel pictures not used", "channel", ch, "error", err)
 			}
 		} else if bg, err := p.loadBackground(ch); err == nil {
