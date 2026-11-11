@@ -5,7 +5,7 @@ import {
   listBoardProfiles,
   updateBoardProfileHotspots,
 } from '../../helpers/api';
-import { acceptsForSlotType, defaultHotspotForSlot, resizeCircle, resizeRect } from '../../helpers/boardHotspots';
+import { defaultHotspotForSlot, resizeCircle, resizeRect } from '../../helpers/boardHotspots';
 
 export function useBoardEditorPageLogic() {
   const [profileIds, setProfileIds] = useState([]);

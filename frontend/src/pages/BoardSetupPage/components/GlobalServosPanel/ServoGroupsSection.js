@@ -119,7 +119,6 @@ const ServoGroupsSection = ({ connected, busy, onRun }) => {
   };
 
   const handleGroupScale = (group, factor) => {
-    const oids = groupOids(group);
     setGroups((prev) => prev.map((item) => (item.id === group.id ? scaleGroupAngles(item, factor) : item)));
     onRun(async () => {
       const plan = applyPlanForGroup(scaleGroupAngles(group, factor), servoObjects);

@@ -46,6 +46,9 @@ export default [
       ...js.configs.recommended.rules,
       ...react.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off',
+      // The app doesn't use PropTypes (the package isn't installed); props are
+      // documented where components are written.
+      'react/prop-types': 'off',
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },

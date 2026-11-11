@@ -11,7 +11,6 @@ export function logMCU(phase, detail = {}) {
   }
   const elapsed =
     detail.elapsedMs != null ? `${detail.elapsedMs}ms` : undefined;
-  // eslint-disable-next-line no-console
   console.info('[goklippy mcu]', phase, elapsed ?? '', detail);
 }
 
