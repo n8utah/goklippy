@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import {
+  cancelSorterJob,
   captureSorterBackground,
+  findSorterCameras,
+  getSorterCameraFind,
   getSorterCameras,
   listSorterCameraDevices,
 } from '../../helpers/api';
 import { useMachineSettings } from '../../helpers/sorterSettings';
+import { useSorterState } from '../../helpers/sorterState';
 
 export const CAMERA_CHANNELS = ['c2', 'c3', 'c4'];
 export const CHANNEL_LABELS = { c2: 'C-channel 2', c3: 'C-channel 3', c4: 'Classification (C4)' };
@@ -139,18 +143,23 @@ export function useCamerasPageLogic() {
    * channel has one camera, so it comes off any other channel. Its label is kept so a
    * camera that's unplugged can still be named.
    */
-  const assign = (device, ch) => {
+  const assign = (device, ch) => assignMany([[device, ch]]);
+
+  /** assign for several cameras at once: [[device, channel], …]. */
+  const assignMany = (pairs) => {
     const next = { ...cams.devices };
     const names = { ...cams.deviceNames };
-    for (const c of CAMERA_CHANNELS) {
-      if (next[c] === device.id || next[c] === device.name) {
-        next[c] = '';
-        delete names[c];
+    for (const [device, ch] of pairs) {
+      for (const c of CAMERA_CHANNELS) {
+        if (next[c] === device.id || next[c] === device.name) {
+          next[c] = '';
+          delete names[c];
+        }
       }
-    }
-    if (ch) {
-      next[ch] = device.id;
-      names[ch] = deviceLabel(device);
+      if (ch) {
+        next[ch] = device.id;
+        names[ch] = deviceLabel(device);
+      }
     }
     setCameras({ devices: next, deviceNames: names });
   };
@@ -218,6 +227,7 @@ export function useCamerasPageLogic() {
     setView,
     channel,
     assign,
+    assignMany,
     channelOf,
     missing,
     previewing,
@@ -236,5 +246,103 @@ export function useCamerasPageLogic() {
     captureBackground,
     error: error || syncError,
     notice,
+  };
+}
+
+export const FIND_JOB = 'Find which camera is where';
+export const ALL_CHANNELS = ['c1', 'c2', 'c3', 'c4'];
+// The laptop's own camera isn't part of the machine; leave it unticked to start.
+const BUILT_IN = /laptop|integrated|built-?in|facetime|front|rear/i;
+
+/**
+ * The camera search: which cameras to watch, starting it, following the job on the
+ * sorter's live state, and applying what it proposes.
+ */
+export function useCameraFinder(logic) {
+  const { state, connected } = useSorterState();
+  const [unpicked, setUnpicked] = useState(null); // device ids left out; null = default
+  const [degrees, setDegrees] = useState(15);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  const list = logic.devices.list;
+  const skipped = unpicked ?? new Set(list.filter((d) => BUILT_IN.test(d.name)).map((d) => d.id));
+  const picked = list.filter((d) => !skipped.has(d.id));
+  const toggle = (id) => {
+    const next = new Set(skipped);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setUnpicked(next);
+  };
+
+  const running = state?.job?.name === FIND_JOB;
+  const finishedAt = state?.last_job?.name === FIND_JOB ? state.last_job.at : '';
+
+  // Fetch the result on opening and whenever a search finishes.
+  useEffect(() => {
+    let cancelled = false;
+    getSorterCameraFind().then(
+      (data) => {
+        if (!cancelled) setResult(data.result);
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [finishedAt]);
+
+  const start = async () => {
+    setError('');
+    try {
+      await findSorterCameras(
+        picked.map((d) => d.id),
+        degrees,
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const cancel = () => cancelSorterJob().catch((err) => setError(err.message));
+
+  /** Puts each proposed camera over its channel. */
+  const apply = () => {
+    const pairs = Object.entries(result?.proposed ?? {})
+      .map(([ch, id]) => [list.find((d) => d.id === id), ch])
+      .filter(([d]) => d);
+    logic.assignMany(pairs);
+  };
+
+  const s = state?.state;
+  const blocked = !connected
+    ? 'Connecting to the backend…'
+    : logic.simulated
+      ? 'The machine is simulated: there are no cameras to find.'
+      : !state?.hardware?.connected
+        ? 'Connect the board on Board Setup first: the search turns the channels.'
+        : s === 'running' || s === 'homing'
+          ? 'Pause or stop the sorter first.'
+          : state?.job && !running
+            ? 'Wait for the sorter’s current task to finish.'
+            : picked.length === 0
+              ? 'Tick at least one camera.'
+              : '';
+
+  return {
+    picked,
+    isPicked: (id) => !skipped.has(id),
+    toggle,
+    degrees,
+    setDegrees,
+    running,
+    job: running ? state.job : null,
+    result,
+    stamp: result?.finished ?? '',
+    start,
+    cancel,
+    apply,
+    blocked,
+    error,
   };
 }

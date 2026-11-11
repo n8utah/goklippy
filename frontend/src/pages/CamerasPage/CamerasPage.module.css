@@ -238,6 +238,94 @@
   font-size: 14px;
 }
 
+.subTitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.findPicks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.findResult {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.findResult .alert {
+  margin: 0;
+}
+
+.findPair {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.findPictures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.findFigure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.findPicture {
+  position: relative;
+}
+
+.findPicture img {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.findCenter {
+  position: absolute;
+  border: 2px dashed #f59e0b;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.findTable {
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.findTable th,
+.findTable td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  color: #0f172a;
+}
+
+.findBest {
+  font-weight: 700;
+  background: #e0f2fe;
+}
+
 .modes {
   display: flex;
   flex-direction: column;

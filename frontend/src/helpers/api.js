@@ -310,6 +310,21 @@ export function listSorterCameraModes(device) {
   return getJSON(`/api/v1/sorter/cameras/modes?device=${encodeURIComponent(device)}`);
 }
 
+/** Starts the camera search: each channel turns a little while these cameras watch. */
+export function findSorterCameras(devices, degrees) {
+  return postJSON('/api/v1/sorter/cameras/find', { devices, degrees });
+}
+
+/** The last camera search: { result: { proposed, scores, noise, notes, error, … } | null }. */
+export function getSorterCameraFind() {
+  return getJSON('/api/v1/sorter/cameras/find');
+}
+
+/** The best camera's picture before or after a channel turned, in a search. */
+export function sorterCameraFindImageURL(channel, which, stamp) {
+  return `${API_BASE_URL}/api/v1/sorter/cameras/find/${channel}/${which}?t=${encodeURIComponent(stamp || '')}`;
+}
+
 export function getSorterCameraPreviewStatus(device) {
   return getJSON(`/api/v1/sorter/cameras/preview/status?device=${encodeURIComponent(device)}`);
 }

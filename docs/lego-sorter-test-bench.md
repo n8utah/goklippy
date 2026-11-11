@@ -137,6 +137,20 @@ The detector's defaults scale with the size: the smallest piece by pixel count (
 1280), so a large frame costs about what a small one does. Changing the size needs a new
 empty-channel picture on each channel; the channel says so until it has one.
 
+**Find which camera is where** (Setup view) does the assigning for you. With the board connected
+and the sorter not running, it starts the ticked cameras (the laptop's own is left unticked) and
+measures how much each picture changes with nothing moving. Then it turns C1, C2, C3 and C4 in
+turn a few degrees (15 by default) and back, comparing each camera's picture before and after.
+Only the middle half of each picture (width and height, outlined on the result's pictures) is
+compared, so a neighboring channel at a camera's edge doesn't count. A camera saw a channel move
+when at least 0.3% of that middle changed and three times its own noise. The strongest
+camera–channel pairs are proposed, one camera per channel, with before/after pictures and the
+full table of changes. **Use these** applies them. Notes say when no camera saw a channel move,
+when two cameras saw it about equally, and when a camera saw only C1 (which has no camera). If
+no camera saw anything move, it says to check motor power instead of guessing. Each channel needs
+something visible that turns with it: a piece or a strip of tape. It runs as a sorter job, so
+Cancel stops it, and every channel is turned back.
+
 A camera is opened once and shared: a channel using it and a preview of it watch the same
 capture, so previewing an assigned camera doesn't disturb it. A preview stops 15 s after the page
 stops watching it.

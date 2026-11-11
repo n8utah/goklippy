@@ -1,3 +1,4 @@
+import CameraFinder from './CameraFinder';
 import DeviceModes from './DeviceModes';
 import DevicePreview from './DevicePreview';
 import { CAMERA_CHANNELS, CHANNEL_LABELS, deviceLabel } from '../CamerasPage.logic';
@@ -109,6 +110,8 @@ const CameraSetup = ({ logic }) => {
           <DeviceCard key={d.id} device={d} logic={logic} />
         ))}
       </div>
+
+      {devices.list.length > 0 && <CameraFinder logic={logic} />}
 
       <div className={styles.panel}>
         <h3 className={styles.panelTitle}>Channels</h3>

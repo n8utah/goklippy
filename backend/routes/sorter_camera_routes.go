@@ -15,12 +15,66 @@ import (
 var (
 	sorterFeed       sorter.CameraFeed
 	sorterPerception *sorter.Perception // nil in simulation
+	cameraFinder     = sorter.NewCameraFinder()
 )
 
 // InitCameras wires the camera feed in. perception is nil when simulating.
 func InitCameras(feed sorter.CameraFeed, perception *sorter.Perception) {
 	sorterFeed = feed
 	sorterPerception = perception
+}
+
+// FindSorterCameras POST /sorter/cameras/find {"devices": [...], "degrees": 15}: turns
+// each channel a little and back while watching the cameras, to propose which camera
+// is where. It runs as a sorter job; GET shows the result.
+func FindSorterCameras(c *gin.Context) {
+	if sorterPerception == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "the machine is simulated: there are no cameras to find"})
+		return
+	}
+	var req sorter.CameraFindRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	for _, d := range req.Devices {
+		if !sorterPerception.MayOpen(d) {
+			c.JSON(http.StatusNotFound, gin.H{"error": sorter.ErrUnknownDevice.Error()})
+			return
+		}
+	}
+	if err := sorterMachine.FindCameras(c.Request.Context(), sorterPerception, cameraFinder, req); err != nil {
+		sorterError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// GetSorterCameraFind GET /sorter/cameras/find: the last search's result.
+func GetSorterCameraFind(c *gin.Context) {
+	r, err := cameraFinder.Last()
+	if errors.Is(err, sorter.ErrNotFinding) {
+		c.JSON(http.StatusOK, gin.H{"result": nil})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": r})
+}
+
+// GetSorterCameraFindImage GET /sorter/cameras/find/:channel/:which (before|after):
+// the best camera's picture before or after that channel turned.
+func GetSorterCameraFindImage(c *gin.Context) {
+	ch, err := sorter.ParseChannel(c.Param("channel"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	jpg, err := cameraFinder.Image(ch, c.Param("which") == "after")
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "image/jpeg", jpg)
 }
 
 func cameraChannel(c *gin.Context) (sorter.Channel, bool) {
