@@ -29,7 +29,8 @@ test('every page URL opens inside the frame', async ({ page }) => {
   }
 });
 
-test('/ opens Run › Sort', async ({ page }) => {
+test('/ opens Home', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/run\/sort$/);
+  await expect(page.locator('main h1')).toHaveText('Home');
+  await expect(page.getByRole('link', { name: /Sorting rules/ })).toBeVisible();
 });

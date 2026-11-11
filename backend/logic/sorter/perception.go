@@ -258,7 +258,7 @@ func (p *Perception) process(ctx context.Context, ch Channel, pc *perceptionChan
 func (p *Perception) observe(ch Channel, pc *perceptionChannel, img image.Image, at time.Time) (vision.Observation, string) {
 	zones, ok := p.settings().Cameras.Zones[string(ch)]
 	if !ok || !zones.Valid() {
-		return vision.Observation{}, "Draw this channel's zones on the Cameras page."
+		return vision.Observation{}, "Draw this channel's zones under Machine › Cameras."
 	}
 	b := img.Bounds()
 	zones = zones.ScaledTo(b.Dx(), b.Dy())

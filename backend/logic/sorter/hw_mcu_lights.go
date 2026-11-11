@@ -11,11 +11,11 @@ import (
 func (h *MCUHardware) lightsOutput(s *mcu.Session) (int, error) {
 	name := h.settings().Lights.Output
 	if name == "" {
-		return 0, fmt.Errorf("%w: no light output is set on the Tuning page", ErrNoLight)
+		return 0, fmt.Errorf("%w: no light output is set under System › Settings › Light", ErrNoLight)
 	}
 	obj := objectBySection(s, name)
 	if obj == nil || obj.Kind != cfgtranslate.KindDigitalOut {
-		return 0, fmt.Errorf("%w: add [%s] with pin: ar10 on Board Setup", ErrNoLight, name)
+		return 0, fmt.Errorf("%w: add [%s] with pin: ar10 under Machine › Board › Wiring", ErrNoLight, name)
 	}
 	return obj.OID, nil
 }

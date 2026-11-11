@@ -11,7 +11,7 @@ import (
 var (
 	ErrInvalidSettings   = errors.New("invalid sorter settings")
 	ErrInvalidTransition = errors.New("not allowed in the sorter's current state")
-	ErrNoBoard           = errors.New("no board connected; connect one on Board Setup")
+	ErrNoBoard           = errors.New("no board connected; connect one under Machine › Board")
 	ErrUnknownChannel    = errors.New("unknown channel")
 )
 

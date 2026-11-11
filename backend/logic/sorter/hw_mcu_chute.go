@@ -28,7 +28,7 @@ func (h *MCUHardware) chuteEndstop(s *mcu.Session, settings MachineSettings) (oi
 	}
 	obj := objectBySection(s, name)
 	if obj == nil || obj.Kind != cfgtranslate.KindEndstop {
-		return 0, false, fmt.Errorf("the chute's home switch %q is not in the board config; add endstop_pin to %s on Board Setup",
+		return 0, false, fmt.Errorf("the chute's home switch %q is not in the board config; add endstop_pin to %s under Machine › Board › Wiring",
 			name, settings.Distributor.Stepper)
 	}
 	return obj.OID, obj.Meta["invert"] == "true", nil

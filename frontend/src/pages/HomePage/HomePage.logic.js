@@ -1,99 +1,119 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
-import { getMe, login, logout, refresh } from '../../helpers/api';
+import { getSorterBins, listSorterIncidents, sorterCommand } from '../../helpers/api';
+import { useMachineSettings } from '../../helpers/sorterSettings';
+import { useSorterState } from '../../helpers/sorterState';
 
-export const useHomePageLogic = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [tokenPair, setTokenPair] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+const POLL_MS = 10000;
 
-  const handleLogin = useCallback(async () => {
-    setLoading(true);
-    setError('');
+/** A backend message as a sentence: capital first letter, full stop. */
+const sentence = (s) =>
+  s ? `${s[0].toUpperCase()}${s.slice(1)}${/[.!?]$/.test(s) ? '' : '.'}` : '';
+const RECENT_PROBLEMS = 4;
+
+/**
+ * What stands between the machine and sorting, in the order to fix them: each
+ * { id, text, to, link } where `to` is the page that fixes it.
+ */
+export function blockers({ state, connected, profile, cameras }) {
+  const list = [];
+  if (!connected) {
+    list.push({ id: 'backend', text: 'The backend isn’t answering. Is goklippy running?' });
+    return list;
+  }
+  if (!state) return list;
+  if (!state.hardware?.connected)
+    list.push({
+      id: 'board',
+      text: sentence(state.hardware?.message) || 'No board is connected.',
+      to: '/machine/board',
+      link: 'Connect the board',
+    });
+  if (state.supply?.low)
+    list.push({
+      id: 'power',
+      text: sentence(state.supply.message) || 'Motor power is low.',
+      to: '/system/settings/power',
+      link: 'Motor power settings',
+    });
+  if (!profile)
+    list.push({
+      id: 'profile',
+      text: 'No sorting profile is active, so every piece would go to misc.',
+      to: '/rules/profiles',
+      link: 'Choose a profile',
+    });
+  const watched = ['c2', 'c3', 'c4'].filter((c) => cameras?.devices?.[c]);
+  if (watched.length < 3)
+    list.push({
+      id: 'cameras',
+      text:
+        watched.length === 0
+          ? 'No camera watches a channel yet.'
+          : `Only ${watched.map((c) => c.toUpperCase()).join(' and ')} ${watched.length === 1 ? 'has' : 'have'} a camera.`,
+      to: '/machine/cameras',
+      link: 'Set up the cameras',
+    });
+  if (state.state === 'error' && state.error)
+    list.push({ id: 'error', text: sentence(state.error) });
+  return list;
+}
+
+export function useHomePageLogic() {
+  const { state, connected } = useSorterState();
+  const [settings] = useMachineSettings();
+  const [profile, setProfile] = useState(undefined); // undefined while loading
+  const [incidents, setIncidents] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      getSorterBins().then(
+        (b) => !cancelled && setProfile(b.profile ?? null),
+        () => {},
+      );
+      listSorterIncidents().then(
+        (i) => !cancelled && setIncidents((i.incidents ?? []).slice(0, RECENT_PROBLEMS)),
+        () => {},
+      );
+    };
+    load();
+    const timer = setInterval(load, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  const command = useCallback(async (name) => {
+    setBusy(true);
     try {
-      const result = await login({ email, password });
-      setTokenPair(result);
-      const me = await getMe(result.access_token);
-      setProfile(me);
-    } catch (requestError) {
-      setError(requestError.message);
+      await sorterCommand(name);
+    } catch (err) {
+      toast.error(err.message);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  }, [email, password]);
+  }, []);
 
-  const handleRefresh = useCallback(async () => {
-    if (!tokenPair?.refresh_token) {
-      setError('No refresh token available.');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    try {
-      const result = await refresh(tokenPair.refresh_token);
-      setTokenPair(result);
-      const me = await getMe(result.access_token);
-      setProfile(me);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [tokenPair]);
-
-  const handleLogout = useCallback(async () => {
-    if (!tokenPair?.refresh_token) {
-      setTokenPair(null);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    try {
-      await logout(tokenPair.refresh_token);
-      setTokenPair(null);
-      setProfile(null);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [tokenPair]);
-
-  const handleLoadProfile = useCallback(async () => {
-    if (!tokenPair?.access_token) {
-      setError('No access token available.');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    try {
-      const me = await getMe(tokenPair.access_token);
-      setProfile(me);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [tokenPair]);
-
+  const s = state?.state;
+  const job = state?.job;
   return {
-    email,
-    setEmail,
-    password,
-    setPassword,
-    tokenPair,
+    state,
+    connected,
     profile,
-    error,
-    loading,
-    handleLogin,
-    handleRefresh,
-    handleLogout,
-    handleLoadProfile,
+    incidents,
+    blockers:
+      profile === undefined
+        ? []
+        : blockers({ state, connected, profile, cameras: settings.cameras }),
+    busy,
+    command,
+    canHome: !busy && s && s !== 'running' && s !== 'homing' && !job && state?.hardware?.connected,
+    canStart: !busy && s === 'ready' && !job,
+    canPause: !busy && s === 'running',
+    canResume: !busy && s === 'paused' && !job,
   };
-};
+}

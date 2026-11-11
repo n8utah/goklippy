@@ -1,4 +1,4 @@
-import { Activity, ListFilter, Play, Settings2, Wrench } from 'lucide-react';
+import { Activity, House, ListFilter, Play, Settings2, Wrench } from 'lucide-react';
 
 import { SETTING_SECTIONS } from './settingsRegistry';
 
@@ -7,10 +7,23 @@ import { SETTING_SECTIONS } from './settingsRegistry';
  * its flyouts, the page tabs, the phone's bottom bar and search all read from here, so a
  * page is added in one place. `parts` are a page's part tabs, each its own URL.
  *
- * Home (/) and Machine › Overview arrive with their pages in build steps 4 and 5; until
- * then / opens Run › Sort and /machine opens Machine › Board.
+ * Machine › Overview arrives with its page in build step 5; until then /machine opens
+ * Machine › Board.
  */
 export const NAV_GROUPS = [
+  {
+    id: 'home',
+    label: 'Home',
+    icon: House,
+    pages: [
+      {
+        id: 'home',
+        label: 'Home',
+        path: '/',
+        about: 'What the machine is doing and what to do next',
+      },
+    ],
+  },
   {
     id: 'run',
     label: 'Run',
@@ -120,9 +133,6 @@ export const NAV_GROUPS = [
     ],
   },
 ];
-
-/** Where the app opens until Home exists. */
-export const START_PATH = '/run/sort';
 
 /** The group and page a path belongs to, or {} when it's neither. */
 export function findLocation(pathname) {

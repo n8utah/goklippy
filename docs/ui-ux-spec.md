@@ -233,3 +233,12 @@ Each step keeps the app working and is its own commit.
   - `stopped: true` settings (platter sectors) are marked "Change while stopped", not locked.
   - No action asks for an input yet (such as turning a channel by an amount).
   - Pages show inline SettingFields as they're rebuilt in step 4.
+- **Step 4, part 1** (2026-11-11): Home (`/`, `pages/HomePage`: status hero with what's
+  blocking a sort and where to fix it, task cards, recent problems) and Run › Sort
+  (`pages/SortPage`: state and controls, the run's numbers, incident card, camera tiles, on C4
+  now, the Recently sorted strip, turn/shake folded away while sorting). Shared `PieceCard` and
+  `JourneyModal` (opened with `useJourneyModal().open(pieceId)`, mounted in the frame). The old
+  Auth/Dev page is `pages/AccountPage`; the Dashboard is gone. For now:
+  - Pieces aren't linked to their C2/C3 camera journeys yet (phase 9 step 2), so the modal shows
+    C4 and the chute from the piece's record and points to Diagnose › Piece journeys.
+  - Home's setup progress comes with Machine › Overview (step 5).

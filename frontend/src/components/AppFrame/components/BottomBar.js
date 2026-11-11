@@ -7,7 +7,7 @@ import { NAV_GROUPS } from '@/helpers/navigation';
 import { cn } from '@/lib/utils';
 
 // The phone shows the first groups in the bar and the rest under More.
-const IN_BAR = 3;
+const IN_BAR = 4;
 
 const itemClass = (current) =>
   cn(

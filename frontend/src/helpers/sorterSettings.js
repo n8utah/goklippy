@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 import { getSorterSettings, putSorterSettings } from './api';
 
@@ -49,7 +49,7 @@ export const DEFAULT_SORTER_SETTINGS = {
     c4: { stepper: 'stepper_e0', forward: true, gear: 130 / 12 },
   },
   routines: {},
-  // The pulsing feeder (C1â€“C3) and the classification platter (C4); see System › Settings (helpers/settingsRegistry.js).
+  // The pulsing feeder (C1–C3) and the classification platter (C4); see System › Settings (helpers/settingsRegistry.js).
   feeder: {
     dropPulseDeg: 30,
     dropPauseMs: 100,
@@ -87,7 +87,7 @@ export const DEFAULT_SORTER_SETTINGS = {
   },
   // The machine's light: an [output_pin] in the board config (RAMPS D10).
   lights: { output: 'output_pin leds', onWhenSorting: true },
-  // The motors' 12 V supply read through a divider (10 kÎ© over 4.7 kÎ©); see System › Settings (helpers/settingsRegistry.js).
+  // The motors' 12 V supply read through a divider (10 kΩ over 4.7 kΩ); see System › Settings (helpers/settingsRegistry.js).
   supply: {
     sensor: 'voltage_sensor supply',
     topOhms: 10000,

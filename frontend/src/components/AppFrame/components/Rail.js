@@ -39,13 +39,15 @@ function RailGroup({ group, current }) {
   // Hover opens without moving focus; the keyboard opens with focus on the first page.
   const byKeyboard = useRef(false);
   const Icon = group.icon;
+  // A group of one page (Home) has nothing to list.
+  const single = group.pages.length === 1;
 
   const later = (fn, ms) => {
     clearTimeout(timer.current);
     timer.current = setTimeout(fn, ms);
   };
   const hoverOpen = (e) => {
-    if (e.pointerType !== 'mouse') return;
+    if (e.pointerType !== 'mouse' || single) return;
     byKeyboard.current = false;
     later(() => setOpen(true), OPEN_DELAY_MS);
   };
@@ -67,14 +69,14 @@ function RailGroup({ group, current }) {
             setOpen(false);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowRight') {
+            if (e.key === 'ArrowRight' && !single) {
               e.preventDefault();
               byKeyboard.current = true;
               setOpen(true);
             }
           }}
           aria-current={current ? 'page' : undefined}
-          aria-haspopup="menu"
+          aria-haspopup={single ? undefined : 'menu'}
           className={cn(
             'flex w-[72px] flex-col items-center gap-1 rounded-lg py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
             current && 'bg-accent text-primary-text hover:text-primary-text',

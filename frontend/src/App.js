@@ -1,4 +1,4 @@
-﻿import {
+import {
   BrowserRouter,
   Link,
   Navigate,
@@ -11,15 +11,14 @@
 
 import AppFrame from './components/AppFrame/AppFrame';
 import { MCUSessionProvider } from './context/MCUSessionContext';
-import { START_PATH } from './helpers/navigation';
 import { MachineSettingsProvider } from './helpers/sorterSettings';
 import { SorterStateProvider } from './helpers/sorterState';
+import AccountPage from './pages/AccountPage/AccountPage';
 import BinsPage from './pages/BinsPage/BinsPage';
 import BoardEditorPage from './pages/BoardEditorPage/BoardEditorPage';
 import BoardSetupPage from './pages/BoardSetupPage/BoardSetupPage';
 import CamerasPage from './pages/CamerasPage/CamerasPage';
 import ChutePage from './pages/ChutePage/ChutePage';
-import DashboardPage from './pages/DashboardPage/DashboardPage';
 import DevicesPage from './pages/DevicesPage/DevicesPage';
 import HomePage from './pages/HomePage/HomePage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
@@ -27,21 +26,13 @@ import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
 import RecordsPage from './pages/RecordsPage/RecordsPage';
 import SorterPage from './pages/SorterPage/SorterPage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
+import SortPage from './pages/SortPage/SortPage';
 import UiKitPage from './pages/UiKitPage/UiKitPage';
 
 const WIRING_PATH = '/machine/board/wiring';
 
 /** A page from before the new UI: always light until build step 4 rebuilds it. */
 const Legacy = ({ children }) => <div className="legacy-page">{children}</div>;
-
-const SortRoute = () => {
-  const navigate = useNavigate();
-  return (
-    <Legacy>
-      <DashboardPage onOpenPiece={(piece) => navigate(`/run/records?piece=${piece.id}`)} />
-    </Legacy>
-  );
-};
 
 const RecordsRoute = () => {
   const [params] = useSearchParams();
@@ -53,7 +44,7 @@ const RecordsRoute = () => {
   );
 };
 
-/** Machine â€º Board: Connection, Wiring and Board picture, today's three pages. */
+/** Machine › Board: Connection, Wiring and Board picture, today's three pages. */
 const BoardRoute = () => {
   const navigate = useNavigate();
   const { part = 'connection' } = useParams();
@@ -90,9 +81,9 @@ const NotFound = () => (
   <div className="ds rounded-xl border border-border bg-card p-6">
     <p className="font-display text-lg font-semibold">No page here</p>
     <p className="mt-1 text-sm text-muted-foreground">
-      This address isnâ€™t a page in goklippy. Search with Ctrl K, or{' '}
-      <Link to={START_PATH} className="font-medium text-primary-text underline">
-        go to Run â€º Sort
+      This address isn’t a page in goklippy. Search with Ctrl K, or{' '}
+      <Link to="/" className="font-medium text-primary-text underline">
+        go Home
       </Link>
       .
     </p>
@@ -107,11 +98,11 @@ const App = () => (
         <MachineSettingsProvider>
           <Routes>
             <Route element={<AppFrame />}>
-              <Route index element={<Navigate to={START_PATH} replace />} />
+              <Route index element={<HomePage />} />
 
               <Route path="run">
                 <Route index element={<Navigate to="sort" replace />} />
-                <Route path="sort" element={<SortRoute />} />
+                <Route path="sort" element={<SortPage />} />
                 <Route path="records" element={<RecordsRoute />} />
               </Route>
 
@@ -178,7 +169,7 @@ const App = () => (
                   path="account"
                   element={
                     <Legacy>
-                      <HomePage />
+                      <AccountPage />
                     </Legacy>
                   }
                 />
