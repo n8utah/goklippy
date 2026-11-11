@@ -161,6 +161,10 @@ type LayerSettings struct {
 	MaxPieces int `json:"maxPieces"`
 }
 
+// ChannelGear is every channel's (C1–C4) motor turns per rotor turn: 130t rotor gear ÷ 12t motor gear
+// (the 24t idler between them changes direction, not ratio).
+const ChannelGear = 130.0 / 12
+
 // DefaultMachineSettings matches the bench page's defaults.
 func DefaultMachineSettings() MachineSettings {
 	return MachineSettings{
@@ -192,10 +196,11 @@ func DefaultMachineSettings() MachineSettings {
 			},
 		},
 		Channels: map[string]ChannelSettings{
-			"c1": {Stepper: "stepper_x", Forward: true, Gear: 1},
-			"c2": {Stepper: "stepper_y", Forward: true, Gear: 1},
-			"c3": {Stepper: "stepper_z", Forward: true, Gear: 1},
-			"c4": {Stepper: "stepper_e0", Forward: true, Gear: 10.8},
+			// Every channel: a 12t motor gear drives the rotor's 130t gear through a 24t idler.
+			"c1": {Stepper: "stepper_x", Forward: true, Gear: ChannelGear},
+			"c2": {Stepper: "stepper_y", Forward: true, Gear: ChannelGear},
+			"c3": {Stepper: "stepper_z", Forward: true, Gear: ChannelGear},
+			"c4": {Stepper: "stepper_e0", Forward: true, Gear: ChannelGear},
 		},
 		// Sorter V2's defaults ("Conservative" exit pulses).
 		Feeder: FeederSettings{

@@ -40,11 +40,13 @@ export const DEFAULT_SORTER_SETTINGS = {
       { servo: '', bins: 12, openAngle: 90, closedAngle: 0 },
     ],
   },
+  // Every channel: a 12t motor gear drives the rotor's 130t gear through a 24t idler,
+  // so 130/12 motor turns per rotor turn.
   channels: {
-    c1: { stepper: 'stepper_x', forward: true, gear: 1 },
-    c2: { stepper: 'stepper_y', forward: true, gear: 1 },
-    c3: { stepper: 'stepper_z', forward: true, gear: 1 },
-    c4: { stepper: 'stepper_e0', forward: true, gear: 10.8 },
+    c1: { stepper: 'stepper_x', forward: true, gear: 130 / 12 },
+    c2: { stepper: 'stepper_y', forward: true, gear: 130 / 12 },
+    c3: { stepper: 'stepper_z', forward: true, gear: 130 / 12 },
+    c4: { stepper: 'stepper_e0', forward: true, gear: 130 / 12 },
   },
   routines: {},
   // The pulsing feeder (C1–C3) and the classification platter (C4); see the Tuning page.

@@ -194,8 +194,8 @@ other.
 2. **Light (D10).** With power, switch it on and off (Dashboard) and compare C2's pictures; check
    D10's LED on the board and the strip's polarity. Leave it on a minute to confirm the 5 s
    safety timeout never trips.
-3. **Gear ratios.** Set each channel's real gear on the Sorter page; a 15° test move with the
-   default gear 1 is only 15° of motor shaft.
+3. **Gear ratios.** Done: all four set to 130/12. Your saved mapping is C1 stepper_y, C2
+   stepper_z, C3 stepper_x, C4 stepper_e0; the 2026-11-11 C1 nudge was stepper_x, so your C3.
 4. **Find which camera is where.** Put a piece or tape on each channel and run it from the
    Cameras page, Setup view.
 5. **Supply voltage sensing (wiring).** A divider from the 12 V 5 A rail to a free analog pin
@@ -207,8 +207,9 @@ other.
 
 ## Open questions
 
-- The Sorter V2 docs give no gear ratios or stage speeds, so the feeder defaults (1:1, C1 5 rpm, C2
-  7.5 rpm, C3 11.25 rpm) are placeholders to tune on the machine. C4's 10.8 gear ratio was set on
-  the machine so one forward move lands on the next slot.
+- Every channel (C1–C4) is geared the same: a 12t gear on the motor drives a 24t idler, which
+  drives the 130t gear on the rotor. The idler only reverses direction, so the ratio is
+  130/12 ≈ 10.833 motor turns per rotor turn (the default; C4 was earlier set to 10.8–10.9 by
+  eye). The stage speeds (C1 5 rpm, C2 7.5 rpm, C3 11.25 rpm) are still placeholders to tune.
 - C4 indexing ramps (see Accel above). Feeder runs and the distributor's bin moves still start at
   full speed.
