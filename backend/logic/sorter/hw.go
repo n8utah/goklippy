@@ -65,6 +65,17 @@ type Hardware interface {
 	// travel. The returned channel receives once when the move should be done.
 	AimChute(angle float64) (<-chan error, error)
 	ChuteStatus() ChuteStatus
+
+	// SetLights turns the machine's light on or off.
+	SetLights(on bool) error
+	LightsStatus() LightsStatus
+}
+
+// LightsStatus is whether the light is on. Message says why it can't be switched
+// (no board, or its output isn't in the board config).
+type LightsStatus struct {
+	On      bool   `json:"on"`
+	Message string `json:"message,omitempty"`
 }
 
 // ChuteStatus is where the chute is and what its switch reads.
@@ -77,6 +88,8 @@ type ChuteStatus struct {
 }
 
 var ErrChuteNotHomed = errors.New("the chute isn't homed; home it first")
+
+var ErrNoLight = errors.New("the light's output is not in the board config")
 
 // HardwareHealth is what the UI shows about the hardware.
 type HardwareHealth struct {

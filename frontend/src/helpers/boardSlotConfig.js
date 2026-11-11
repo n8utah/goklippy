@@ -20,7 +20,8 @@ function pinsMatchSlot(slot, options) {
     case 'relay':
       return normalizePin(options.pin) === normalizePin(slot.pins.pin);
     case 'heater':
-      return normalizePin(options.heater_pin) === normalizePin(slot.pins.pin);
+      // A MOSFET output can also be an on/off [output_pin], such as lights on D10.
+      return normalizePin(options.heater_pin || options.pin) === normalizePin(slot.pins.pin);
     case 'servo':
       return normalizePin(options.pin) === normalizePin(slot.pins.pin);
     case 'endstop':

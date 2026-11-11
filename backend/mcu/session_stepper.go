@@ -61,6 +61,7 @@ func (s *Session) ensureMCUReady() error {
 		return nil
 	}
 	s.abortAllMotion(fmt.Errorf("mcu shut down: %s", s.Conn.ShutdownReason()))
+	s.outputsToShutdownValues()
 	if err := s.recoverMCUShutdown(); err != nil {
 		return fmt.Errorf("mcu shutdown could not be cleared, use Reset: %w", err)
 	}

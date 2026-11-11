@@ -1,4 +1,5 @@
 import { SECTIONS, useTuningPageLogic } from './TuningPage.logic';
+import LightsPanel from './components/LightsPanel';
 
 import styles from './TuningPage.module.css';
 import appStyles from '../../styles/app.module.css';
@@ -53,6 +54,7 @@ const TuningPage = () => {
           })}
         </div>
       ))}
+      <LightsPanel logic={logic} />
     </section>
   );
 };

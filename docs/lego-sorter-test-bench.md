@@ -56,6 +56,29 @@ shows whether it reads Open or Triggered, which is the quickest wiring check.
 
 If homing turns the chute clockwise, untick **Motor forward turns the chute clockwise**.
 
+## The light (D10)
+
+The LED light runs off the RAMPS D10 MOSFET (the hotend heater output, 12 V switched on the
+negative side). Add it to the board config as an on/off output:
+
+```
+[output_pin leds]
+pin: ar10
+value: 0
+shutdown_value: 0
+```
+
+`value` is whether it's on once the board is configured, and `shutdown_value` is its state after
+an MCU shutdown (both 0 or 1; on/off only, no PWM). Add `!` (`!ar10`) if the light is on when it
+should be off. Don't also configure an `[extruder]` on D10: two outputs on one pin is a config
+error. Board Setup shows the section on the D10 slot with on/off buttons, which is the quickest
+wiring check.
+
+The **Light** button on the Dashboard switches it, at any time, sorting included. Starting or
+resuming a sort turns it on if **Turn on when sorting starts** is ticked on the Tuning page (the
+default). The Tuning page also holds the section name, `output_pin leds` by default. A board reset
+puts the light back to `value`.
+
 The mapping, gear ratios, speeds and index settings are saved on the server
 (`sorter_settings`, document `machine`; routines are document `routines`), so every browser and
 the sorter's control loop see the same values. The first time a browser opens the page against an

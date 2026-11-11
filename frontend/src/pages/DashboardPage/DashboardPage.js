@@ -70,6 +70,16 @@ const DashboardPage = ({ onOpenPiece }) => {
           </p>
         </div>
         <div className={styles.buttonRow}>
+          <button
+            type="button"
+            className={`${appStyles.buttonSecondary} ${logic.lights?.on ? styles.lightOn : ''}`}
+            aria-pressed={Boolean(logic.lights?.on)}
+            disabled={!logic.lights || Boolean(logic.lights.message) || logic.busy}
+            title={logic.lights?.message || (logic.lights?.on ? 'Turn the light off' : 'Turn the light on')}
+            onClick={logic.toggleLights}
+          >
+            {logic.lights?.on ? 'Light on' : 'Light off'}
+          </button>
           <button type="button" className={appStyles.buttonSecondary} disabled={!logic.canHome || logic.busy} onClick={() => logic.command('home')}>
             {state?.chute?.homed ? 'Re-home' : 'Home'}
           </button>
@@ -93,6 +103,7 @@ const DashboardPage = ({ onOpenPiece }) => {
       </div>
 
       {state?.error && <p className={styles.alert}>{state.error}</p>}
+      {state?.hardware?.connected && state?.lights?.message && <p className={styles.notice}>Light: {state.lights.message}</p>}
       {logic.error && <p className={styles.alert}>{logic.error}</p>}
       {state?.job && (
         <p className={styles.notice}>

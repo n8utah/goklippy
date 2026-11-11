@@ -39,6 +39,17 @@ type MachineSettings struct {
 	Feeder       FeederSettings             `json:"feeder"`
 	Platter      PlatterSettings            `json:"platter"`
 	Cameras      CameraSettings             `json:"cameras"`
+	Lights       LightsSettings             `json:"lights"`
+}
+
+// LightsSettings is the machine's light: an [output_pin] in the board config (the
+// RAMPS D10 MOSFET), switched on and off.
+type LightsSettings struct {
+	// Output is the config section, such as "output_pin leds"; empty means no light.
+	Output string `json:"output"`
+	// OnWhenSorting turns the light on when sorting starts or resumes; the cameras
+	// need it.
+	OnWhenSorting bool `json:"onWhenSorting"`
 }
 
 // CameraSettings say which camera watches each channel (c2, c3, c4) and where that
@@ -204,6 +215,7 @@ func DefaultMachineSettings() MachineSettings {
 			Zones:   map[string]vision.ChannelZones{},
 			Width:   640, Height: 480, Fps: 10,
 		},
+		Lights: LightsSettings{Output: "output_pin leds", OnWhenSorting: true},
 	}
 }
 

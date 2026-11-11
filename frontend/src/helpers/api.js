@@ -180,6 +180,11 @@ export function zeroSorterChute() {
   return postJSON('/api/v1/sorter/chute/zero', {});
 }
 
+/** Switches the machine's light (the RAMPS D10 output). Returns { on, message }. */
+export function setSorterLights(on) {
+  return postJSON('/api/v1/sorter/lights', { on });
+}
+
 export function calibrateSorterChute(firstAngle, lastAngle, binsPerSection) {
   return postJSON('/api/v1/sorter/chute/calibrate', {
     first_angle: firstAngle,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { listSorterShakes, moveSorterChannel, resolveSorterIncident, shakeSorterChannel, sorterCommand } from '../../helpers/api';
+import { listSorterShakes, moveSorterChannel, resolveSorterIncident, setSorterLights, shakeSorterChannel, sorterCommand } from '../../helpers/api';
 import { useMachineSettings } from '../../helpers/sorterSettings';
 import { useSorterState } from '../../helpers/sorterState';
 
@@ -56,9 +56,14 @@ export function useDashboardPageLogic() {
     return run(() => moveSorterChannel(channel, degrees, rpm));
   };
   const shake = (channel, profile) => run(() => shakeSorterChannel(channel, profile));
+  const lights = state?.lights;
+  /** Allowed while sorting too: the light moves nothing. */
+  const toggleLights = () => run(() => setSorterLights(!lights?.on));
 
   const s = state?.state;
   return {
+    lights,
+    toggleLights,
     state,
     connected,
     error,

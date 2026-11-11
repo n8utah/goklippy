@@ -22,6 +22,7 @@ type SimHardware struct {
 	onMove    func(ch Channel, from, to float64)
 	onShake   func(ch Channel)
 	shakes    []Channel
+	lights    bool
 }
 
 // OnMove calls fn after every move with the channel's rotor angle before and after
@@ -218,6 +219,25 @@ func (h *SimHardware) ChuteStatus() ChuteStatus {
 		}
 	}
 	return status
+}
+
+func (h *SimHardware) SetLights(on bool) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.connected {
+		return ErrNoBoard
+	}
+	h.lights = on
+	return nil
+}
+
+func (h *SimHardware) LightsStatus() LightsStatus {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.connected {
+		return LightsStatus{Message: ErrNoBoard.Error()}
+	}
+	return LightsStatus{On: h.lights}
 }
 
 // Position is a channel's rotor angle in degrees since start.

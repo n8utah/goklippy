@@ -54,6 +54,24 @@ func ZeroSorterChute(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+type lightsRequest struct {
+	On *bool `json:"on" binding:"required"`
+}
+
+// SetSorterLights POST /sorter/lights {"on": true} switches the machine's light.
+func SetSorterLights(c *gin.Context) {
+	var req lightsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "on is required"})
+		return
+	}
+	if err := sorterMachine.SetLights(c.Request.Context(), *req.On); err != nil {
+		sorterError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, sorterMachine.Snapshot().Lights)
+}
+
 type chuteCalibrateRequest struct {
 	FirstAngle     float64 `json:"first_angle"`
 	LastAngle      float64 `json:"last_angle"`

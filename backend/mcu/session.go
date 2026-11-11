@@ -55,6 +55,7 @@ type Session struct {
 
 	readings       map[int]Reading
 	stepperJogging map[int]bool
+	outputLevels   map[int]bool // digital out OID -> level last set (see session_output.go)
 	err            string
 }
 
@@ -225,7 +226,11 @@ func (s *Session) SetDigitalOut(oid int, value bool) error {
 	if value {
 		v = 1
 	}
-	return s.Conn.SendCommand(fmt.Sprintf("update_digital_out oid=%d value=%d", oid, v))
+	if err := s.Conn.SendCommand(fmt.Sprintf("update_digital_out oid=%d value=%d", oid, v)); err != nil {
+		return err
+	}
+	s.recordOutputLevel(oid, value)
+	return nil
 }
 
 // SetServoAngle sets a servo PWM output (0-180 degrees).

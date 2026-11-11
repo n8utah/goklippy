@@ -71,6 +71,8 @@ export const DEFAULT_SORTER_SETTINGS = {
   },
   // Which camera watches each channel (c2, c3, c4) and where its zones are.
   cameras: { devices: {}, zones: {}, width: 640, height: 480, fps: 10, ffmpeg: '', threshold: 0, minArea: 0 },
+  // The machine's light: an [output_pin] in the board config (RAMPS D10).
+  lights: { output: 'output_pin leds', onWhenSorting: true },
 };
 
 /** Older saves stored C2 and C3 as multiples of C1. */
@@ -95,6 +97,7 @@ export function normalizeSorterSettings(saved) {
     cameras: { ...DEFAULT_SORTER_SETTINGS.cameras, ...saved.cameras },
     feeder: { ...DEFAULT_SORTER_SETTINGS.feeder, ...saved.feeder },
     platter: { ...DEFAULT_SORTER_SETTINGS.platter, ...saved.platter },
+    lights: { ...DEFAULT_SORTER_SETTINGS.lights, ...saved.lights },
   };
 }
 

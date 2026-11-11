@@ -182,6 +182,7 @@ and `models/sort_e2e_test.go` sorts known pieces end to end on SQLite and checks
 | 6 Profiles and bins | Built. |
 | 7 Coordinator and dashboard | Built: the machine runs platter then feeder each tick, with runs and the **Dashboard** page. |
 | 8 Records, incidents, recovery | Built: pieces, photos, runs, incidents, reviews and the **Records** page; shakes and Sorter V2's landing-held procedure, clearing a stalled C4, shaking off a piece that didn't fall; bin counts with full bins and "emptied"; kit limits from set inventories. |
+| Light | Built: the LED light on D10 as `[output_pin leds]` (on/off, `!`, `value`, `shutdown_value`), switched from the **Dashboard** and on when sorting starts. See the test bench notes. Needs the light wired. |
 
 Not planned: BrickStore export, Hive sync, and sending reviews back to Brickognize as feedback.
 Still open: the "no bin" incident (pieces go to the bucket with a problem noted instead), a piece

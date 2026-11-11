@@ -79,6 +79,14 @@
   padding: 6px 8px;
 }
 
+.rowInput .textInput {
+  width: 180px;
+}
+
+.rowInput input[type='checkbox'] {
+  width: auto;
+}
+
 .reset {
   border: none;
   background: none;

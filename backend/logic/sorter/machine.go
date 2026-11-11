@@ -41,6 +41,7 @@ type Snapshot struct {
 	Since    time.Time      `json:"since"`
 	Hardware HardwareHealth `json:"hardware"`
 	Chute    ChuteStatus    `json:"chute"`
+	Lights   LightsStatus   `json:"lights"`
 	Job      *JobStatus     `json:"job,omitempty"`      // the task running now
 	LastJob  *JobStatus     `json:"last_job,omitempty"` // the last one to finish
 	Ticks    uint64         `json:"ticks"`              // control-loop ticks spent running
@@ -121,6 +122,7 @@ type Machine struct {
 	ticks    uint64
 	health   HardwareHealth
 	chute    ChuteStatus
+	lights   LightsStatus
 	job      *job
 	lastJob  *JobStatus
 	sort     *sortStations
@@ -146,6 +148,7 @@ func NewMachine(hw Hardware, settings func() MachineSettings, tick time.Duration
 		since:    time.Now().UTC(),
 		health:   hw.Health(),
 		chute:    hw.ChuteStatus(),
+		lights:   hw.LightsStatus(),
 	}
 	m.snap = m.snapshot()
 	return m
@@ -206,6 +209,35 @@ func (m *Machine) MoveChannel(ctx context.Context, ch Channel, degrees, rpm floa
 		_, err := m.hw.MoveChannel(ch, degrees, rpm)
 		return err
 	}})
+}
+
+// SetLights turns the machine's light on or off. It's allowed at any time, sorting
+// included: it moves nothing.
+func (m *Machine) SetLights(ctx context.Context, on bool) error {
+	return m.send(ctx, request{do: func() error {
+		err := m.hw.SetLights(on)
+		m.refreshLights()
+		return err
+	}})
+}
+
+// lightsForSorting turns the light on as sorting starts, if set to. A light that
+// won't switch doesn't stop the run; it's logged and shown on the page.
+func (m *Machine) lightsForSorting() {
+	if !m.settings().Lights.OnWhenSorting || m.lights.On {
+		return
+	}
+	if err := m.hw.SetLights(true); err != nil {
+		slog.Warn("sorter: light not turned on for sorting", "error", err)
+	}
+	m.refreshLights()
+}
+
+func (m *Machine) refreshLights() {
+	if lights := m.hw.LightsStatus(); lights != m.lights {
+		m.lights = lights
+		m.changed = true
+	}
 }
 
 // ZeroChute makes the chute's current position 0° without its switch.
@@ -368,6 +400,7 @@ func (m *Machine) handle(req request) error {
 		if err := m.startRun(time.Now().UTC()); err != nil {
 			return err
 		}
+		m.lightsForSorting()
 		return m.transition(req.command, StateRunning, StateReady)
 	case CommandPause:
 		return m.transition(req.command, StatePaused, StateRunning)
@@ -375,7 +408,11 @@ func (m *Machine) handle(req request) error {
 		if m.job != nil {
 			return ErrBusy
 		}
-		return m.transition(req.command, StateRunning, StatePaused)
+		if err := m.transition(req.command, StateRunning, StatePaused); err != nil {
+			return err
+		}
+		m.lightsForSorting()
+		return nil
 	case CommandStop:
 		if err := m.transition(req.command, StateReady, StateRunning, StatePaused); err != nil {
 			return err
@@ -552,6 +589,7 @@ func (m *Machine) checkHealth() {
 		m.changed = true
 	}
 	m.refreshChute()
+	m.refreshLights()
 	switch m.state {
 	case StateReady, StateRunning, StatePaused:
 	default:
@@ -613,7 +651,7 @@ func (m *Machine) setState(next State, errMsg string) {
 func (m *Machine) snapshot() Snapshot {
 	snap := Snapshot{
 		State: m.state, Error: m.err, Since: m.since, Hardware: m.health,
-		Chute: m.chute, LastJob: m.lastJob, Ticks: m.ticks,
+		Chute: m.chute, Lights: m.lights, LastJob: m.lastJob, Ticks: m.ticks,
 	}
 	if m.job != nil {
 		status := m.job.status

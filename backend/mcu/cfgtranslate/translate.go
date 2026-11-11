@@ -176,18 +176,62 @@ func (b *Builder) addStepperEnable(stepperName, enablePin string) error {
 	return nil
 }
 
+// addDigitalOut configures an on/off output. As in Klipper's [output_pin]: "!" on the
+// pin inverts it, value is its state once configured and shutdown_value its state
+// after an MCU shutdown (both 0 or 1, default 0).
 func (b *Builder) addDigitalOut(name string, sec klipperconfig.Section) error {
-	pin := sec.Options["pin"]
+	pin := strings.TrimSpace(sec.Options["pin"])
+	invert := strings.HasPrefix(pin, "!")
+	pin = strings.TrimSpace(strings.TrimPrefix(pin, "!"))
 	if pin == "" {
 		return fmt.Errorf("%s: pin is required", name)
 	}
+	start, err := onOffOption(sec.Options, "value")
+	if err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	shutdown, err := onOffOption(sec.Options, "shutdown_value")
+	if err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	level := func(on bool) int {
+		if on != invert {
+			return 1
+		}
+		return 0
+	}
 	oid := b.allocOID()
 	b.lines = append(b.lines, fmt.Sprintf(
-		"config_digital_out oid=%d pin=%s value=0 default_value=0 max_duration=0",
-		oid, pin,
+		"config_digital_out oid=%d pin=%s value=%d default_value=%d max_duration=0",
+		oid, pin, level(start), level(shutdown),
 	))
-	b.addObject(name, oid, KindDigitalOut, map[string]string{"pin": pin})
+	b.addObject(name, oid, KindDigitalOut, map[string]string{
+		"pin":            pin,
+		"invert":         fmt.Sprintf("%v", invert),
+		"value":          fmt.Sprintf("%d", boolInt(start)),
+		"shutdown_level": fmt.Sprintf("%d", level(shutdown)),
+	})
 	return nil
+}
+
+// onOffOption reads an output's 0/1 option; missing is off. Klipper allows a PWM
+// fraction here, which an on/off output can't do.
+func onOffOption(opts map[string]string, key string) (bool, error) {
+	switch strings.TrimSpace(opts[key]) {
+	case "", "0", "0.0", "0.", "False", "false":
+		return false, nil
+	case "1", "1.0", "1.", "True", "true":
+		return true, nil
+	default:
+		return false, fmt.Errorf("%s must be 0 or 1 for an on/off output, not %q", key, opts[key])
+	}
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func (b *Builder) addAnalogIn(name string, sec klipperconfig.Section) error {

@@ -28,6 +28,8 @@ func (s *Session) Reset() error {
 		return fmt.Errorf("sync clock: %w", err)
 	}
 
+	s.forgetOutputLevels()
+
 	s.pcaMu.Lock()
 	s.pcaReady = nil
 	s.pcaMu.Unlock()
