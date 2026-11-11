@@ -18,11 +18,21 @@ const ChannelControls = ({ shakes, disabled, onTurn, onShake }) => {
   return (
     <div className={styles.controls}>
       <h3 className={styles.panelTitle}>Turn or shake a channel</h3>
-      <p className={styles.muted}>These move the real channel at once. Pause or stop the sort first.</p>
+      <p className={styles.muted}>
+        These move the real channel at once. Pause or stop the sort first.
+      </p>
       <div className={styles.controlRow}>
         <label className={styles.inlineField}>
           Turn by
-          <input type="number" min="0.1" max="360" step="1" value={amount} onChange={(e) => Number(e.target.value) > 0 && setAmount(Number(e.target.value))} />°
+          <input
+            type="number"
+            min="0.1"
+            max="360"
+            step="1"
+            value={amount}
+            onChange={(e) => Number(e.target.value) > 0 && setAmount(Number(e.target.value))}
+          />
+          °
         </label>
         <label className={styles.inlineField}>
           Shake
@@ -39,13 +49,30 @@ const ChannelControls = ({ shakes, disabled, onTurn, onShake }) => {
         {CHANNELS.map((ch) => (
           <div key={ch.id} className={styles.channelButtonGroup}>
             <strong>{ch.label}</strong>
-            <button type="button" className={appStyles.buttonSecondary} disabled={disabled} onClick={() => onTurn(ch.id, -amount)} title="Back">
+            <button
+              type="button"
+              className={appStyles.buttonSecondary}
+              disabled={disabled}
+              onClick={() => onTurn(ch.id, -amount)}
+              title="Back"
+            >
               ←
             </button>
-            <button type="button" className={appStyles.buttonSecondary} disabled={disabled} onClick={() => onTurn(ch.id, amount)} title="Forward">
+            <button
+              type="button"
+              className={appStyles.buttonSecondary}
+              disabled={disabled}
+              onClick={() => onTurn(ch.id, amount)}
+              title="Forward"
+            >
               →
             </button>
-            <button type="button" className={appStyles.buttonSecondary} disabled={disabled} onClick={() => onShake(ch.id, shake)}>
+            <button
+              type="button"
+              className={appStyles.buttonSecondary}
+              disabled={disabled}
+              onClick={() => onShake(ch.id, shake)}
+            >
               Shake
             </button>
           </div>

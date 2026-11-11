@@ -72,6 +72,33 @@ func SetSorterLights(c *gin.Context) {
 	c.JSON(http.StatusOK, sorterMachine.Snapshot().Lights)
 }
 
+type blinkRequest struct {
+	Seconds  float64 `json:"seconds"`   // 0 is 30
+	PeriodMs int     `json:"period_ms"` // 0 is 1000
+}
+
+// BlinkSorterLights POST /sorter/lights/blink {"seconds": 30}: switches the light on
+// and off every second, then leaves it off, for checking its wiring at the machine.
+func BlinkSorterLights(c *gin.Context) {
+	var req blinkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	if req.Seconds == 0 {
+		req.Seconds = 30
+	}
+	if req.PeriodMs == 0 {
+		req.PeriodMs = 1000
+	}
+	d := time.Duration(req.Seconds * float64(time.Second))
+	if err := sorterMachine.BlinkLights(c.Request.Context(), d, time.Duration(req.PeriodMs)*time.Millisecond); err != nil {
+		sorterError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 type chuteCalibrateRequest struct {
 	FirstAngle     float64 `json:"first_angle"`
 	LastAngle      float64 `json:"last_angle"`

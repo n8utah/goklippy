@@ -64,6 +64,7 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	sorterGroup.POST("/chute/aim", routes.AimSorterChute)
 	sorterGroup.POST("/chute/zero", routes.ZeroSorterChute)
 	sorterGroup.POST("/lights", routes.SetSorterLights)
+	sorterGroup.POST("/lights/blink", routes.BlinkSorterLights)
 	sorterGroup.POST("/chute/calibrate", routes.CalibrateSorterChute)
 	sorterGroup.POST("/distribution/send", routes.SendToSorterBin)
 	sorterGroup.POST("/distribution/test", routes.TestSorterLayer)

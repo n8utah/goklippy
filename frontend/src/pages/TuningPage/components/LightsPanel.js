@@ -10,8 +10,9 @@ const LightsPanel = ({ logic }) => {
         <h3 className={styles.panelTitle}>Light</h3>
       </div>
       <p className={styles.muted}>
-        The light runs off the RAMPS D10 output. Add it to the board config on Board Setup as <code>[{output || 'output_pin leds'}]</code> with{' '}
-        <code>pin: ar10</code>, then switch it from the Dashboard.
+        The light runs off the RAMPS D10 output. Add it to the board config on Board Setup as{' '}
+        <code>[{output || 'output_pin leds'}]</code> with <code>pin: ar10</code>, then switch it
+        from the Dashboard.
       </p>
       <div className={styles.row}>
         <div className={styles.rowText}>
@@ -19,18 +20,27 @@ const LightsPanel = ({ logic }) => {
           <span className={styles.muted}>The [output_pin] the light is wired to.</span>
         </div>
         <div className={styles.rowInput}>
-          <input className={styles.textInput} value={output} onChange={(e) => logic.set('lights', 'output', e.target.value)} />
+          <input
+            className={styles.textInput}
+            value={output}
+            onChange={(e) => logic.set('lights', 'output', e.target.value)}
+          />
         </div>
       </div>
       <div className={styles.row}>
         <div className={styles.rowText}>
           <strong>Turn on when sorting starts</strong>
           <span className={styles.muted}>
-            The cameras need it. Starting or resuming a sort switches it on. Stopping, an error or the backend exiting always switches it off.
+            The cameras need it. Starting or resuming a sort switches it on. Stopping, an error or
+            the backend exiting always switches it off.
           </span>
         </div>
         <div className={styles.rowInput}>
-          <input type="checkbox" checked={onWhenSorting} onChange={(e) => logic.set('lights', 'onWhenSorting', e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={onWhenSorting}
+            onChange={(e) => logic.set('lights', 'onWhenSorting', e.target.checked)}
+          />
         </div>
       </div>
     </div>

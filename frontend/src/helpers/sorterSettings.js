@@ -87,6 +87,15 @@ export const DEFAULT_SORTER_SETTINGS = {
   },
   // The machine's light: an [output_pin] in the board config (RAMPS D10).
   lights: { output: 'output_pin leds', onWhenSorting: true },
+  // The motors' 12 V supply read through a divider (10 kΩ over 4.7 kΩ); see the Tuning page.
+  supply: {
+    sensor: 'voltage_sensor supply',
+    topOhms: 10000,
+    bottomOhms: 4700,
+    referenceV: 5,
+    calibration: 1,
+    minVolts: 10.5,
+  },
   // Which frames of a tracked piece are good pictures of it; see the Tuning page.
   pictures: {
     isolationPx: 12,
@@ -132,6 +141,7 @@ export function normalizeSorterSettings(saved) {
     platter: { ...DEFAULT_SORTER_SETTINGS.platter, ...saved.platter },
     lights: { ...DEFAULT_SORTER_SETTINGS.lights, ...saved.lights },
     pictures: { ...DEFAULT_SORTER_SETTINGS.pictures, ...saved.pictures },
+    supply: { ...DEFAULT_SORTER_SETTINGS.supply, ...saved.supply },
   };
 }
 

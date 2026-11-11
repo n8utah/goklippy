@@ -58,6 +58,7 @@ type Session struct {
 	outputLevels   map[int]bool      // digital out OID -> level last set (see session_output.go)
 	outputSent     map[int]time.Time // digital out OID -> when its level was last sent
 	outputStop     chan struct{}     // stops the output keeper; nil when not running
+	analog         analogLatest      // newest analog readings (see session_analog.go)
 	err            string
 }
 
@@ -83,7 +84,7 @@ func NewSession(id, port string, baud int, conn *Conn, objects []cfgtranslate.Ob
 			clockFreq = n
 		}
 	}
-	return &Session{
+	s := &Session{
 		ID:             id,
 		Port:           port,
 		Baud:           baud,
@@ -95,6 +96,8 @@ func NewSession(id, port string, baud int, conn *Conn, objects []cfgtranslate.Ob
 		stepperJogging: make(map[int]bool),
 		stopTrsyncOIDs: make(map[int]int),
 	}
+	conn.SetMessageHook(s.noteMessage)
+	return s
 }
 
 // Close shuts down the serial connection.

@@ -42,6 +42,7 @@ type Snapshot struct {
 	Hardware HardwareHealth `json:"hardware"`
 	Chute    ChuteStatus    `json:"chute"`
 	Lights   LightsStatus   `json:"lights"`
+	Supply   SupplyStatus   `json:"supply"`
 	Job      *JobStatus     `json:"job,omitempty"`      // the task running now
 	LastJob  *JobStatus     `json:"last_job,omitempty"` // the last one to finish
 	Ticks    uint64         `json:"ticks"`              // control-loop ticks spent running
@@ -124,6 +125,7 @@ type Machine struct {
 	health   HardwareHealth
 	chute    ChuteStatus
 	lights   LightsStatus
+	supply   SupplyStatus
 	job      *job
 	lastJob  *JobStatus
 	sort     *sortStations
@@ -151,6 +153,7 @@ func NewMachine(hw Hardware, settings func() MachineSettings, tick time.Duration
 		health:   hw.Health(),
 		chute:    hw.ChuteStatus(),
 		lights:   hw.LightsStatus(),
+		supply:   hw.SupplyVoltage(),
 	}
 	m.snap = m.snapshot()
 	return m
@@ -226,6 +229,43 @@ func (m *Machine) SetLights(ctx context.Context, on bool) error {
 		err := m.hw.SetLights(on)
 		m.refreshLights()
 		return err
+	}})
+}
+
+// BlinkLights switches the light on and off every period for a while, then leaves it
+// off: one person can check the wiring at the machine with a meter or by eye. It's a
+// job, so Cancel stops it; the light is left off either way.
+func (m *Machine) BlinkLights(ctx context.Context, d, period time.Duration) error {
+	if d <= 0 || d > 5*time.Minute || period < 200*time.Millisecond {
+		return fmt.Errorf("%w: blink for up to 5 minutes, at most every 200 ms", ErrInvalidSettings)
+	}
+	return m.send(ctx, request{do: func() error {
+		if err := m.handsOff(); err != nil {
+			return err
+		}
+		if err := m.hw.SetLights(true); err != nil {
+			return err // nothing to blink: say why now
+		}
+		n := int(d / period)
+		return m.startJob("Blink the light", func(ctx context.Context, report reportFunc) error {
+			defer func() { _ = m.hw.SetLights(false) }()
+			on := true
+			for i := 1; i <= n; i++ {
+				state := "on"
+				if !on {
+					state = "off"
+				}
+				report(i, n, "Light "+state)
+				if err := waitFor(ctx, period); err != nil {
+					return err
+				}
+				on = !on
+				if err := m.hw.SetLights(on); err != nil {
+					return err
+				}
+			}
+			return nil
+		}, func(error) { m.refreshLights() })
 	}})
 }
 
@@ -414,6 +454,9 @@ func (m *Machine) handle(req request) error {
 		if m.state != StateReady {
 			return fmt.Errorf("%w: can't start while %s", ErrInvalidTransition, m.state)
 		}
+		if err := m.needsSupply(); err != nil {
+			return err
+		}
 		if err := m.startRun(time.Now().UTC()); err != nil {
 			return err
 		}
@@ -424,6 +467,9 @@ func (m *Machine) handle(req request) error {
 	case CommandResume:
 		if m.job != nil {
 			return ErrBusy
+		}
+		if err := m.needsSupply(); err != nil {
+			return err
 		}
 		if err := m.transition(req.command, StateRunning, StatePaused); err != nil {
 			return err
@@ -488,6 +534,9 @@ func (m *Machine) startHoming() error {
 	}
 	if m.state == StateRunning {
 		return fmt.Errorf("%w: can't home while running", ErrInvalidTransition)
+	}
+	if err := m.needsSupply(); err != nil {
+		return err
 	}
 	err := m.startJob("Home", func(ctx context.Context, report reportFunc) error {
 		return m.home(ctx, report)
@@ -608,16 +657,37 @@ func (m *Machine) checkHealth() {
 	}
 	m.refreshChute()
 	m.refreshLights()
+	m.refreshSupply()
 	switch m.state {
 	case StateReady, StateRunning, StatePaused:
 	default:
 		return
 	}
-	if !health.Connected {
+	switch {
+	case !health.Connected:
 		m.stopForError("Board disconnected: " + health.Message)
-	} else if !m.chute.Homed {
+	case !m.chute.Homed:
 		m.stopForError("The chute lost its home position (was the board reset?). Home again.")
+	case m.supply.Known && m.supply.Low && (m.state == StateRunning || m.state == StatePaused):
+		m.stopForError(m.supply.lowError().Error())
 	}
+}
+
+func (m *Machine) refreshSupply() {
+	if s := m.hw.SupplyVoltage(); !s.same(m.supply) {
+		m.supply = s
+		m.changed = true
+	}
+}
+
+// needsSupply refuses to move the machine on purpose with its motors unpowered: they
+// wouldn't move, and nothing would say why.
+func (m *Machine) needsSupply() error {
+	m.refreshSupply()
+	if m.supply.Known && m.supply.Low {
+		return m.supply.lowError()
+	}
+	return nil
 }
 
 func (m *Machine) stopForError(msg string) {
@@ -670,7 +740,7 @@ func (m *Machine) setState(next State, errMsg string) {
 func (m *Machine) snapshot() Snapshot {
 	snap := Snapshot{
 		State: m.state, Error: m.err, Since: m.since, Hardware: m.health,
-		Chute: m.chute, Lights: m.lights, LastJob: m.lastJob, Ticks: m.ticks,
+		Chute: m.chute, Lights: m.lights, Supply: m.supply, LastJob: m.lastJob, Ticks: m.ticks,
 	}
 	if m.job != nil {
 		status := m.job.status

@@ -26,6 +26,16 @@
   color: #64748b;
 }
 
+.supply {
+  white-space: nowrap;
+}
+
+.supplyLow {
+  white-space: nowrap;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 .lightOn,
 .lightOn:hover:not(:disabled) {
   border-color: #f59e0b;

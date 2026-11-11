@@ -23,6 +23,7 @@ type SimHardware struct {
 	onShake   func(ch Channel)
 	shakes    []Channel
 	lights    bool
+	supply    *float64 // simulated supply volts; nil is 12 V
 }
 
 // OnMove calls fn after every move with the channel's rotor angle before and after

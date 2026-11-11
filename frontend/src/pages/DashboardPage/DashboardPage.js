@@ -17,7 +17,9 @@ function ChannelTile({ id, summary, simulated }) {
     <div className={styles.channel}>
       <div className={styles.channelHeader}>
         <strong>{CHANNEL_NAMES[id]}</strong>
-        <span className={`${styles.badge} ${live ? styles.good : styles.muted}`}>{live ? 'Live' : summary?.valid ? 'Stale' : 'No camera'}</span>
+        <span className={`${styles.badge} ${live ? styles.good : styles.muted}`}>
+          {live ? 'Live' : summary?.valid ? 'Stale' : 'No camera'}
+        </span>
       </div>
       {(simulated || summary?.valid) && <CameraView channel={id} compact />}
       <span className={styles.muted}>
@@ -25,7 +27,9 @@ function ChannelTile({ id, summary, simulated }) {
           ? `${summary.pieces} piece${summary.pieces === 1 ? '' : 's'}${zones.length ? ` · in ${zones.join(', ')}` : ''}`
           : 'Waiting for frames'}
       </span>
-      {summary?.falls > 0 && <span className={styles.muted}>{summary.falls} pushed off this run</span>}
+      {summary?.falls > 0 && (
+        <span className={styles.muted}>{summary.falls} pushed off this run</span>
+      )}
     </div>
   );
 }
@@ -39,7 +43,13 @@ function IncidentCard({ incident, busy, onResolve }) {
       </div>
       <div className={styles.buttonRow}>
         {incident.actions.map((action) => (
-          <button key={action} type="button" className={appStyles.button} disabled={busy} onClick={() => onResolve(action)}>
+          <button
+            key={action}
+            type="button"
+            className={appStyles.button}
+            disabled={busy}
+            onClick={() => onResolve(action)}
+          >
             {action === 'done' ? 'Done' : action}
           </button>
         ))}
@@ -59,7 +69,10 @@ const DashboardPage = ({ onOpenPiece }) => {
       <div className={styles.headerRow}>
         <div>
           <h2 className={styles.title}>
-            Sorter <span className={`${styles.badge} ${styles[state?.state] ?? styles.muted}`}>{STATE_LABELS[state?.state] ?? '…'}</span>
+            Sorter{' '}
+            <span className={`${styles.badge} ${styles[state?.state] ?? styles.muted}`}>
+              {STATE_LABELS[state?.state] ?? '…'}
+            </span>
           </h2>
           <p className={appStyles.muted}>
             {!logic.connected
@@ -67,6 +80,19 @@ const DashboardPage = ({ onOpenPiece }) => {
               : state?.hardware?.connected
                 ? `${state.hardware.simulated ? 'Simulated machine' : `Board on ${state.hardware.port}`}${state.run_id ? ` · run ${state.run_id}` : ''}`
                 : state?.hardware?.message || 'No board connected'}
+            {state?.hardware?.connected && (
+              <span
+                className={logic.supply?.low ? styles.supplyLow : styles.supply}
+                title={
+                  logic.supply?.known
+                    ? `Needs at least ${logic.supply.min_volts} V`
+                    : logic.supply?.message
+                }
+              >
+                {' · '}motor power{' '}
+                {logic.supply?.known ? `${logic.supply.volts.toFixed(1)} V` : 'not measured'}
+              </span>
+            )}
           </p>
         </div>
         <div className={styles.buttonRow}>
@@ -75,35 +101,87 @@ const DashboardPage = ({ onOpenPiece }) => {
             className={`${appStyles.buttonSecondary} ${logic.lights?.on ? styles.lightOn : ''}`}
             aria-pressed={Boolean(logic.lights?.on)}
             disabled={!logic.lights || Boolean(logic.lights.message) || logic.busy}
-            title={logic.lights?.message || (logic.lights?.on ? 'Turn the light off' : 'Turn the light on')}
+            title={
+              logic.lights?.message ||
+              (logic.lights?.on ? 'Turn the light off' : 'Turn the light on')
+            }
             onClick={logic.toggleLights}
           >
             {logic.lights?.on ? 'Light on' : 'Light off'}
           </button>
-          <button type="button" className={appStyles.buttonSecondary} disabled={!logic.canHome || logic.busy} onClick={() => logic.command('home')}>
+          <button
+            type="button"
+            className={appStyles.buttonSecondary}
+            disabled={
+              !logic.lights ||
+              Boolean(logic.lights.message) ||
+              logic.busy ||
+              Boolean(state?.job) ||
+              state?.state === 'running'
+            }
+            title="On and off every second for 30 s, then off: for checking the wiring at the machine"
+            onClick={logic.blinkLights}
+          >
+            Blink
+          </button>
+          <button
+            type="button"
+            className={appStyles.buttonSecondary}
+            disabled={!logic.canHome || logic.busy}
+            onClick={() => logic.command('home')}
+          >
             {state?.chute?.homed ? 'Re-home' : 'Home'}
           </button>
           {logic.canResume ? (
-            <button type="button" className={appStyles.button} disabled={logic.busy} onClick={() => logic.command('resume')}>
+            <button
+              type="button"
+              className={appStyles.button}
+              disabled={logic.busy}
+              onClick={() => logic.command('resume')}
+            >
               Resume
             </button>
           ) : logic.canPause ? (
-            <button type="button" className={appStyles.button} disabled={logic.busy} onClick={() => logic.command('pause')}>
+            <button
+              type="button"
+              className={appStyles.button}
+              disabled={logic.busy}
+              onClick={() => logic.command('pause')}
+            >
               Pause
             </button>
           ) : (
-            <button type="button" className={appStyles.button} disabled={!logic.canStart || logic.busy} onClick={() => logic.command('start')}>
+            <button
+              type="button"
+              className={appStyles.button}
+              disabled={!logic.canStart || logic.busy}
+              onClick={() => logic.command('start')}
+            >
               Start sorting
             </button>
           )}
-          <button type="button" className={appStyles.buttonSecondary} disabled={!logic.canStop || logic.busy} onClick={() => logic.command('stop')}>
+          <button
+            type="button"
+            className={appStyles.buttonSecondary}
+            disabled={!logic.canStop || logic.busy}
+            onClick={() => logic.command('stop')}
+          >
             Stop
           </button>
         </div>
       </div>
 
       {state?.error && <p className={styles.alert}>{state.error}</p>}
-      {state?.hardware?.connected && state?.lights?.message && <p className={styles.notice}>Light: {state.lights.message}</p>}
+      {logic.supply?.low && !state?.error && (
+        <p className={styles.alert}>
+          Motor power is low: {logic.supply.volts.toFixed(1)} V, needs {logic.supply.min_volts} V.
+          Check the 12 V supply to the RAMPS 5 A input. Homing and sorting are held until it&apos;s
+          back.
+        </p>
+      )}
+      {state?.hardware?.connected && state?.lights?.message && (
+        <p className={styles.notice}>Light: {state.lights.message}</p>
+      )}
       {logic.error && <p className={styles.alert}>{logic.error}</p>}
       {state?.job && (
         <p className={styles.notice}>
@@ -112,16 +190,32 @@ const DashboardPage = ({ onOpenPiece }) => {
           {state.job.detail && `: ${state.job.detail}`}
         </p>
       )}
-      {state?.incident && <IncidentCard incident={state.incident} busy={logic.busy} onResolve={logic.resolve} />}
-      {state?.state === 'standby' && <p className={styles.notice}>Press Home to start the hardware and home the chute before sorting.</p>}
+      {state?.incident && (
+        <IncidentCard incident={state.incident} busy={logic.busy} onResolve={logic.resolve} />
+      )}
+      {state?.state === 'standby' && (
+        <p className={styles.notice}>
+          Press Home to start the hardware and home the chute before sorting.
+        </p>
+      )}
 
       <div className={styles.channels}>
         {['c2', 'c3', 'c4'].map((id) => (
-          <ChannelTile key={id} id={id} summary={state?.channels?.[id]} simulated={state?.hardware?.simulated} />
+          <ChannelTile
+            key={id}
+            id={id}
+            summary={state?.channels?.[id]}
+            simulated={state?.hardware?.simulated}
+          />
         ))}
       </div>
 
-      <ChannelControls shakes={logic.shakes} disabled={!logic.handsFree || logic.busy} onTurn={logic.turn} onShake={logic.shake} />
+      <ChannelControls
+        shakes={logic.shakes}
+        disabled={!logic.handsFree || logic.busy}
+        onTurn={logic.turn}
+        onShake={logic.shake}
+      />
 
       <div className={styles.pieces}>
         <h3 className={styles.panelTitle}>On the classification channel</h3>

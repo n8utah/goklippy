@@ -180,6 +180,11 @@ export function zeroSorterChute() {
   return postJSON('/api/v1/sorter/chute/zero', {});
 }
 
+/** Blinks the light every second for a while, then leaves it off (a sorter job). */
+export function blinkSorterLights(seconds = 30) {
+  return postJSON('/api/v1/sorter/lights/blink', { seconds });
+}
+
 /** Switches the machine's light (the RAMPS D10 output). Returns { on, message }. */
 export function setSorterLights(on) {
   return postJSON('/api/v1/sorter/lights', { on });

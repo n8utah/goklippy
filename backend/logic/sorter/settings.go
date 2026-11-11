@@ -41,6 +41,41 @@ type MachineSettings struct {
 	Cameras      CameraSettings             `json:"cameras"`
 	Lights       LightsSettings             `json:"lights"`
 	Pictures     PicturesSettings           `json:"pictures"`
+	Supply       SupplySettings             `json:"supply"`
+}
+
+// SupplySettings read the motors' 12 V supply through a resistor divider into an
+// analog pin: [voltage_sensor supply] with sensor_pin: analog5 in the board config.
+type SupplySettings struct {
+	// Sensor is the config section; when the board config hasn't got it, the supply
+	// isn't measured and nothing is held back.
+	Sensor string `json:"sensor"`
+	// TopOhms runs from the supply to the pin, BottomOhms from the pin to ground.
+	TopOhms    float64 `json:"topOhms"`
+	BottomOhms float64 `json:"bottomOhms"`
+	// ReferenceV is the ADC's full scale (the Mega's 5 V); Calibration multiplies the
+	// result, set from a meter reading.
+	ReferenceV  float64 `json:"referenceV"`
+	Calibration float64 `json:"calibration"`
+	// MinVolts: below this the motors aren't properly powered; homing and sorting are
+	// refused, and a run stops.
+	MinVolts float64 `json:"minVolts"`
+}
+
+// Volts turns a reading (a share of the ADC's range) into the supply's voltage.
+func (s SupplySettings) Volts(fraction float64) float64 {
+	top, bottom := s.TopOhms, s.BottomOhms
+	if bottom <= 0 {
+		top, bottom = 0, 1 // no divider
+	}
+	ref, cal := s.ReferenceV, s.Calibration
+	if ref <= 0 {
+		ref = 5
+	}
+	if cal <= 0 {
+		cal = 1
+	}
+	return fraction * ref * (top + bottom) / bottom * cal
 }
 
 // PicturesSettings decide which frames of a tracked piece are good pictures of it
@@ -313,6 +348,11 @@ func DefaultMachineSettings() MachineSettings {
 		},
 		Lights:   LightsSettings{Output: "output_pin leds", OnWhenSorting: true},
 		Pictures: DefaultPictures(),
+		// 10 kΩ from 12 V to the pin, 4.7 kΩ to ground: 12 V reads 3.8 V.
+		Supply: SupplySettings{
+			Sensor: "voltage_sensor supply", TopOhms: 10000, BottomOhms: 4700,
+			ReferenceV: 5, Calibration: 1, MinVolts: 10.5,
+		},
 	}
 }
 

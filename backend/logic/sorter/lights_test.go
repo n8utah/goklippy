@@ -26,6 +26,24 @@ func TestMachineSwitchesLights(t *testing.T) {
 	assert.NotEmpty(t, m.Snapshot().Lights.Message)
 }
 
+func TestMachineBlinksTheLightThenLeavesItOff(t *testing.T) {
+	m, hw := startMachine(t)
+	require.NoError(t, m.BlinkLights(context.Background(), time.Second, 200*time.Millisecond))
+	assert.True(t, hw.LightsStatus().On, "starts on")
+	assert.Equal(t, "Blink the light", m.Snapshot().Job.Name)
+	seenOff := false
+	require.Eventually(t, func() bool {
+		if !hw.LightsStatus().On {
+			seenOff = true
+		}
+		return m.Snapshot().Job == nil
+	}, 3*time.Second, 20*time.Millisecond)
+	assert.True(t, seenOff)
+	assert.False(t, hw.LightsStatus().On, "left off")
+
+	assert.ErrorIs(t, m.BlinkLights(context.Background(), time.Second, 10*time.Millisecond), ErrInvalidSettings)
+}
+
 func TestMachineLightsOnWhenSorting(t *testing.T) {
 	m, _ := startMachine(t)
 	require.NoError(t, do(t, m, CommandHome))

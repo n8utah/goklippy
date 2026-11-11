@@ -55,6 +55,17 @@ type Conn struct {
 	inflight         []sentBlock // blocks written but not yet acknowledged, oldest first
 	clockBase        uint64
 	clockBaseAt      time.Time
+	// hook sees every message read, whichever call reads it (see SetMessageHook).
+	hook func(map[string]interface{})
+}
+
+// SetMessageHook calls fn with every message read from the MCU, so reports it sends on
+// its own (analog readings) aren't lost when a query reads past them. fn runs with the
+// connection locked: it must be quick and must not call back into the connection.
+func (c *Conn) SetMessageHook(fn func(map[string]interface{})) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.hook = fn
 }
 
 // OpenConn opens a serial port and prepares for Klipper protocol communication.
@@ -537,6 +548,9 @@ func (c *Conn) readMessageLocked() (map[string]interface{}, error) {
 			c.ackThrough(c.mcuExpectedSeq)
 			if params, ok := c.parser.ParseSafe(frame); ok {
 				c.logIfShutdown(params)
+				if c.hook != nil {
+					c.hook(params)
+				}
 				return params, nil
 			}
 			continue

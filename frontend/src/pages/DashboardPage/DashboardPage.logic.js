@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { listSorterShakes, moveSorterChannel, resolveSorterIncident, setSorterLights, shakeSorterChannel, sorterCommand } from '../../helpers/api';
+import {
+  blinkSorterLights,
+  listSorterShakes,
+  moveSorterChannel,
+  resolveSorterIncident,
+  setSorterLights,
+  shakeSorterChannel,
+  sorterCommand,
+} from '../../helpers/api';
 import { useMachineSettings } from '../../helpers/sorterSettings';
 import { useSorterState } from '../../helpers/sorterState';
 
@@ -59,11 +67,16 @@ export function useDashboardPageLogic() {
   const lights = state?.lights;
   /** Allowed while sorting too: the light moves nothing. */
   const toggleLights = () => run(() => setSorterLights(!lights?.on));
+  /** On and off every second for 30 s, then off: for checking the wiring at the machine. */
+  const blinkLights = () => run(() => blinkSorterLights(30));
+  const supply = state?.supply;
 
   const s = state?.state;
   return {
     lights,
     toggleLights,
+    blinkLights,
+    supply,
     state,
     connected,
     error,
@@ -73,7 +86,8 @@ export function useDashboardPageLogic() {
     turn,
     shake,
     shakes,
-    handsFree: Boolean(state?.hardware?.connected) && s !== 'running' && s !== 'homing' && !state?.job,
+    handsFree:
+      Boolean(state?.hardware?.connected) && s !== 'running' && s !== 'homing' && !state?.job,
     canHome: s && s !== 'running' && s !== 'homing' && !state.job,
     canStart: s === 'ready' && !state.job,
     canPause: s === 'running',

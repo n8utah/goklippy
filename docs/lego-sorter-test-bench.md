@@ -211,8 +211,10 @@ other.
    Cameras page, Setup view.
 5. **Supply voltage sensing (wiring).** A divider from the 12 V 5 A rail to a free analog pin
    (AUX-2 A5 or A9–A12): 10 kΩ from 12 V to the pin, 4.7 kΩ from the pin to ground (12 V →
-   3.8 V; 14 V stays under 5 V). Note the pin; the software side (a supply-voltage reading on
-   the Dashboard, refusing to home or sort below about 10.5 V) is then to be built.
+   3.8 V; 14 V stays under 5 V). The software is built: add `[voltage_sensor supply]` with
+   `sensor_pin: analog5` (or your pin) to the board config. The Dashboard then shows motor
+   power, and homing and sorting are refused below 10.5 V (Tuning, Motor power). Set the
+   calibration from a meter reading.
 6. **Piece detection.** Take the brick off, capture C2 empty, drop pieces on and check they're
    found and tracked as the channel turns.
 

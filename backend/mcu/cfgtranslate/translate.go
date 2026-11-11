@@ -55,7 +55,9 @@ func Build(f *klipperconfig.File) (BuildResult, error) {
 			if err := b.addDigitalOut(name, sec); err != nil {
 				return BuildResult{}, err
 			}
-		case strings.HasPrefix(name, "temperature_sensor "):
+		case strings.HasPrefix(name, "temperature_sensor "), strings.HasPrefix(name, "voltage_sensor "):
+			// [voltage_sensor supply] (sensor_pin: analog5) reads the supply through a
+			// divider; the sorter turns the reading into volts.
 			if err := b.addAnalogIn(name, sec); err != nil {
 				return BuildResult{}, err
 			}

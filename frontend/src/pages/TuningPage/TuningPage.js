@@ -1,5 +1,6 @@
 import { SECTIONS, useTuningPageLogic } from './TuningPage.logic';
 import LightsPanel from './components/LightsPanel';
+import SupplyPanel from './components/SupplyPanel';
 
 import styles from './TuningPage.module.css';
 import appStyles from '../../styles/app.module.css';
@@ -10,14 +11,21 @@ const TuningPage = () => {
   return (
     <section className={appStyles.card}>
       <h2 className={styles.title}>Tuning</h2>
-      <p className={appStyles.muted}>Changes save on their own and apply to a running sort straight away. Change a few at a time and watch the next pieces.</p>
+      <p className={appStyles.muted}>
+        Changes save on their own and apply to a running sort straight away. Change a few at a time
+        and watch the next pieces.
+      </p>
       {logic.error && <p className={styles.alert}>{logic.error}</p>}
 
       {SECTIONS.map((section) => (
         <div key={section.group} className={styles.panel}>
           <div className={styles.panelHeader}>
             <h3 className={styles.panelTitle}>{section.title}</h3>
-            <button type="button" className={appStyles.buttonSecondary} onClick={() => logic.resetAll(section.group)}>
+            <button
+              type="button"
+              className={appStyles.buttonSecondary}
+              onClick={() => logic.resetAll(section.group)}
+            >
               Reset all to defaults
             </button>
           </div>
@@ -39,12 +47,17 @@ const TuningPage = () => {
                     step={f.step}
                     value={v}
                     onChange={(e) => {
-                      if (e.target.value !== '' && Number(e.target.value) >= 0) logic.set(section.group, f.key, Number(e.target.value));
+                      if (e.target.value !== '' && Number(e.target.value) >= 0)
+                        logic.set(section.group, f.key, Number(e.target.value));
                     }}
                   />
                   {f.unit && <span className={styles.muted}>{f.unit}</span>}
                   {changed && (
-                    <button type="button" className={styles.reset} onClick={() => logic.set(section.group, f.key, d)}>
+                    <button
+                      type="button"
+                      className={styles.reset}
+                      onClick={() => logic.set(section.group, f.key, d)}
+                    >
                       Reset to {d}
                     </button>
                   )}
@@ -55,6 +68,7 @@ const TuningPage = () => {
         </div>
       ))}
       <LightsPanel logic={logic} />
+      <SupplyPanel logic={logic} />
     </section>
   );
 };

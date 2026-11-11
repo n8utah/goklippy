@@ -3,6 +3,7 @@ package sorter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 )
@@ -69,6 +70,31 @@ type Hardware interface {
 	// SetLights turns the machine's light on or off.
 	SetLights(on bool) error
 	LightsStatus() LightsStatus
+
+	// SupplyVoltage is the motors' supply, if it's measured.
+	SupplyVoltage() SupplyStatus
+}
+
+// SupplyStatus is the motors' supply voltage. Known is false when it isn't measured
+// (no sensor in the board config, or no reading yet); then nothing is held back.
+type SupplyStatus struct {
+	Known    bool    `json:"known"`
+	Volts    float64 `json:"volts,omitempty"`
+	MinVolts float64 `json:"min_volts,omitempty"`
+	Low      bool    `json:"low,omitempty"`
+	Message  string  `json:"message,omitempty"`
+}
+
+// ErrSupplyLow refuses to home or sort without motor power.
+var ErrSupplyLow = errors.New("the motors' supply is low")
+
+func (s SupplyStatus) lowError() error {
+	return fmt.Errorf("%w: %.1f V, needs %.1f V. Check the 12 V supply to the RAMPS 5 A input", ErrSupplyLow, s.Volts, s.MinVolts)
+}
+
+func (a SupplyStatus) same(b SupplyStatus) bool {
+	// Small changes in the voltage aren't news.
+	return a.Known == b.Known && a.Low == b.Low && a.Message == b.Message && math.Abs(a.Volts-b.Volts) < 0.1
 }
 
 // LightsStatus is whether the light is on. Message says why it can't be switched
