@@ -183,7 +183,7 @@ and `models/sort_e2e_test.go` sorts known pieces end to end on SQLite and checks
 | 7 Coordinator and dashboard | Built: the machine runs platter then feeder each tick, with runs and the **Dashboard** page. |
 | 8 Records, incidents, recovery | Built: pieces, photos, runs, incidents, reviews and the **Records** page; shakes and Sorter V2's landing-held procedure, clearing a stalled C4, shaking off a piece that didn't fall; bin counts with full bins and "emptied"; kit limits from set inventories. |
 | Light | Built: the LED light on D10 as `[output_pin leds]` (on/off, `!`, `value`, `shutdown_value`), switched from the **Dashboard** and on when sorting starts. See the test bench notes. Needs the light wired. |
-| 9 Pictures along the way | Planned: crops of each piece on every channel, linked across channels, the best sent to Brickognize, and a **Piece journeys** debug page. Waits on the light and full-channel camera views. |
+| 9 Pictures along the way | Step 1 built: every tracked piece's frames judged (whole, alone, settled, steady, usual size, sharp) and the best kept, with the **Piece journeys** debug page and the rules on **Tuning**. Next: tune on C3 with the light and a full view; then link tracks across channels and send the pictures to Brickognize. |
 
 Not planned: BrickStore export, Hive sync, and sending reviews back to Brickognize as feedback.
 Still open: the "no bin" incident (pieces go to the bucket with a problem noted instead), a piece
@@ -401,9 +401,14 @@ Original scope:
 
 ### Phase 9: Pictures of each piece along the way
 
-**Status (2026-11-11): planned.** Waiting on the light and on cameras that see the whole channel
-(C3's sees only part of the outer wall where pieces ride). Step 1 needs one camera; step 2 needs
-two.
+**Status (2026-11-11): step 1 and the debug page built, tested in simulation.**
+`logic/sorter/journeys.go` judges every frame of every tracked piece (from `Perception`, or
+`RunSimCameras` when simulating) and keeps the spread-out sharpest; the **Piece journeys** page
+shows each journey's frames, decisions, ring diagram and landing/last-seen frames; the rules are
+on the **Tuning** page (Piece pictures). One journey per track for now. Still to do: tune it on
+C3 once its camera sees the whole bowl and the light works (the sharpness minimum especially:
+the simulator's crisp squares score in the thousands), step 2 (linking at falls) once two
+channels have cameras, and step 3 (sending the pictures to Brickognize).
 
 Today a piece is identified from C4's burst alone. It has already been in view on C2 and C3,
 turning and showing other sides. The aim: collect good, cropped pictures of each piece on every

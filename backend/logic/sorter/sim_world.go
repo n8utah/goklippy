@@ -249,10 +249,27 @@ func (w *SimWorld) Observation(ch Channel) vision.Observation {
 	return vision.Observe(SimZones(), boxes, 2, time.Now())
 }
 
+// Snapshot is a channel's frame and its pieces' boxes at the same moment.
+func (w *SimWorld) Snapshot(ch Channel) (image.Image, []vision.Box, time.Time) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var boxes []vision.Box
+	for _, p := range w.onRotor[ch] {
+		boxes = append(boxes, simBox(p.angle))
+	}
+	img, at := w.frameLocked(ch)
+	return img, boxes, at
+}
+
 // Frame draws C4 (or any channel) with its pieces as colored squares.
 func (w *SimWorld) Frame(ch Channel) (image.Image, time.Time, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	img, at := w.frameLocked(ch)
+	return img, at, true
+}
+
+func (w *SimWorld) frameLocked(ch Channel) (image.Image, time.Time) {
 	img := image.NewRGBA(image.Rect(0, 0, 640, 480))
 	for i := 0; i < len(img.Pix); i += 4 {
 		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 128, 128, 128, 255
@@ -271,7 +288,7 @@ func (w *SimWorld) Frame(ch Channel) (image.Image, time.Time, bool) {
 		now = w.frameAt.Add(time.Microsecond)
 	}
 	w.frameAt = now
-	return img, now, true
+	return img, now
 }
 
 // Identify names the next piece that landed on C4, as Brickognize would.

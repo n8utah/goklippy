@@ -55,9 +55,17 @@ type Perception struct {
 	dataDir  string
 	pool     *cameraPool
 
-	mu    sync.Mutex
-	chans map[Channel]*perceptionChannel
-	known map[string]bool // devices the last listing found, which may be previewed
+	mu       sync.Mutex
+	chans    map[Channel]*perceptionChannel
+	known    map[string]bool // devices the last listing found, which may be previewed
+	recorder *JourneyRecorder
+}
+
+// SetRecorder hands every observed frame to the journey recorder.
+func (p *Perception) SetRecorder(r *JourneyRecorder) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.recorder = r
 }
 
 type perceptionChannel struct {
@@ -235,7 +243,12 @@ func (p *Perception) process(ctx context.Context, ch Channel, pc *perceptionChan
 			obs, msg := p.observe(ch, pc, img, f.At)
 			p.mu.Lock()
 			pc.img, pc.imgAt, pc.obs, pc.message = img, f.At, obs, msg
+			rec := p.recorder
 			p.mu.Unlock()
+			if rec != nil && obs.Valid {
+				b := img.Bounds()
+				rec.Observe(ch, img, p.settings().Cameras.Zones[string(ch)].ScaledTo(b.Dx(), b.Dy()), obs)
+			}
 		}
 	}
 }

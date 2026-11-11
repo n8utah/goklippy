@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"goklippy/backend/config"
 	"goklippy/backend/logic/brickognize"
@@ -38,16 +39,20 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 	var hw sorter.Hardware
 	deps := sorter.SortDeps{Sorting: sorting, Records: records}
 	var identifier sorter.Identifier = brickognize.NewClient()
+	journeys := sorter.NewJourneyRecorder(filepath.Join(dataDir, "journeys"), machineSettings)
+	routes.InitJourneys(journeys)
 	if cfg.Simulate {
 		sim := sorter.NewSimHardware(machineSettings)
 		world := sorter.NewSimWorld(sim, machineSettings, nil)
 		world.Random = true
 		hw, deps.Vision, deps.Identifier = sim, world, world
 		routes.InitCameras(sorter.SimFeed{World: world}, nil)
+		go sorter.RunSimCameras(ctx, world, journeys, simCameraInterval)
 		slog.Info("sorter running on simulated hardware with pretend LEGO")
 	} else {
 		hw = sorter.NewMCUHardware(mcu.DefaultManager(), settings.Machine)
 		perception := sorter.NewPerception(settings.Machine, dataDir)
+		perception.SetRecorder(journeys)
 		go perception.Run(ctx)
 		deps.Vision, deps.Identifier = perception, identifier
 		routes.InitCameras(perception, perception)
@@ -63,6 +68,9 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 	slog.Info("sorter data folder", "path", dataDir)
 	return machine, nil
 }
+
+// simCameraInterval is how often the simulated cameras take a frame (10 fps).
+const simCameraInterval = 100 * time.Millisecond
 
 // simSettings are the saved settings with the simulated world's zones on every
 // camera channel.

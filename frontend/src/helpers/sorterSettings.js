@@ -87,6 +87,19 @@ export const DEFAULT_SORTER_SETTINGS = {
   },
   // The machine's light: an [output_pin] in the board config (RAMPS D10).
   lights: { output: 'output_pin leds', onWhenSorting: true },
+  // Which frames of a tracked piece are good pictures of it; see the Tuning page.
+  pictures: {
+    isolationPx: 12,
+    settleFrames: 3,
+    maxDegPerFrame: 6,
+    minSharpness: 40,
+    sizeFactor: 1.6,
+    keepEveryDeg: 15,
+    maxKept: 12,
+    cropMarginPct: 20,
+    cropMaxPx: 512,
+    keepJourneys: 200,
+  },
 };
 
 /** Older saves stored C2 and C3 as multiples of C1. */
@@ -118,6 +131,7 @@ export function normalizeSorterSettings(saved) {
     feeder: { ...DEFAULT_SORTER_SETTINGS.feeder, ...saved.feeder },
     platter: { ...DEFAULT_SORTER_SETTINGS.platter, ...saved.platter },
     lights: { ...DEFAULT_SORTER_SETTINGS.lights, ...saved.lights },
+    pictures: { ...DEFAULT_SORTER_SETTINGS.pictures, ...saved.pictures },
   };
 }
 

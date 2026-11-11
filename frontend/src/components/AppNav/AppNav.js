@@ -13,6 +13,7 @@ const AppNav = ({ page, onChange }) => {
     { id: 'bins', label: 'Bins' },
     { id: 'profiles', label: 'Profiles' },
     { id: 'records', label: 'Records' },
+    { id: 'journeys', label: 'Piece journeys' },
     { id: 'home', label: 'Auth / Dev' },
   ];
 

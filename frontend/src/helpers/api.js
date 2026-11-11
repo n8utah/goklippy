@@ -315,6 +315,20 @@ export function measureSorterRing(channel) {
   return postJSON(`/api/v1/sorter/cameras/${channel}/measure`, {});
 }
 
+/** The newest pieces' journeys (still riding included), newest first. */
+export function listSorterJourneys(limit = 100) {
+  return getJSON(`/api/v1/sorter/journeys?limit=${limit}`);
+}
+
+/** One journey: its tracks, every frame's decision, and its moments. */
+export function getSorterJourney(id) {
+  return getJSON(`/api/v1/sorter/journeys/${encodeURIComponent(id)}`);
+}
+
+export function sorterJourneyFileURL(id, name) {
+  return `${API_BASE_URL}/api/v1/sorter/journeys/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`;
+}
+
 /** Starts a job turning the channel all the way round, capturing it empty every step°. */
 export function captureSorterRound(channel, step) {
   return postJSON(`/api/v1/sorter/cameras/${channel}/background/round`, { step });

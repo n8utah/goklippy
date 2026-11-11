@@ -13,6 +13,7 @@ import DashboardPage from './pages/DashboardPage/DashboardPage';
 import RecordsPage from './pages/RecordsPage/RecordsPage';
 import CamerasPage from './pages/CamerasPage/CamerasPage';
 import TuningPage from './pages/TuningPage/TuningPage';
+import JourneysPage from './pages/JourneysPage/JourneysPage';
 import styles from './styles/app.module.css';
 
 const App = () => {
@@ -30,13 +31,18 @@ const App = () => {
         <div className={styles.appShell}>
           <header className={styles.header}>
             <h1 className={styles.title}>goklippy</h1>
-            <p className={styles.subtitle}>Klipper MCU workbench — visual board setup and config editing</p>
+            <p className={styles.subtitle}>
+              Klipper MCU workbench — visual board setup and config editing
+            </p>
           </header>
           <AppNav page={page} onChange={setPage} />
           {page === 'dashboard' && <DashboardPage onOpenPiece={openPiece} />}
-          {page === 'records' && <RecordsPage key={pieceId || 'records'} initialPieceId={pieceId} />}
+          {page === 'records' && (
+            <RecordsPage key={pieceId || 'records'} initialPieceId={pieceId} />
+          )}
           {page === 'cameras' && <CamerasPage />}
           {page === 'tuning' && <TuningPage />}
+          {page === 'journeys' && <JourneysPage />}
           {page === 'home' && <HomePage />}
           {page === 'devices' && <DevicesPage onGoBoard={() => setPage('board')} />}
           {page === 'board' && <BoardSetupPage />}

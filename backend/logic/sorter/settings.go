@@ -40,6 +40,78 @@ type MachineSettings struct {
 	Platter      PlatterSettings            `json:"platter"`
 	Cameras      CameraSettings             `json:"cameras"`
 	Lights       LightsSettings             `json:"lights"`
+	Pictures     PicturesSettings           `json:"pictures"`
+}
+
+// PicturesSettings decide which frames of a tracked piece are good pictures of it
+// (see journeys.go). 0 uses the default for each.
+type PicturesSettings struct {
+	// IsolationPx: another piece's box this close makes a frame "not alone".
+	IsolationPx int `json:"isolationPx"`
+	// SettleFrames: a track's first frames are skipped while it lands and bounces.
+	SettleFrames int `json:"settleFrames"`
+	// MaxDegPerFrame: faster than this, the piece is moving too much for a sharp
+	// picture.
+	MaxDegPerFrame float64 `json:"maxDegPerFrame"`
+	// MinSharpness: the crop's detail (variance of its Laplacian) must reach this.
+	MinSharpness float64 `json:"minSharpness"`
+	// SizeFactor: a box more than this factor off the track's usual area means it's
+	// touching something or partly hidden.
+	SizeFactor float64 `json:"sizeFactor"`
+	// KeepEveryDeg: kept pictures are at least this far apart along the channel, so
+	// they show the piece turned different ways; the sharpest in each stretch wins.
+	KeepEveryDeg float64 `json:"keepEveryDeg"`
+	MaxKept      int     `json:"maxKept"` // per channel
+	// CropMarginPct pads the crop on each side, as a share of the box; CropMaxPx caps
+	// the crop's longer side.
+	CropMarginPct float64 `json:"cropMarginPct"`
+	CropMaxPx     int     `json:"cropMaxPx"`
+	// KeepJourneys is how many finished journeys keep their debug pictures.
+	KeepJourneys int `json:"keepJourneys"`
+}
+
+// withDefaults fills in the unset fields.
+func (p PicturesSettings) withDefaults() PicturesSettings {
+	d := DefaultPictures()
+	if p.IsolationPx <= 0 {
+		p.IsolationPx = d.IsolationPx
+	}
+	if p.SettleFrames <= 0 {
+		p.SettleFrames = d.SettleFrames
+	}
+	if p.MaxDegPerFrame <= 0 {
+		p.MaxDegPerFrame = d.MaxDegPerFrame
+	}
+	if p.MinSharpness <= 0 {
+		p.MinSharpness = d.MinSharpness
+	}
+	if p.SizeFactor <= 1 {
+		p.SizeFactor = d.SizeFactor
+	}
+	if p.KeepEveryDeg <= 0 {
+		p.KeepEveryDeg = d.KeepEveryDeg
+	}
+	if p.MaxKept <= 0 {
+		p.MaxKept = d.MaxKept
+	}
+	if p.CropMarginPct <= 0 {
+		p.CropMarginPct = d.CropMarginPct
+	}
+	if p.CropMaxPx <= 0 {
+		p.CropMaxPx = d.CropMaxPx
+	}
+	if p.KeepJourneys <= 0 {
+		p.KeepJourneys = d.KeepJourneys
+	}
+	return p
+}
+
+// DefaultPictures are starting points, to tune on real runs.
+func DefaultPictures() PicturesSettings {
+	return PicturesSettings{
+		IsolationPx: 12, SettleFrames: 3, MaxDegPerFrame: 6, MinSharpness: 40, SizeFactor: 1.6,
+		KeepEveryDeg: 15, MaxKept: 12, CropMarginPct: 20, CropMaxPx: 512, KeepJourneys: 200,
+	}
 }
 
 // LightsSettings is the machine's light: an [output_pin] in the board config (the
@@ -239,7 +311,8 @@ func DefaultMachineSettings() MachineSettings {
 			// laptop can't keep up.
 			Width: 1280, Height: 720, Fps: 10,
 		},
-		Lights: LightsSettings{Output: "output_pin leds", OnWhenSorting: true},
+		Lights:   LightsSettings{Output: "output_pin leds", OnWhenSorting: true},
+		Pictures: DefaultPictures(),
 	}
 }
 

@@ -33,6 +33,24 @@ export const SECTIONS = [
       { key: 'stallMs', label: 'Stuck after', unit: 'ms', step: 1000, hint: 'No progress this long with pieces aboard: turn the channel round to clear it, then ask.' },
     ],
   },
+  {
+    group: 'pictures',
+    title: 'Piece pictures',
+    blurb:
+      'Which frames of a tracked piece are good pictures of it for identifying. A frame must be whole, alone, settled, steady, its usual size and sharp. See each decision on the Piece journeys page.',
+    fields: [
+      { key: 'isolationPx', label: 'Alone: no other piece within', unit: 'px', step: 1, hint: 'Another piece’s box closer than this makes a frame “not alone”.' },
+      { key: 'settleFrames', label: 'Settling: skip the first', unit: 'frames', step: 1, hint: 'While a piece lands and bounces.' },
+      { key: 'maxDegPerFrame', label: 'Moving: at most', unit: '°/frame', step: 0.5, hint: 'Faster than this, the piece is moving too much for a sharp picture.' },
+      { key: 'minSharpness', label: 'Sharp: at least', step: 5, hint: 'The crop’s detail (variance of its Laplacian). Look at the values on the Piece journeys page to set it.' },
+      { key: 'sizeFactor', label: 'Size: within a factor of', unit: '×', step: 0.1, hint: 'Of the piece’s usual box area. A jump means it’s touching something or partly hidden.' },
+      { key: 'keepEveryDeg', label: 'Keep one per', unit: '°', step: 1, hint: 'Kept pictures this far apart along the channel show the piece turned different ways; the sharpest in each stretch wins.' },
+      { key: 'maxKept', label: 'Keep at most', unit: 'per channel', step: 1 },
+      { key: 'cropMarginPct', label: 'Crop margin', unit: '%', step: 5, hint: 'Around the piece’s box, on each side.' },
+      { key: 'cropMaxPx', label: 'Crop size at most', unit: 'px', step: 32, hint: 'The crop’s longer side.' },
+      { key: 'keepJourneys', label: 'Keep debug pictures for', unit: 'pieces', step: 50, hint: 'The newest pieces’ journeys; older ones are deleted.' },
+    ],
+  },
 ];
 
 export function useTuningPageLogic() {
