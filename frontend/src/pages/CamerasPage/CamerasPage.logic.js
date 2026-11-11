@@ -4,6 +4,7 @@ import {
   cancelSorterJob,
   captureSorterBackground,
   captureSorterRound,
+  measureSorterRing,
   findSorterCameras,
   getSorterCameraFind,
   getSorterCameras,
@@ -200,6 +201,54 @@ export function useCamerasPageLogic() {
     setZones(defaultZones(w, h));
   };
 
+  /**
+   * Finds the ring in the channel's picture and puts it in the zones, keeping the drop
+   * and exit arcs (or the defaults on a first measure).
+   */
+  const [measuring, setMeasuring] = useState(false);
+  const measureRing = async () => {
+    setError('');
+    setNotice('');
+    setMeasuring(true);
+    try {
+      const { measure: m, frame_w: w, frame_h: h } = await measureSorterRing(channel);
+      const base = zones ?? defaultZones(w, h);
+      setZones({ ...base, frame_w: w, frame_h: h, ring: m.ring });
+      const out = Math.round(m.out_of_frame * 100);
+      const fit = Math.round(m.rim_fit * 100);
+      const parts = [
+        `Ring measured: center (${m.ring.center.x}, ${m.ring.center.y}), ${m.ring.inner_radius} to ${m.ring.outer_radius} px.`,
+        m.hole_radius > 0
+          ? ''
+          : 'The hole in the middle wasn’t found, so the inner edge is a guess.',
+        fit < 70
+          ? `Only ${fit}% of the rim’s edge points fit the circle; check it on the picture.`
+          : '',
+        out >= 10
+          ? `${out}% of the rim is outside the picture: pieces riding there can’t be seen. Move the camera so the whole bowl is in view.`
+          : '',
+        'Check the blue drop and orange exit sit where pieces land and leave.',
+      ];
+      setNotice(parts.filter(Boolean).join(' '));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setMeasuring(false);
+    }
+  };
+
+  // The channel's setup, step by step, from its live status.
+  const setupSteps = [
+    { label: 'Camera picked and running', done: Boolean(chStatus?.camera?.running) },
+    { label: 'Ring measured or drawn', done: Boolean(chStatus?.zones_set) },
+    { label: 'Drop (blue) and exit (orange) where pieces land and leave', done: null },
+    {
+      label: 'Captured empty across a section',
+      done: (chStatus?.views ?? 0) > 0,
+      note: chStatus?.has_background && !chStatus?.views ? 'one picture only' : '',
+    },
+  ];
+
   /** Update one field by path, e.g. ['ring', 'center', 'x']. */
   const setZoneField = (path, value) => {
     const next = structuredClone(zones);
@@ -267,6 +316,9 @@ export function useCamerasPageLogic() {
     chStatus,
     zones,
     startZones,
+    measureRing,
+    measuring,
+    setupSteps,
     setZoneField,
     pickCenter,
     captureBackground,

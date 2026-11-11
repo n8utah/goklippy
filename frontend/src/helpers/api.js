@@ -310,6 +310,11 @@ export function listSorterCameraModes(device) {
   return getJSON(`/api/v1/sorter/cameras/modes?device=${encodeURIComponent(device)}`);
 }
 
+/** Finds the channel's ring in its newest frame: { measure: { ring, rim_fit, out_of_frame, … }, frame_w, frame_h }. */
+export function measureSorterRing(channel) {
+  return postJSON(`/api/v1/sorter/cameras/${channel}/measure`, {});
+}
+
 /** Starts a job turning the channel all the way round, capturing it empty every step°. */
 export function captureSorterRound(channel, step) {
   return postJSON(`/api/v1/sorter/cameras/${channel}/background/round`, { step });

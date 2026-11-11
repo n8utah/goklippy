@@ -1,13 +1,16 @@
 package routes
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"image/jpeg"
 	"net/http"
 	"time"
 
 	"goklippy/backend/logic/camera"
 	"goklippy/backend/logic/sorter"
+	"goklippy/backend/logic/vision"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,6 +25,33 @@ var (
 func InitCameras(feed sorter.CameraFeed, perception *sorter.Perception) {
 	sorterFeed = feed
 	sorterPerception = perception
+}
+
+// MeasureSorterRing POST /sorter/cameras/:channel/measure: finds the channel's ring
+// (rim and hole) in its newest frame. It only measures; the page puts the ring into
+// the zones and saves them.
+func MeasureSorterRing(c *gin.Context) {
+	ch, ok := cameraChannel(c)
+	if !ok {
+		return
+	}
+	jpg, _, ok := sorterFeed.JPEG(ch)
+	if !ok {
+		c.JSON(http.StatusConflict, gin.H{"error": sorter.ErrNoFrame.Error()})
+		return
+	}
+	img, err := jpeg.Decode(bytes.NewReader(jpg))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	m, err := vision.MeasureRing(img)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return
+	}
+	b := img.Bounds()
+	c.JSON(http.StatusOK, gin.H{"measure": m, "frame_w": b.Dx(), "frame_h": b.Dy()})
 }
 
 type roundRequest struct {

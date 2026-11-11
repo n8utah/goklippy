@@ -238,6 +238,35 @@
   font-size: 14px;
 }
 
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+.step,
+.stepDone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+}
+
+.stepDone {
+  color: #166534;
+}
+
+.stepMark {
+  display: inline-flex;
+  justify-content: center;
+  width: 18px;
+  font-weight: 700;
+}
+
 .subTitle {
   margin: 4px 0 0;
   font-size: 14px;

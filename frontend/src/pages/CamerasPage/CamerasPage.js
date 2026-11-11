@@ -132,194 +132,224 @@ const CamerasPage = () => {
       {logic.view === 'setup' ? (
         <CameraSetup logic={logic} />
       ) : (
-        <div className={styles.layout}>
-          <div className={styles.viewCol}>
-            {device || logic.simulated ? (
-              <CameraView
-                key={`${channel}-${device}`}
-                channel={channel}
-                zonesOverride={zones}
-                onPick={zones ? logic.pickCenter : undefined}
-              />
-            ) : (
-              <div className={styles.placeholder}>Pick a camera for this channel.</div>
-            )}
-            <p className={styles.hint}>
-              {zones ? 'Click the picture to put the ring’s center there. ' : ''}
-              Blue: drop zone · magenta: precise · orange: exit · green boxes: pieces found.
-            </p>
-            {chStatus && (
-              <p className={styles.status}>
-                {chStatus.camera?.running
-                  ? `Running · ${chStatus.frame_w}×${chStatus.frame_h} · ${chStatus.camera.fps.toFixed(1)} fps`
-                  : chStatus.camera?.error
-                    ? `Not running: ${chStatus.camera.error}`
-                    : device
-                      ? 'Starting…'
-                      : ''}
-                {chStatus.message && ` · ${chStatus.message}`}
-                {chStatus.has_background &&
-                  (chStatus.views > 0
-                    ? ` · empty all the way round (${chStatus.views} pictures, matching #${chStatus.matched_view + 1})`
-                    : ' · empty-channel picture captured')}
-              </p>
-            )}
-          </div>
-
-          <div className={styles.side}>
-            <div className={styles.panel}>
-              <h3 className={styles.panelTitle}>Camera</h3>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Device</span>
-                <select
-                  value={known ? device : '__custom'}
-                  onChange={(e) =>
-                    logic.setDevice(e.target.value === '__custom' ? device : e.target.value)
-                  }
-                >
-                  <option value="">None</option>
-                  {devices.list.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {deviceLabel(d)}
-                    </option>
-                  ))}
-                  <option value={TEST_DEVICE}>ffmpeg test picture</option>
-                  {!known && (
-                    <option value="__custom">
-                      {cams.deviceNames?.[channel] || device} (not found)
-                    </option>
-                  )}
-                </select>
-              </label>
-              <div className={styles.buttonRow}>
-                <button
-                  type="button"
-                  className={appStyles.buttonSecondary}
-                  disabled={devices.loading}
-                  onClick={logic.findDevices}
-                >
-                  {devices.loading ? 'Looking…' : 'Find cameras'}
-                </button>
-                <button
-                  type="button"
-                  className={appStyles.button}
-                  disabled={!device && !logic.simulated}
-                  onClick={logic.captureBackground}
-                >
-                  Capture empty channel
-                </button>
-              </div>
-              {devices.error && <p className={styles.hint}>{devices.error}</p>}
-            </div>
-
-            <div className={styles.panel}>
-              <h3 className={styles.panelTitle}>Empty all the way round</h3>
-              <p className={styles.hint}>
-                For a rotor with a pattern on it (the cone&apos;s facets): turns the channel across
-                one section ({logic.roundPeriod.toFixed(0)}°, after which the rotor looks the same
-                again), capturing it empty every few degrees, so its pattern turning isn&apos;t
-                taken for pieces. Clear the channel first. It replaces the single picture above, and
-                that one replaces it.
-              </p>
-              <div className={styles.buttonRow}>
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Every (°)</span>
-                  <input
-                    type="number"
-                    min="0.5"
-                    max="30"
-                    step="0.5"
-                    value={logic.roundStep}
-                    disabled={Boolean(logic.roundJob)}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (v >= 0.5 && v <= 30) logic.setRoundStep(v);
-                    }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className={appStyles.button}
-                  disabled={!device || logic.simulated || Boolean(logic.roundJob)}
-                  onClick={logic.captureRound}
-                >
-                  Capture empty across a section
-                </button>
-              </div>
-              <p className={styles.hint}>
-                {logic.roundJob
-                  ? `${logic.roundJob.detail} (${logic.roundJob.step} of ${logic.roundJob.total})`
-                  : `${Math.max(1, Math.round(logic.roundPeriod / logic.roundStep))} pictures, about ${Math.ceil((logic.roundPeriod / logic.roundStep) * 0.8)} s.`}
-              </p>
-            </div>
-
-            <div className={styles.panel}>
-              <h3 className={styles.panelTitle}>Zones</h3>
-              {zones ? (
-                <ZoneEditor zones={zones} onField={logic.setZoneField} />
+        <>
+          <ol className={styles.steps}>
+            {logic.setupSteps.map((s) => (
+              <li key={s.label} className={s.done ? styles.stepDone : styles.step}>
+                <span className={styles.stepMark}>
+                  {s.done ? '✓' : s.done === null ? '?' : '○'}
+                </span>
+                {s.label}
+                {s.note && <span className={styles.hint}> ({s.note})</span>}
+              </li>
+            ))}
+          </ol>
+          <div className={styles.layout}>
+            <div className={styles.viewCol}>
+              {device || logic.simulated ? (
+                <CameraView
+                  key={`${channel}-${device}`}
+                  channel={channel}
+                  zonesOverride={zones}
+                  onPick={zones ? logic.pickCenter : undefined}
+                />
               ) : (
-                <button type="button" className={appStyles.button} onClick={logic.startZones}>
-                  Start drawing zones
-                </button>
+                <div className={styles.placeholder}>Pick a camera for this channel.</div>
+              )}
+              <p className={styles.hint}>
+                {zones ? 'Click the picture to put the ring’s center there. ' : ''}
+                Blue: drop zone · magenta: precise · orange: exit · green boxes: pieces found.
+              </p>
+              {chStatus && (
+                <p className={styles.status}>
+                  {chStatus.camera?.running
+                    ? `Running · ${chStatus.frame_w}×${chStatus.frame_h} · ${chStatus.camera.fps.toFixed(1)} fps`
+                    : chStatus.camera?.error
+                      ? `Not running: ${chStatus.camera.error}`
+                      : device
+                        ? 'Starting…'
+                        : ''}
+                  {chStatus.message && ` · ${chStatus.message}`}
+                  {chStatus.has_background &&
+                    (chStatus.views > 0
+                      ? ` · empty all the way round (${chStatus.views} pictures, matching #${chStatus.matched_view + 1})`
+                      : ' · empty-channel picture captured')}
+                </p>
               )}
             </div>
 
-            <div className={styles.panel}>
-              <h3 className={styles.panelTitle}>All cameras</h3>
-              <div className={styles.inline}>
+            <div className={styles.side}>
+              <div className={styles.panel}>
+                <h3 className={styles.panelTitle}>Camera</h3>
                 <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Size</span>
+                  <span className={styles.fieldLabel}>Device</span>
                   <select
-                    value={`${cams.width}x${cams.height}`}
-                    onChange={(e) => {
-                      const [width, height] = e.target.value.split('x').map(Number);
-                      logic.setCameras({ width, height });
-                    }}
+                    value={known ? device : '__custom'}
+                    onChange={(e) =>
+                      logic.setDevice(e.target.value === '__custom' ? device : e.target.value)
+                    }
                   >
-                    {CAMERA_SIZES.map(([w, h]) => (
-                      <option key={`${w}x${h}`} value={`${w}x${h}`}>
-                        {w}×{h}
+                    <option value="">None</option>
+                    {devices.list.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {deviceLabel(d)}
                       </option>
                     ))}
-                    {!CAMERA_SIZES.some(([w, h]) => w === cams.width && h === cams.height) && (
-                      <option value={`${cams.width}x${cams.height}`}>
-                        {cams.width}×{cams.height}
+                    <option value={TEST_DEVICE}>ffmpeg test picture</option>
+                    {!known && (
+                      <option value="__custom">
+                        {cams.deviceNames?.[channel] || device} (not found)
                       </option>
                     )}
                   </select>
                 </label>
-                <Num
-                  label="FPS"
-                  value={cams.fps}
-                  min={1}
-                  onChange={(v) => logic.setCameras({ fps: v })}
-                />
+                <div className={styles.buttonRow}>
+                  <button
+                    type="button"
+                    className={appStyles.buttonSecondary}
+                    disabled={devices.loading}
+                    onClick={logic.findDevices}
+                  >
+                    {devices.loading ? 'Looking…' : 'Find cameras'}
+                  </button>
+                  <button
+                    type="button"
+                    className={appStyles.button}
+                    disabled={!device && !logic.simulated}
+                    onClick={logic.captureBackground}
+                  >
+                    Capture empty channel
+                  </button>
+                </div>
+                {devices.error && <p className={styles.hint}>{devices.error}</p>}
               </div>
-              <div className={styles.inline}>
-                <Num
-                  label="Sensitivity (0 = 90)"
-                  value={cams.threshold}
-                  min={0}
-                  onChange={(v) => logic.setCameras({ threshold: v })}
-                />
-                <Num
-                  label="Smallest piece px (0 = scaled)"
-                  value={cams.minArea}
-                  min={0}
-                  onChange={(v) => logic.setCameras({ minArea: v })}
-                />
+
+              <div className={styles.panel}>
+                <h3 className={styles.panelTitle}>Empty all the way round</h3>
+                <p className={styles.hint}>
+                  For a rotor with a pattern on it (the cone&apos;s facets): turns the channel
+                  across one section ({logic.roundPeriod.toFixed(0)}°, after which the rotor looks
+                  the same again), capturing it empty every few degrees, so its pattern turning
+                  isn&apos;t taken for pieces. Clear the channel first. It replaces the single
+                  picture above, and that one replaces it.
+                </p>
+                <div className={styles.buttonRow}>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Every (°)</span>
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="30"
+                      step="0.5"
+                      value={logic.roundStep}
+                      disabled={Boolean(logic.roundJob)}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (v >= 0.5 && v <= 30) logic.setRoundStep(v);
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className={appStyles.button}
+                    disabled={!device || logic.simulated || Boolean(logic.roundJob)}
+                    onClick={logic.captureRound}
+                  >
+                    Capture empty across a section
+                  </button>
+                </div>
+                <p className={styles.hint}>
+                  {logic.roundJob
+                    ? `${logic.roundJob.detail} (${logic.roundJob.step} of ${logic.roundJob.total})`
+                    : `${Math.max(1, Math.round(logic.roundPeriod / logic.roundStep))} pictures, about ${Math.ceil((logic.roundPeriod / logic.roundStep) * 0.8)} s.`}
+                </p>
               </div>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>ffmpeg (empty: the one on PATH)</span>
-                <input
-                  value={cams.ffmpeg}
-                  onChange={(e) => logic.setCameras({ ffmpeg: e.target.value })}
-                  placeholder="C:\ffmpeg\bin\ffmpeg.exe"
-                />
-              </label>
+
+              <div className={styles.panel}>
+                <h3 className={styles.panelTitle}>Zones</h3>
+                <div className={styles.buttonRow}>
+                  <button
+                    type="button"
+                    className={appStyles.button}
+                    disabled={logic.measuring || (!device && !logic.simulated)}
+                    onClick={logic.measureRing}
+                  >
+                    {logic.measuring ? 'Measuring…' : 'Measure ring from the picture'}
+                  </button>
+                  {!zones && (
+                    <button
+                      type="button"
+                      className={appStyles.buttonSecondary}
+                      onClick={logic.startZones}
+                    >
+                      Draw by hand
+                    </button>
+                  )}
+                </div>
+                <p className={styles.hint}>
+                  Finds the bowl&apos;s rim and the hole in its middle, and sets the ring between
+                  them. It keeps the drop and exit angles; set those by hand.
+                </p>
+                {zones && <ZoneEditor zones={zones} onField={logic.setZoneField} />}
+              </div>
+
+              <div className={styles.panel}>
+                <h3 className={styles.panelTitle}>All cameras</h3>
+                <div className={styles.inline}>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Size</span>
+                    <select
+                      value={`${cams.width}x${cams.height}`}
+                      onChange={(e) => {
+                        const [width, height] = e.target.value.split('x').map(Number);
+                        logic.setCameras({ width, height });
+                      }}
+                    >
+                      {CAMERA_SIZES.map(([w, h]) => (
+                        <option key={`${w}x${h}`} value={`${w}x${h}`}>
+                          {w}×{h}
+                        </option>
+                      ))}
+                      {!CAMERA_SIZES.some(([w, h]) => w === cams.width && h === cams.height) && (
+                        <option value={`${cams.width}x${cams.height}`}>
+                          {cams.width}×{cams.height}
+                        </option>
+                      )}
+                    </select>
+                  </label>
+                  <Num
+                    label="FPS"
+                    value={cams.fps}
+                    min={1}
+                    onChange={(v) => logic.setCameras({ fps: v })}
+                  />
+                </div>
+                <div className={styles.inline}>
+                  <Num
+                    label="Sensitivity (0 = 90)"
+                    value={cams.threshold}
+                    min={0}
+                    onChange={(v) => logic.setCameras({ threshold: v })}
+                  />
+                  <Num
+                    label="Smallest piece px (0 = scaled)"
+                    value={cams.minArea}
+                    min={0}
+                    onChange={(v) => logic.setCameras({ minArea: v })}
+                  />
+                </div>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>ffmpeg (empty: the one on PATH)</span>
+                  <input
+                    value={cams.ffmpeg}
+                    onChange={(e) => logic.setCameras({ ffmpeg: e.target.value })}
+                    placeholder="C:\ffmpeg\bin\ffmpeg.exe"
+                  />
+                </label>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </section>
   );
