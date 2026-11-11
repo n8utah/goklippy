@@ -186,6 +186,25 @@ other.
 - The steppers are open-loop. These figures show what the MCU issued; skipped steps on the shaft
   are not visible.
 
+## At the machine next (2026-11-11)
+
+1. **Motor power.** Check 12 V on the RAMPS **5 A** input (steppers, D9, D10). On 2026-11-11 the
+   board took every command but the light stayed dark and the camera saw no channel turn; only a
+   C1 move nudged the blue brick, so C1 may be powered, or that was vibration.
+2. **Light (D10).** With power, switch it on and off (Dashboard) and compare C2's pictures; check
+   D10's LED on the board and the strip's polarity. Leave it on a minute to confirm the 5 s
+   safety timeout never trips.
+3. **Gear ratios.** Set each channel's real gear on the Sorter page; a 15° test move with the
+   default gear 1 is only 15° of motor shaft.
+4. **Find which camera is where.** Put a piece or tape on each channel and run it from the
+   Cameras page, Setup view.
+5. **Supply voltage sensing (wiring).** A divider from the 12 V 5 A rail to a free analog pin
+   (AUX-2 A5 or A9–A12): 10 kΩ from 12 V to the pin, 4.7 kΩ from the pin to ground (12 V →
+   3.8 V; 14 V stays under 5 V). Note the pin; the software side (a supply-voltage reading on
+   the Dashboard, refusing to home or sort below about 10.5 V) is then to be built.
+6. **Piece detection.** Take the brick off, capture C2 empty, drop pieces on and check they're
+   found and tracked as the channel turns.
+
 ## Open questions
 
 - The Sorter V2 docs give no gear ratios or stage speeds, so the feeder defaults (1:1, C1 5 rpm, C2
