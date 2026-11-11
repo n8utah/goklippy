@@ -99,6 +99,7 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	sorterGroup.GET("/cameras/:channel/stream", routes.StreamSorterCamera)
 	sorterGroup.GET("/cameras/:channel/observation", routes.GetSorterCameraObservation)
 	sorterGroup.POST("/cameras/:channel/background", routes.CaptureSorterBackground)
+	sorterGroup.POST("/cameras/:channel/background/round", routes.CaptureSorterRound)
 
 	registerFrontendHosting(r, cfg.Frontend)
 }

@@ -310,6 +310,11 @@ export function listSorterCameraModes(device) {
   return getJSON(`/api/v1/sorter/cameras/modes?device=${encodeURIComponent(device)}`);
 }
 
+/** Starts a job turning the channel all the way round, capturing it empty every step°. */
+export function captureSorterRound(channel, step) {
+  return postJSON(`/api/v1/sorter/cameras/${channel}/background/round`, { step });
+}
+
 /** Starts the camera search: each channel turns a little while these cameras watch. */
 export function findSorterCameras(devices, degrees) {
   return postJSON('/api/v1/sorter/cameras/find', { devices, degrees });

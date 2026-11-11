@@ -24,6 +24,34 @@ func InitCameras(feed sorter.CameraFeed, perception *sorter.Perception) {
 	sorterPerception = perception
 }
 
+type roundRequest struct {
+	Step float64 `json:"step"` // degrees between pictures; 0 uses 2
+}
+
+// CaptureSorterRound POST /sorter/cameras/:channel/background/round {"step": 2}: a
+// job turns the channel all the way round, capturing it empty every step degrees,
+// so a patterned rotor's turning doesn't look like pieces.
+func CaptureSorterRound(c *gin.Context) {
+	ch, ok := cameraChannel(c)
+	if !ok {
+		return
+	}
+	if sorterPerception == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "the machine is simulated: there are no cameras"})
+		return
+	}
+	var req roundRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	if err := sorterMachine.CaptureViews(c.Request.Context(), ch, sorterPerception, req.Step); err != nil {
+		sorterError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // FindSorterCameras POST /sorter/cameras/find {"devices": [...], "degrees": 15}: turns
 // each channel a little and back while watching the cameras, to propose which camera
 // is where. It runs as a sorter job; GET shows the result.

@@ -158,7 +158,10 @@ const CamerasPage = () => {
                       ? 'Starting…'
                       : ''}
                 {chStatus.message && ` · ${chStatus.message}`}
-                {chStatus.has_background && ' · empty-channel picture captured'}
+                {chStatus.has_background &&
+                  (chStatus.views > 0
+                    ? ` · empty all the way round (${chStatus.views} pictures, matching #${chStatus.matched_view + 1})`
+                    : ' · empty-channel picture captured')}
               </p>
             )}
           </div>
@@ -207,6 +210,46 @@ const CamerasPage = () => {
                 </button>
               </div>
               {devices.error && <p className={styles.hint}>{devices.error}</p>}
+            </div>
+
+            <div className={styles.panel}>
+              <h3 className={styles.panelTitle}>Empty all the way round</h3>
+              <p className={styles.hint}>
+                For a rotor with a pattern on it (the cone&apos;s facets): turns the channel once
+                round, capturing it empty every few degrees, so its pattern turning isn&apos;t taken
+                for pieces. Clear the channel first. It replaces the single picture above, and that
+                one replaces it.
+              </p>
+              <div className={styles.buttonRow}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Every (°)</span>
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="30"
+                    step="0.5"
+                    value={logic.roundStep}
+                    disabled={Boolean(logic.roundJob)}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (v >= 0.5 && v <= 30) logic.setRoundStep(v);
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className={appStyles.button}
+                  disabled={!device || logic.simulated || Boolean(logic.roundJob)}
+                  onClick={logic.captureRound}
+                >
+                  Capture all the way round
+                </button>
+              </div>
+              <p className={styles.hint}>
+                {logic.roundJob
+                  ? `${logic.roundJob.detail} (${logic.roundJob.step} of ${logic.roundJob.total})`
+                  : `${Math.round(360 / logic.roundStep)} pictures, about ${Math.ceil(((360 / logic.roundStep) * 0.8) / 60)} min.`}
+              </p>
             </div>
 
             <div className={styles.panel}>

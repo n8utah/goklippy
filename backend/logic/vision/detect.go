@@ -35,20 +35,28 @@ type BackgroundDetector struct {
 	bgH    int
 	mask   []bool // sampled pixels on the channel
 	maskOf ChannelZones
+
+	// views are empty-channel pictures all the way round (see views.go); when set
+	// they're used instead of bg.
+	views    [][]uint8
+	lastView int
 }
 
 // NewBackgroundDetector has defaults for a 640×480 camera.
 func NewBackgroundDetector() *BackgroundDetector {
-	return &BackgroundDetector{Threshold: 90, MinArea: 120, Step: 2, Learn: 0.01}
+	return &BackgroundDetector{Threshold: 90, MinArea: 120, Step: 2, Learn: 0.01, lastView: -1}
 }
 
-// HasBackground reports whether an empty-channel picture has been captured.
+// HasBackground reports whether an empty-channel picture (or a set of them all the
+// way round) has been captured.
 func (d *BackgroundDetector) HasBackground() bool {
-	return d.bg != nil
+	return d.bg != nil || len(d.views) > 0
 }
 
-// SetBackground takes a frame of the empty channel as the background.
+// SetBackground takes a frame of the empty channel as the background, replacing any
+// views.
 func (d *BackgroundDetector) SetBackground(frame image.Image) {
+	d.views, d.lastView = nil, -1
 	b := frame.Bounds()
 	step := max(1, d.Step)
 	d.bgW, d.bgH = (b.Dx()+step-1)/step, (b.Dy()+step-1)/step
@@ -80,6 +88,9 @@ func (d *BackgroundDetector) channelMask(z ChannelZones) []bool {
 
 // Detect returns a box per blob of changed pixels on the channel.
 func (d *BackgroundDetector) Detect(frame image.Image, z ChannelZones) ([]Box, error) {
+	if len(d.views) > 0 {
+		return d.detectViews(frame, z)
+	}
 	if d.bg == nil {
 		return nil, ErrNoBackground
 	}

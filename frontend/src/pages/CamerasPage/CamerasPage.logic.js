@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   cancelSorterJob,
   captureSorterBackground,
+  captureSorterRound,
   findSorterCameras,
   getSorterCameraFind,
   getSorterCameras,
@@ -72,6 +73,8 @@ export function useCamerasPageLogic() {
   const channel = view === 'setup' ? 'c2' : view;
   const [devices, setDevices] = useState({ ...NO_DEVICES, loading: true });
   const [previewing, setPreviewing] = useState({}); // device id -> shown
+  const [roundStep, setRoundStep] = useState(2);
+  const sorter = useSorterState();
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -221,8 +224,27 @@ export function useCamerasPageLogic() {
     }
   };
 
+  /** Starts the job turning the channel round, capturing it empty every roundStep°. */
+  const captureRound = async () => {
+    setError('');
+    setNotice('');
+    try {
+      await captureSorterRound(channel, roundStep);
+      setNotice(
+        `Turning ${channel.toUpperCase()} all the way round, a picture every ${roundStep}°. Keep it clear and don't feed it until it's done.`,
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const roundJob = sorter.state?.job?.name?.startsWith('Capture ') ? sorter.state.job : null;
+
   return {
     simulated: status?.simulated,
+    roundStep,
+    setRoundStep,
+    captureRound,
+    roundJob,
     view,
     setView,
     channel,

@@ -37,10 +37,14 @@ type CameraStatus struct {
 	Device        string        `json:"device"`
 	Camera        camera.Status `json:"camera"`
 	HasBackground bool          `json:"has_background"`
-	ZonesSet      bool          `json:"zones_set"`
-	FrameW        int           `json:"frame_w,omitempty"`
-	FrameH        int           `json:"frame_h,omitempty"`
-	Message       string        `json:"message,omitempty"`
+	// Views is how many empty-channel pictures it has all the way round (0: one
+	// picture, or none), and MatchedView the one the last frame matched.
+	Views       int    `json:"views"`
+	MatchedView int    `json:"matched_view"`
+	ZonesSet    bool   `json:"zones_set"`
+	FrameW      int    `json:"frame_w,omitempty"`
+	FrameH      int    `json:"frame_h,omitempty"`
+	Message     string `json:"message,omitempty"`
 }
 
 // Perception runs a camera per channel that has one and turns its frames into
@@ -176,7 +180,11 @@ func (p *Perception) reconcile(ctx context.Context) {
 		cctx, cancel := context.WithCancel(ctx)
 		pc := &perceptionChannel{cfg: want, cam: p.pool.acquire(want), cancel: cancel, detector: vision.NewBackgroundDetector(), tracker: vision.NewTracker()}
 		pc.detector.Threshold, pc.detector.MinArea, pc.detector.Step = detectorParams(cs)
-		if bg, err := p.loadBackground(ch); err == nil {
+		if views, err := p.loadViews(ch); err == nil && len(views) > 0 {
+			if err := pc.detector.SetViews(views); err != nil {
+				slog.Warn("saved empty-channel pictures not used", "channel", ch, "error", err)
+			}
+		} else if bg, err := p.loadBackground(ch); err == nil {
 			pc.detector.SetBackground(bg)
 		}
 		p.chans[ch] = pc
@@ -315,6 +323,7 @@ func (p *Perception) CaptureBackground(ch Channel) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	_ = os.RemoveAll(p.viewsDir(ch)) // one picture replaces the round
 	return os.WriteFile(path, frame.JPEG, 0o644)
 }
 
@@ -342,6 +351,7 @@ func (p *Perception) Statuses() map[Channel]CameraStatus {
 		if pc := p.chans[ch]; pc != nil {
 			st.Camera = pc.cam.Status()
 			st.HasBackground = pc.detector.HasBackground()
+			st.Views, st.MatchedView = pc.detector.Views(), pc.detector.LastView()
 			st.Message = pc.message
 			if pc.img != nil {
 				st.FrameW, st.FrameH = pc.img.Bounds().Dx(), pc.img.Bounds().Dy()
