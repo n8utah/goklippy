@@ -87,29 +87,33 @@ action, and stopping is safe (pieces aboard are recorded).
   settle.
 
 ### 6. Page layout template
-One shape for every page so they read alike. Recommendation: header (group › page title, one
-line on what it's for, the page's main actions on the right); content in cards on a 12-column
-grid; long pages split into tabs (Board: Connection / Wiring / Config file / Board picture;
-Channels: per channel; Chute: Calibrate / Layers / Test); a right-hand panel for the selected
-thing where it helps (a bin, a piece, a board slot).
+One shape for every page so they read alike. **Decided (2026-11-11): tabs per part.** Header:
+the group title, its pages as tabs, one line on what the page is for, its main actions on the
+right. Long pages split into tabs per part, one part at a time: Board › Connection / Wiring /
+Config file / Picture; Channels › C1 / C2 / C3 / C4 / Routines; Chute › Calibrate / Layers / Test
+bins; Cameras › Setup / C2 / C3 / C4. Content in cards on a 12-column grid; a right-hand panel
+for the selected thing where it helps (a bin, a board slot).
 
 ### 7. Global search (Ctrl+K)
-One palette that finds **pages**, **settings** (opens the quick editor), **actions** (shake a
-channel, blink the light, home, capture empty) and **records** (pieces by id, runs). Canvas board 3.
-Open questions: actions that move the machine in search, or not? Prefix (">") for actions only?
-Recent items when the box is empty?
+**Decided (2026-11-11): pages, settings and actions; not records.** One palette that finds
+**pages** and their tabs ("chute calibrate", "camera C3 zones"), **settings** (Enter opens the
+quick editor) and **actions** (home, start/pause, blink the light, shake a channel, capture
+empty, find cameras). Actions that move the machine say so and follow the same rules as their
+buttons (refused while sorting, and so on). Pieces and runs are found on Records and Diagnose,
+not in search. Still to settle in the spec: a ">" prefix for actions only, and recent items when
+the box is empty.
 
 ### 8. Settings model
-Recommendation: every setting is defined once in a registry (key, label, help, unit, range,
-default, section, "applies while sorting", which page uses it). The Settings page lists them by
-section; machine pages show the ones they use inline; search opens any of them in the quick
-editor (canvas board 4). The registry also drives search, defaults and reset, so they can't
-drift apart.
+**Decided (2026-11-11): one registry, three doors.** Every setting is defined once in a registry
+(key, label, help, unit, range, default, section, "applies while sorting", which page uses it).
+System › Settings lists them by section; machine pages show the ones they use inline; search
+opens any of them in the quick editor (canvas board 4). All three edit the same value. The
+registry also drives search, defaults and reset, so they can't drift apart.
 
 ### 9. Machine setup flow
-Machine › Overview: a checklist (board, motors, chute, cameras, light, motor power, profile) with
-ticks from live status and a link to the page that fixes each. Open question: also a first-run
-wizard, or the checklist alone?
+**Decided (2026-11-11): the checklist only, no wizard.** Machine › Overview lists each step
+(board, motors, chute, cameras, light, motor power, profile) with a tick from live status and a
+link to the page that does it, in no forced order; Home shows the progress.
 
 ### 10. Screens and devices
 Laptop at the machine is the main screen. Recommendation: work down to tablet width (sidebar
