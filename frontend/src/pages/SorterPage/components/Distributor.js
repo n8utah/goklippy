@@ -50,7 +50,7 @@ const Distributor = ({ logic, showSettings, connected }) => {
         <h3 className={styles.cardTitle}>Distributor</h3>
         <span className={moving ? styles.badgeOn : styles.badgeOff}>{moving ? `Moving ${distributor.measuredRpm.toFixed(1)} rpm` : 'Stopped'}</span>
       </header>
-      {connected && oid == null && <p className={styles.alert}>{config.stepper} isn&apos;t in the connected config. Add it on Board Setup.</p>}
+      {connected && oid == null && <p className={styles.alert}>{config.stepper} isn&apos;t in the connected config. Add it under Machine › Board › Wiring.</p>}
       <p className={appStyles.muted}>Home, calibrate and aim the chute, and test bins, on the Chute page.</p>
 
       <div className={styles.layerStack}>

@@ -177,7 +177,7 @@ const ChutePage = () => {
           <NumberSetting label="Servo settle" value={distributor.doorSettleMs} min={0} step={50} unit="ms" onChange={(v) => logic.setDistributor({ doorSettleMs: v })} />
         </div>
         <p className={styles.hint}>
-          The home switch is an <code>endstop_pin</code> on the chute&apos;s stepper section (Board Setup). Speed,
+          The home switch is an <code>endstop_pin</code> on the chute&apos;s stepper section (Machine › Board › Wiring). Speed,
           acceleration, gearing and the layer servos are on the LEGO Sorter page.
         </p>
       </div>

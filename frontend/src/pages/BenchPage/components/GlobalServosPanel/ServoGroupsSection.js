@@ -119,7 +119,9 @@ const ServoGroupsSection = ({ connected, busy, onRun }) => {
   };
 
   const handleGroupScale = (group, factor) => {
-    setGroups((prev) => prev.map((item) => (item.id === group.id ? scaleGroupAngles(item, factor) : item)));
+    setGroups((prev) =>
+      prev.map((item) => (item.id === group.id ? scaleGroupAngles(item, factor) : item)),
+    );
     onRun(async () => {
       const plan = applyPlanForGroup(scaleGroupAngles(group, factor), servoObjects);
       await setServosAtAngles(plan);
@@ -186,7 +188,7 @@ const ServoGroupsSection = ({ connected, busy, onRun }) => {
                     max="180"
                     className={styles.memberSpeedInput}
                     disabled={!checked}
-                    value={checked ? draft.angles?.[key] ?? DEFAULT_SERVO_ANGLE : ''}
+                    value={checked ? (draft.angles?.[key] ?? DEFAULT_SERVO_ANGLE) : ''}
                     onChange={(e) => setDraftMemberAngle(key, Number(e.target.value))}
                     aria-label={`${label} angle`}
                   />
@@ -222,7 +224,11 @@ const ServoGroupsSection = ({ connected, busy, onRun }) => {
                   <button type="button" className={styles.linkBtn} onClick={() => beginEdit(group)}>
                     Edit
                   </button>
-                  <button type="button" className={styles.linkBtnDanger} onClick={() => deleteGroup(group.id)}>
+                  <button
+                    type="button"
+                    className={styles.linkBtnDanger}
+                    onClick={() => deleteGroup(group.id)}
+                  >
                     Delete
                   </button>
                 </div>
@@ -246,9 +252,7 @@ const ServoGroupsSection = ({ connected, busy, onRun }) => {
                   disabled={busy || !connected || available === 0}
                   onClick={() =>
                     onRun(() =>
-                      setServosAtAngles(
-                        oids.map((oid) => ({ oid, angle: DEFAULT_SERVO_ANGLE })),
-                      ),
+                      setServosAtAngles(oids.map((oid) => ({ oid, angle: DEFAULT_SERVO_ANGLE }))),
                     )
                   }
                 >

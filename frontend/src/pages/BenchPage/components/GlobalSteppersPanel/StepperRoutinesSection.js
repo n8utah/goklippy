@@ -178,7 +178,8 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
       </div>
 
       <p className={styles.routinesHint}>
-        Build repeating move patterns — each segment runs forward or backward for a set number of steps, then loops forever until stopped.
+        Build repeating move patterns — each segment runs forward or backward for a set number of
+        steps, then loops forever until stopped.
       </p>
 
       {memberOptions.length === 0 && (
@@ -293,7 +294,9 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
       )}
 
       {routines.length === 0 && !draft && memberOptions.length > 0 && (
-        <p className={appStyles.muted}>No routines yet. Create one to run repeating step patterns.</p>
+        <p className={appStyles.muted}>
+          No routines yet. Create one to run repeating step patterns.
+        </p>
       )}
 
       <ul className={styles.groupList}>
@@ -303,7 +306,9 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
           const missing = routine.members.length - available;
           const running = routineHasRunning(routine);
           // Messages from members whose routine stopped on its own (backend-reported).
-          const failures = [...new Set(oids.map((oid) => stepperRoutineErrors[oid]).filter(Boolean))];
+          const failures = [
+            ...new Set(oids.map((oid) => stepperRoutineErrors[oid]).filter(Boolean)),
+          ];
           return (
             <li key={routine.id} className={styles.groupCard}>
               <div className={styles.groupCardHead}>
@@ -312,10 +317,18 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
                   {running && <span className={styles.runningBadge}>Running</span>}
                 </span>
                 <div className={styles.groupCardTools}>
-                  <button type="button" className={styles.linkBtn} onClick={() => beginEdit(routine)}>
+                  <button
+                    type="button"
+                    className={styles.linkBtn}
+                    onClick={() => beginEdit(routine)}
+                  >
                     Edit
                   </button>
-                  <button type="button" className={styles.linkBtnDanger} onClick={() => deleteRoutine(routine.id)}>
+                  <button
+                    type="button"
+                    className={styles.linkBtnDanger}
+                    onClick={() => deleteRoutine(routine.id)}
+                  >
                     Delete
                   </button>
                 </div>

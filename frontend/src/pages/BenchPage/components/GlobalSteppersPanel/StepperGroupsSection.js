@@ -133,7 +133,9 @@ const StepperGroupsSection = ({ connected, busy, onRun }) => {
 
   const handleGroupScale = (group, factor) => {
     const oids = groupOids(group);
-    setGroups((prev) => prev.map((item) => (item.id === group.id ? scaleGroupSpeeds(item, factor) : item)));
+    setGroups((prev) =>
+      prev.map((item) => (item.id === group.id ? scaleGroupSpeeds(item, factor) : item)),
+    );
     onRun(async () => {
       if (oids.some((oid) => stepperJogState[oid])) {
         await scaleStepperSpeeds(oids, factor);
@@ -192,7 +194,7 @@ const StepperGroupsSection = ({ connected, busy, onRun }) => {
                     max="50000"
                     className={styles.memberSpeedInput}
                     disabled={!checked}
-                    value={checked ? draft.speeds?.[key] ?? DEFAULT_STEPPER_SPEED : ''}
+                    value={checked ? (draft.speeds?.[key] ?? DEFAULT_STEPPER_SPEED) : ''}
                     onChange={(e) => setDraftMemberSpeed(key, Number(e.target.value))}
                     aria-label={`${label} speed`}
                   />
@@ -228,7 +230,11 @@ const StepperGroupsSection = ({ connected, busy, onRun }) => {
                   <button type="button" className={styles.linkBtn} onClick={() => beginEdit(group)}>
                     Edit
                   </button>
-                  <button type="button" className={styles.linkBtnDanger} onClick={() => deleteGroup(group.id)}>
+                  <button
+                    type="button"
+                    className={styles.linkBtnDanger}
+                    onClick={() => deleteGroup(group.id)}
+                  >
                     Delete
                   </button>
                 </div>

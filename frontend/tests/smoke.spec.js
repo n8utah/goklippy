@@ -15,6 +15,8 @@ test('every page URL opens inside the frame', async ({ page }) => {
     ['/rules/profiles', 'Rules'],
     ['/rules/bins', 'Rules'],
     ['/machine/board/wiring', 'Machine'],
+    ['/machine/board/config', 'Machine'],
+    ['/diagnose/bench', 'Diagnose'],
     ['/machine/channels', 'Machine'],
     ['/machine/chute', 'Machine'],
     ['/machine/cameras', 'Machine'],

@@ -242,3 +242,13 @@ Each step keeps the app working and is its own commit.
   - Pieces aren't linked to their C2/C3 camera journeys yet (phase 9 step 2), so the modal shows
     C4 and the chute from the piece's record and points to Diagnose › Piece journeys.
   - Home's setup progress comes with Machine › Overview (step 5).
+- **Step 4, part 2** (2026-11-11): Machine › Board (`pages/BoardPage`, one route
+  `/machine/board/:part?` so tabs keep edits) replaces Devices, Board Setup and the Overlay
+  Editor: a connection strip and unsaved-wiring bar on every tab; Connection (ports, check for
+  boards, connect, a dialog instead of the browser's confirm for unsaved wiring); Wiring;
+  Config file; Board picture. Diagnose › Motor bench (`pages/BenchPage`) takes the steppers,
+  servos, groups, routines and PCA9685 panels. The config workspace is shared through
+  `helpers/useKlipperWorkspace.js`. For now:
+  - The board diagram, the pin panel (`BoardPage/components/SlotPanel`), the picture editor
+    (`pages/BoardEditorPage`) and the bench panels are the earlier components in light panels;
+    restyling them is still to do.

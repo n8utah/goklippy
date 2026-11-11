@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useMCUSession } from '../../../../context/MCUSessionContext';
-import { DEFAULT_OUTPUT_TIMEOUT_S, MAX_OUTPUT_TIMEOUT_S, isOnOffSlot } from '../../../../helpers/boardSlotConfig';
+import {
+  DEFAULT_OUTPUT_TIMEOUT_S,
+  MAX_OUTPUT_TIMEOUT_S,
+  isOnOffSlot,
+} from '../../../../helpers/boardSlotConfig';
 
-import styles from './ConnectionPanel.module.css';
+import styles from './SlotPanel.module.css';
 
 import appStyles from '../../../../styles/app.module.css';
 
-
-
-const ConnectionPanel = ({
-
+/** Board › Wiring's side panel: what's wired to the picked pin, and trying it live. */
+const SlotPanel = ({
   hotspot,
 
   slots,
@@ -36,28 +38,24 @@ const ConnectionPanel = ({
   onJogStepper,
 
   onStopStepper,
-
 }) => {
-
   if (!hotspot) {
-
     return (
-
       <aside className={styles.panel}>
+        <h3 className={styles.heading}>Pin</h3>
 
-        <h3 className={styles.heading}>Connection</h3>
+        <p className={appStyles.muted}>
+          Click a pin on the board diagram to configure what is wired there.
+        </p>
 
-        <p className={appStyles.muted}>Click a pin on the board diagram to configure what is wired there.</p>
-
-        {connected && <p className={styles.liveHint}>Live session active — connected slots show readings on the diagram.</p>}
-
+        {connected && (
+          <p className={styles.liveHint}>
+            Live session active — connected slots show readings on the diagram.
+          </p>
+        )}
       </aside>
-
     );
-
   }
-
-
 
   const slotId = hotspot.slot_ids?.[0];
 
@@ -67,12 +65,8 @@ const ConnectionPanel = ({
 
   const timeout = state.maxMcuDuration ?? DEFAULT_OUTPUT_TIMEOUT_S;
 
-
-
   const handleConnect = () => {
-
     onUpdate(slotId, {
-
       connected: true,
 
       label: state.label || slot.label || hotspot.label,
@@ -80,74 +74,47 @@ const ConnectionPanel = ({
       type: slot.type,
 
       maxMcuDuration: timeout,
-
     });
-
   };
 
-
-
   return (
-
     <aside className={styles.panel}>
-
       <h3 className={styles.heading}>{hotspot.label}</h3>
 
       <p className={styles.meta}>Slot: {slotId}</p>
 
-      <p className={styles.meta}>Type: {isOnOffSlot(slot) ? 'on/off output' : slot.type || 'unknown'}</p>
+      <p className={styles.meta}>
+        Type: {isOnOffSlot(slot) ? 'on/off output' : slot.type || 'unknown'}
+      </p>
 
       <p className={styles.meta}>Accepts: {(hotspot.accepts || []).join(', ') || '—'}</p>
 
-
-
       {connected && liveObject && (
-
         <LiveControls
-
           slot={slot}
-
           liveObject={liveObject}
-
           liveReading={liveReading}
-
           onSetDigitalOut={onSetDigitalOut}
-
           onSetServo={onSetServo}
-
           onJogStepper={onJogStepper}
-
           onStopStepper={onStopStepper}
-
         />
-
       )}
 
-
-
       {!connected && (
-
         <>
-
           <label className={styles.label} htmlFor="slot-label">
-
             Label
-
           </label>
 
           <input
-
             id="slot-label"
-
             className={styles.input}
-
             value={state.label || ''}
-
-            onChange={(event) => onUpdate(slotId, { ...state, label: event.target.value, localOnly: true })}
-
+            onChange={(event) =>
+              onUpdate(slotId, { ...state, label: event.target.value, localOnly: true })
+            }
           />
-
-
 
           {isOnOffSlot(slot) && (
             <>
@@ -170,233 +137,166 @@ const ConnectionPanel = ({
                 }}
               />
               <p className={styles.meta}>
-                If the backend stops refreshing this output for this long (it crashed, or the USB cable came out), the board shuts down: the
-                output and every motor stop. Up to {MAX_OUTPUT_TIMEOUT_S} s.
+                If the backend stops refreshing this output for this long (it crashed, or the USB
+                cable came out), the board shuts down: the output and every motor stop. Up to{' '}
+                {MAX_OUTPUT_TIMEOUT_S} s.
               </p>
             </>
           )}
 
           {slot.defaults?.sensor_type && !isOnOffSlot(slot) && (
-
             <>
-
               <label className={styles.label}>Sensor type</label>
 
               <input className={styles.input} readOnly value={slot.defaults.sensor_type} />
-
             </>
-
           )}
 
-
-
           {slot.pins && (
-
             <div className={styles.pinBlock}>
-
               <p className={styles.label}>Pins</p>
 
               <ul className={styles.pinList}>
-
                 {Object.entries(slot.pins).map(([key, value]) => (
-
                   <li key={key}>
-
                     {key}: {value}
-
                   </li>
-
                 ))}
-
               </ul>
-
             </div>
-
           )}
 
-
-
           <div className={styles.actions}>
-
             <button type="button" className={appStyles.button} onClick={handleConnect}>
-
               {state.connected ? 'Update' : 'Mark connected'}
-
             </button>
 
             {state.connected && (
-
-              <button type="button" className={appStyles.buttonSecondary} onClick={() => onClear(slotId)}>
-
+              <button
+                type="button"
+                className={appStyles.buttonSecondary}
+                onClick={() => onClear(slotId)}
+              >
                 Clear
-
               </button>
-
             )}
-
           </div>
-
         </>
-
       )}
 
-
-
       <button type="button" className={styles.linkButton} onClick={onOpenConfig}>
-
         Edit in config file →
-
       </button>
-
     </aside>
-
   );
-
 };
 
-
-
-function LiveControls({ slot, liveObject, liveReading, onSetDigitalOut, onSetServo, onJogStepper, onStopStepper }) {
-
+function LiveControls({
+  slot,
+  liveObject,
+  liveReading,
+  onSetDigitalOut,
+  onSetServo,
+  onJogStepper,
+  onStopStepper,
+}) {
   const kind = liveObject.kind;
 
   const oid = liveObject.oid;
 
   const isServo = kind === 'pwm_out' && liveObject.meta?.device === 'servo';
 
-
-
   if (kind === 'analog_in' || slot.type === 'thermistor') {
-
     const val = liveReading?.value;
 
     const display = val != null ? `${Number(val).toFixed(3)} (${liveReading?.unit || 'adc'})` : '—';
 
     return (
-
       <div className={styles.liveBlock}>
-
         <p className={styles.liveLabel}>Live reading</p>
 
         <p className={styles.liveValue}>{display}</p>
 
         <p className={styles.meta}>Section: {liveObject.section}</p>
-
       </div>
-
     );
-
   }
 
-
-
   if (kind === 'endstop') {
-
     const triggered = liveReading?.value ? 'TRIGGERED' : 'open';
 
     return (
-
       <div className={styles.liveBlock}>
-
         <p className={styles.liveLabel}>Endstop</p>
 
         <p className={styles.liveValue}>{triggered}</p>
-
       </div>
-
     );
-
   }
-
-
 
   if (kind === 'digital_out' || (kind === 'pwm_out' && !isServo)) {
-
-    return <DigitalOutControl oid={oid} onSetDigitalOut={onSetDigitalOut} label={slot.type === 'fan' ? 'Fan' : 'Output'} />;
-
+    return (
+      <DigitalOutControl
+        oid={oid}
+        onSetDigitalOut={onSetDigitalOut}
+        label={slot.type === 'fan' ? 'Fan' : 'Output'}
+      />
+    );
   }
-
-
 
   if (isServo) {
-
     return <ServoControl oid={oid} onSetServo={onSetServo} />;
-
   }
-
-
 
   if (kind === 'stepper') {
-
-    return <StepperControl oid={oid} liveReading={liveReading} onJogStepper={onJogStepper} onStopStepper={onStopStepper} />;
-
+    return (
+      <StepperControl
+        oid={oid}
+        liveReading={liveReading}
+        onJogStepper={onJogStepper}
+        onStopStepper={onStopStepper}
+      />
+    );
   }
 
-
-
   return (
-
     <div className={styles.liveBlock}>
-
-      <p className={styles.meta}>Configured ({kind}) — OID {oid}</p>
-
+      <p className={styles.meta}>
+        Configured ({kind}) — OID {oid}
+      </p>
     </div>
-
   );
-
 }
 
-
-
 function DigitalOutControl({ oid, onSetDigitalOut, label }) {
-
   const [on, setOn] = useState(false);
 
   const [busy, setBusy] = useState(false);
 
-
-
   const toggle = async () => {
-
     setBusy(true);
 
     try {
-
       const next = !on;
 
       await onSetDigitalOut(oid, next);
 
       setOn(next);
-
     } finally {
-
       setBusy(false);
-
     }
-
   };
 
-
-
   return (
-
     <div className={styles.liveBlock}>
-
       <p className={styles.liveLabel}>{label}</p>
 
       <button type="button" className={appStyles.button} disabled={busy} onClick={toggle}>
-
         {on ? 'Turn off' : 'Turn on'}
-
       </button>
-
     </div>
-
   );
-
 }
-
-
 
 function ServoControl({ oid, onSetServo }) {
   const { servoAngles } = useMCUSession();
@@ -474,10 +374,7 @@ function ServoControl({ oid, onSetServo }) {
   );
 }
 
-
-
 function StepperControl({ oid, liveReading, onJogStepper, onStopStepper }) {
-
   const { isStepperRunning, setStepperRunning } = useMCUSession();
 
   const [forward, setForward] = useState(true);
@@ -561,170 +458,118 @@ function StepperControl({ oid, liveReading, onJogStepper, onStopStepper }) {
   const livePosition = liveReading?.value;
   const positionDisplay = livePosition != null ? Number(livePosition) : null;
 
-
-
   return (
-
     <div className={styles.liveBlock}>
-
       <p className={styles.liveLabel}>Stepper jog</p>
-
-
 
       <label className={styles.label}>Direction</label>
 
       <div className={styles.segmentRow}>
-
         <button
-
           type="button"
-
           className={forward ? appStyles.navButtonActive : appStyles.navButton}
-
           onClick={() => setForward(true)}
-
         >
-
           Forward
-
         </button>
 
         <button
-
           type="button"
-
           className={!forward ? appStyles.navButtonActive : appStyles.navButton}
-
           onClick={() => setForward(false)}
-
         >
-
           Reverse
-
         </button>
-
       </div>
 
-
-
       <label className={styles.label} htmlFor="stepper-speed">
-
         Speed (steps/s)
-
       </label>
 
       <div className={styles.speedRow}>
-
-        <button type="button" className={styles.stepBtn} aria-label="Decrease speed by 100" onClick={() => adjustSpeed(-100)}>
-
+        <button
+          type="button"
+          className={styles.stepBtn}
+          aria-label="Decrease speed by 100"
+          onClick={() => adjustSpeed(-100)}
+        >
           ▼
-
         </button>
 
         <input
-
           id="stepper-speed"
-
           type="number"
-
           min="1"
-
           max="50000"
-
           className={styles.input}
-
           value={speedHz}
-
           onChange={(e) => setSpeedHz(clampSpeed(Number(e.target.value) || 1))}
-
         />
 
-        <button type="button" className={styles.stepBtn} aria-label="Increase speed by 100" onClick={() => adjustSpeed(100)}>
-
+        <button
+          type="button"
+          className={styles.stepBtn}
+          aria-label="Increase speed by 100"
+          onClick={() => adjustSpeed(100)}
+        >
           ▲
-
         </button>
-
       </div>
-
-
 
       <label className={styles.label}>Mode</label>
 
       <div className={styles.segmentRow}>
-
         <button
-
           type="button"
-
           className={mode === 'continuous' ? appStyles.navButtonActive : appStyles.navButton}
-
           onClick={() => handleModeChange('continuous')}
-
         >
-
           Continuous
-
         </button>
 
         <button
-
           type="button"
-
           className={mode === 'distance' ? appStyles.navButtonActive : appStyles.navButton}
-
           onClick={() => handleModeChange('distance')}
-
         >
-
           Distance
-
         </button>
-
       </div>
 
-
-
       {mode === 'distance' && (
-
         <>
-
           <label className={styles.label} htmlFor="stepper-steps">
-
             Steps
-
           </label>
 
           <input
-
             id="stepper-steps"
-
             type="number"
-
             min="1"
-
             max="1000000"
-
             className={styles.input}
-
             value={steps}
-
             onChange={(e) => setSteps(Number(e.target.value))}
-
           />
-
         </>
-
       )}
 
-
-
       <div className={styles.actions}>
-        <button type="button" className={appStyles.button} disabled={busy || (mode === 'continuous' && running)} onClick={run}>
+        <button
+          type="button"
+          className={appStyles.button}
+          disabled={busy || (mode === 'continuous' && running)}
+          onClick={run}
+        >
           {mode === 'continuous' ? 'Run' : `Run ${steps} steps`}
         </button>
         {mode === 'continuous' && running && (
-          <button type="button" className={appStyles.buttonSecondary} disabled={busy} onClick={stop}>
+          <button
+            type="button"
+            className={appStyles.buttonSecondary}
+            disabled={busy}
+            onClick={stop}
+          >
             Stop
           </button>
         )}
@@ -736,14 +581,8 @@ function StepperControl({ oid, liveReading, onJogStepper, onStopStepper }) {
           <p className={styles.liveValue}>{positionDisplay} steps</p>
         </>
       )}
-
     </div>
-
   );
-
 }
 
-
-
-export default ConnectionPanel;
-
+export default SlotPanel;

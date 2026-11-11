@@ -129,7 +129,9 @@ const GlobalSteppersPanel = () => {
                 const obj = stepperObjects.find((item) => item.oid === oid);
                 return (
                   <li key={oidStr} className={styles.listItem}>
-                    <span className={styles.listName}>{obj ? stepperLabel(obj) : `OID ${oid}`}</span>
+                    <span className={styles.listName}>
+                      {obj ? stepperLabel(obj) : `OID ${oid}`}
+                    </span>
                     <span className={styles.listMeta}>
                       {state.forward ? 'Fwd' : 'Rev'} · {state.speedHz} steps/s
                     </span>

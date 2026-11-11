@@ -57,7 +57,7 @@ const SorterPage = ({ onGoBoard }) => {
           </button>
           {!connected && (
             <button type="button" className={appStyles.button} onClick={onGoBoard}>
-              Connect on Board Setup
+              Connect the board
             </button>
           )}
           <button type="button" className={appStyles.buttonSecondary} disabled={!connected || logic.resetting} onClick={logic.handleReset}>

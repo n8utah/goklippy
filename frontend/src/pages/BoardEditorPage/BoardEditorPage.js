@@ -47,7 +47,7 @@ const BoardEditorPage = () => {
     <section className={appStyles.card}>
       <div className={styles.headerRow}>
         <div>
-          <h2 className={styles.title}>Board Overlay Editor</h2>
+          <h2 className={styles.title}>Pins on the board picture</h2>
           <p className={appStyles.muted}>
             Drag overlays on the board image, add or remove known slots, then save as the default profile map.
           </p>

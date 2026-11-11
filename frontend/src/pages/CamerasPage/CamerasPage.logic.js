@@ -398,7 +398,7 @@ export function useCameraFinder(logic) {
     : logic.simulated
       ? 'The machine is simulated: there are no cameras to find.'
       : !state?.hardware?.connected
-        ? 'Connect the board on Board Setup first: the search turns the channels.'
+        ? 'Connect the board under Machine › Board first: the search turns the channels.'
         : s === 'running' || s === 'homing'
           ? 'Pause or stop the sorter first.'
           : state?.job && !running

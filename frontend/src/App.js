@@ -5,7 +5,6 @@ import {
   Route,
   Routes,
   useNavigate,
-  useParams,
   useSearchParams,
 } from 'react-router';
 
@@ -14,12 +13,11 @@ import { MCUSessionProvider } from './context/MCUSessionContext';
 import { MachineSettingsProvider } from './helpers/sorterSettings';
 import { SorterStateProvider } from './helpers/sorterState';
 import AccountPage from './pages/AccountPage/AccountPage';
+import BenchPage from './pages/BenchPage/BenchPage';
 import BinsPage from './pages/BinsPage/BinsPage';
-import BoardEditorPage from './pages/BoardEditorPage/BoardEditorPage';
-import BoardSetupPage from './pages/BoardSetupPage/BoardSetupPage';
+import BoardPage from './pages/BoardPage/BoardPage';
 import CamerasPage from './pages/CamerasPage/CamerasPage';
 import ChutePage from './pages/ChutePage/ChutePage';
-import DevicesPage from './pages/DevicesPage/DevicesPage';
 import HomePage from './pages/HomePage/HomePage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
 import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
@@ -29,7 +27,7 @@ import SettingsPage from './pages/SettingsPage/SettingsPage';
 import SortPage from './pages/SortPage/SortPage';
 import UiKitPage from './pages/UiKitPage/UiKitPage';
 
-const WIRING_PATH = '/machine/board/wiring';
+const CONNECTION_PATH = '/machine/board/connection';
 
 /** A page from before the new UI: always light until build step 4 rebuilds it. */
 const Legacy = ({ children }) => <div className="legacy-page">{children}</div>;
@@ -44,35 +42,11 @@ const RecordsRoute = () => {
   );
 };
 
-/** Machine › Board: Connection, Wiring and Board picture, today's three pages. */
-const BoardRoute = () => {
-  const navigate = useNavigate();
-  const { part = 'connection' } = useParams();
-  if (part === 'wiring')
-    return (
-      <Legacy>
-        <BoardSetupPage />
-      </Legacy>
-    );
-  if (part === 'picture')
-    return (
-      <Legacy>
-        <BoardEditorPage />
-      </Legacy>
-    );
-  if (part !== 'connection') return <Navigate to="/machine/board" replace />;
-  return (
-    <Legacy>
-      <DevicesPage onGoBoard={() => navigate(WIRING_PATH)} />
-    </Legacy>
-  );
-};
-
 const ChannelsRoute = () => {
   const navigate = useNavigate();
   return (
     <Legacy>
-      <SorterPage onGoBoard={() => navigate(WIRING_PATH)} />
+      <SorterPage onGoBoard={() => navigate(CONNECTION_PATH)} />
     </Legacy>
   );
 };
@@ -128,8 +102,8 @@ const App = () => (
 
               <Route path="machine">
                 <Route index element={<Navigate to="board" replace />} />
-                <Route path="board" element={<BoardRoute />} />
-                <Route path="board/:part" element={<BoardRoute />} />
+                {/* One route, so the page keeps its state from tab to tab. */}
+                <Route path="board/:part?" element={<BoardPage />} />
                 <Route path="channels" element={<ChannelsRoute />} />
                 <Route
                   path="chute"
@@ -159,6 +133,7 @@ const App = () => (
                     </Legacy>
                   }
                 />
+                <Route path="bench" element={<BenchPage />} />
               </Route>
 
               <Route path="system">

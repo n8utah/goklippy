@@ -25,7 +25,14 @@ function formatReading(reading) {
   return String(reading.value ?? '');
 }
 
-const BoardDiagram = ({ diagram, profileId, slotStates, selectedHotspot, onSelectHotspot, readingForSlot }) => {
+const BoardDiagram = ({
+  diagram,
+  profileId,
+  slotStates,
+  selectedHotspot,
+  onSelectHotspot,
+  readingForSlot,
+}) => {
   const [imageFailed, setImageFailed] = useState(false);
 
   if (!diagram) {
@@ -89,7 +96,13 @@ const BoardDiagram = ({ diagram, profileId, slotStates, selectedHotspot, onSelec
                   <title>{hotspot.label}</title>
                 </circle>
                 {readingText && (
-                  <text x={centerX} y={centerY} className={styles.readingLabel} textAnchor="middle" dominantBaseline="middle">
+                  <text
+                    x={centerX}
+                    y={centerY}
+                    className={styles.readingLabel}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                  >
                     {readingText}
                   </text>
                 )}
@@ -111,7 +124,13 @@ const BoardDiagram = ({ diagram, profileId, slotStates, selectedHotspot, onSelec
                 <title>{hotspot.label}</title>
               </rect>
               {readingText && (
-                <text x={centerX} y={centerY} className={styles.readingLabel} textAnchor="middle" dominantBaseline="middle">
+                <text
+                  x={centerX}
+                  y={centerY}
+                  className={styles.readingLabel}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                >
                   {readingText}
                 </text>
               )}
@@ -122,7 +141,9 @@ const BoardDiagram = ({ diagram, profileId, slotStates, selectedHotspot, onSelec
       <div className={styles.legend}>
         <span className={styles.legendDotConnected} /> Connected
         <span className={styles.legendDotEmpty} /> Not configured
-        {readingForSlot && <span className={styles.legendLive}>Live values shown on connected pins</span>}
+        {readingForSlot && (
+          <span className={styles.legendLive}>Live values shown on connected pins</span>
+        )}
       </div>
     </div>
   );

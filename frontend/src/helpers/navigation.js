@@ -70,6 +70,7 @@ export const NAV_GROUPS = [
         parts: [
           { id: 'connection', label: 'Connection' },
           { id: 'wiring', label: 'Wiring' },
+          { id: 'config', label: 'Config file' },
           { id: 'picture', label: 'Board picture' },
         ],
       },
@@ -103,6 +104,12 @@ export const NAV_GROUPS = [
         label: 'Piece journeys',
         path: '/diagnose/journeys',
         about: 'Every picture and decision for recent pieces',
+      },
+      {
+        id: 'bench',
+        label: 'Motor bench',
+        path: '/diagnose/bench',
+        about: 'Run any stepper or servo by hand, in groups or routines',
       },
     ],
   },
