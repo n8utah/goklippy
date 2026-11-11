@@ -70,9 +70,12 @@ shutdown_value: 0
 
 `value` is whether it's on once the board is configured, and `shutdown_value` is its state after
 an MCU shutdown (both 0 or 1; on/off only, no PWM). Add `!` (`!ar10`) if the light is on when it
-should be off. Don't also configure an `[extruder]` on D10: two outputs on one pin is a config
-error. Board Setup shows the section on the D10 slot with on/off buttons, which is the quickest
-wiring check.
+should be off.
+
+Board Setup treats the MOSFET outputs (D8, D9, D10) as plain on/off IO: **Mark connected** writes
+an `[output_pin <slot>]` (keeping the name of one already on that pin, such as `leds`) and removes
+any old `[extruder]`, `[heater_bed]` or `[fan]` on the same pin, since two outputs on one pin is a
+config error. The slot then shows on/off buttons, which is the quickest wiring check.
 
 The **Light** button on the Dashboard switches it, at any time, sorting included. Starting or
 resuming a sort turns it on if **Turn on when sorting starts** is ticked on the Tuning page (the

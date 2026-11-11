@@ -17,6 +17,7 @@ import {
   configOptionsForSlot,
   configSectionName,
   findSectionForSlot,
+  isOnOffSlot,
   slotStatesFromWorkspace,
 } from '../../helpers/boardSlotConfig';
 import { pca9685BoardsInConfig, pca9685Sections } from '../../helpers/pca9685Config';
@@ -231,9 +232,19 @@ export function useBoardSetupPageLogic() {
 
       setConfigError('');
       try {
-        const sectionName = configSectionName(slotId, slot);
-        const options = configOptionsForSlot(slotId, slot, patch);
-        const ws = await updateKlipperSection(sectionName, options);
+        const existing = findSectionForSlot(slotId, slot, workspace?.merged_sections || []);
+        let sectionName = configSectionName(slotId, slot);
+        let options = configOptionsForSlot(slotId, slot, patch);
+        if (isOnOffSlot(slot) && existing?.name.startsWith('output_pin ')) {
+          // Keep its name (e.g. [output_pin leds], which the sorter looks for) and settings.
+          sectionName = existing.name;
+          options = { ...options, ...existing.options };
+        }
+        let ws = await updateKlipperSection(sectionName, options);
+        if (existing && existing.name !== sectionName) {
+          // An old [extruder]/[heater_bed]/[fan] on the same pin would clash with it.
+          ws = await deleteKlipperSection(existing.name);
+        }
         syncWorkspaceState(ws);
         setSlotStates((prev) => ({
           ...prev,
@@ -248,7 +259,7 @@ export function useBoardSetupPageLogic() {
         setConfigError(err.message);
       }
     },
-    [profile, syncWorkspaceState],
+    [profile, workspace, syncWorkspaceState],
   );
 
   const clearSlot = useCallback(

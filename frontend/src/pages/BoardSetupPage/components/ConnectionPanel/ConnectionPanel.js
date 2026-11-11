@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useMCUSession } from '../../../../context/MCUSessionContext';
+import { isOnOffSlot } from '../../../../helpers/boardSlotConfig';
 
 import styles from './ConnectionPanel.module.css';
 
@@ -90,7 +91,7 @@ const ConnectionPanel = ({
 
       <p className={styles.meta}>Slot: {slotId}</p>
 
-      <p className={styles.meta}>Type: {slot.type || 'unknown'}</p>
+      <p className={styles.meta}>Type: {isOnOffSlot(slot) ? 'on/off output' : slot.type || 'unknown'}</p>
 
       <p className={styles.meta}>Accepts: {(hotspot.accepts || []).join(', ') || '—'}</p>
 
@@ -144,7 +145,7 @@ const ConnectionPanel = ({
 
 
 
-          {slot.defaults?.sensor_type && (
+          {slot.defaults?.sensor_type && !isOnOffSlot(slot) && (
 
             <>
 

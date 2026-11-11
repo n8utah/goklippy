@@ -18,10 +18,9 @@ function pinsMatchSlot(slot, options) {
       return normalizePin(options.sensor_pin) === normalizePin(slot.pins.sensor);
     case 'fan':
     case 'relay':
-      return normalizePin(options.pin) === normalizePin(slot.pins.pin);
     case 'heater':
-      // A MOSFET output can also be an on/off [output_pin], such as lights on D10.
-      return normalizePin(options.heater_pin || options.pin) === normalizePin(slot.pins.pin);
+      // [output_pin] and [fan] use pin; an older [extruder]/[heater_bed] used heater_pin.
+      return normalizePin(options.pin || options.heater_pin) === normalizePin(slot.pins.pin);
     case 'servo':
       return normalizePin(options.pin) === normalizePin(slot.pins.pin);
     case 'endstop':
@@ -31,15 +30,23 @@ function pinsMatchSlot(slot, options) {
   }
 }
 
+/**
+ * The MOSFET outputs (D8, D9, D10 on RAMPS) are plain on/off IO for us, whatever the
+ * board calls them: connecting one writes an [output_pin], never a heater or fan.
+ */
+export function isOnOffSlot(slot) {
+  return ['heater', 'fan', 'relay'].includes(slot?.type);
+}
+
 /** Preferred Klipper section name for a board profile slot. */
 export function configSectionName(slotId, slot) {
   switch (slot?.type) {
     case 'stepper':
       return slotId;
     case 'fan':
-      return 'fan';
     case 'heater':
-      return slotId === 'heater_bed' ? 'heater_bed' : 'extruder';
+    case 'relay':
+      return `output_pin ${slotId}`;
     case 'thermistor':
       return `temperature_sensor ${slotId.replace(/^thermistor_/, '')}`;
     case 'servo': {
@@ -65,13 +72,9 @@ export function configOptionsForSlot(slotId, slot, patch = {}) {
         rotation_distance: '40',
       };
     case 'fan':
-      return { pin: slot.pins.pin };
     case 'heater':
-      return {
-        heater_pin: slot.pins.pin,
-        sensor_pin: slot.pins.sensor || 'analog13',
-        ...(slot.defaults?.sensor_type ? { sensor_type: String(slot.defaults.sensor_type) } : {}),
-      };
+    case 'relay':
+      return { pin: slot.pins.pin, value: '0', shutdown_value: '0' };
     case 'thermistor':
       return {
         sensor_pin: slot.pins.sensor,
