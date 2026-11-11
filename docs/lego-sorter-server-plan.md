@@ -183,6 +183,7 @@ and `models/sort_e2e_test.go` sorts known pieces end to end on SQLite and checks
 | 7 Coordinator and dashboard | Built: the machine runs platter then feeder each tick, with runs and the **Dashboard** page. |
 | 8 Records, incidents, recovery | Built: pieces, photos, runs, incidents, reviews and the **Records** page; shakes and Sorter V2's landing-held procedure, clearing a stalled C4, shaking off a piece that didn't fall; bin counts with full bins and "emptied"; kit limits from set inventories. |
 | Light | Built: the LED light on D10 as `[output_pin leds]` (on/off, `!`, `value`, `shutdown_value`), switched from the **Dashboard** and on when sorting starts. See the test bench notes. Needs the light wired. |
+| 9 Pictures along the way | Planned: crops of each piece on every channel, linked across channels, the best sent to Brickognize, and a **Piece journeys** debug page. Waits on the light and full-channel camera views. |
 
 Not planned: BrickStore export, Hive sync, and sending reviews back to Brickognize as feedback.
 Still open: the "no bin" incident (pieces go to the bucket with a problem noted instead), a piece
@@ -397,6 +398,75 @@ Original scope:
 - Recovery as data, from `recovery/procedures.py`: a list of moves (turn, shake profile, probe
   backwards) tried in order, checking perception after each.
 - Lifetime and per-run stats: pieces per minute, time spent in each station phase.
+
+### Phase 9: Pictures of each piece along the way
+
+**Status (2026-11-11): planned.** Waiting on the light and on cameras that see the whole channel
+(C3's sees only part of the outer wall where pieces ride). Step 1 needs one camera; step 2 needs
+two.
+
+Today a piece is identified from C4's burst alone. It has already been in view on C2 and C3,
+turning and showing other sides. The aim: collect good, cropped pictures of each piece on every
+channel it crosses, and send Brickognize the best spread of them (up to 8), without ever mixing
+in a picture of another piece.
+
+**Already there.** Each camera channel's tracker keeps a piece's track id while it rides
+(`vision.Tracker`). The detector reports when a box is several blobs merged (`Observation.Merged`).
+The feeder sees a piece fall off an exit and holds the next one until it lands, so pieces cross
+one at a time. Pieces, photos and runs are recorded (`Records`).
+
+**1. Pictures per track, on one channel.** Every frame of a tracked piece is a candidate crop. A
+crop is kept only if all of these hold, and the reason is recorded when one fails:
+
+- *Alone:* no other detection within a margin, and its box isn't a merge of several blobs.
+- *Whole:* the box doesn't touch the frame's edge or the ring's edges.
+- *Settled:* a few frames after landing (not mid-bounce), and not while the channel is turning
+  fast.
+- *Sharp:* a blur score (variance of the Laplacian over the crop) above a threshold.
+- *Usual size:* within a factor of the track's median area. A jump means it's touching
+  something or partly hidden.
+
+Crops are cut with a margin (about 20% each side) and capped in size (512 px). Kept crops are
+spread out: at most one per few degrees of travel, the sharpest of each, so they show the piece
+turned different ways rather than eight near-identical frames. A track keeps a bounded number
+(say 12) and every rejection's reason, so the debug view can show why.
+
+**2. Linking tracks across channels into a journey.** At a fall off channel N's exit, the next new
+track in channel N+1's drop zone within a window (about 1 s) is the same piece; the journey
+carries on with that track. It's clean only when there's exactly one candidate. Two new tracks at
+once (two pieces fell together), none (it fell elsewhere or wasn't seen), or one outside the
+window: the new track starts its own journey with nothing inherited. A track that splits (pieces
+stuck together came apart) or joins (two pieces touching) marks the journey *unsure* and drops
+its crops from before that point. A piece that circles a channel keeps its journey; the extra lap
+gives more angles. A journey ends at C4's exit, as the piece record.
+
+**3. Choosing what to send.** From the journey's kept crops plus C4's burst, pick up to 8: C4's
+best (the last, steadiest look) first, then the rest spread across channels and angles. A journey
+with no upstream crops is identified from C4's burst alone, as now. Every crop sent is saved with
+the piece (channel, track, angle, sharpness, why chosen), so the Records page shows what
+Brickognize saw, and reviews can tell over time which pictures help.
+
+**Debug view: Piece journeys** (built with step 1, extended in each later step). A page listing
+the most recent pieces (newest first, also live while sorting), each with its outcome (part and
+score, bin, or the problem). Clicking one opens its whole journey, channel by channel:
+
+- each track: when it was seen, where it landed and left, its frames' positions on a small ring
+  diagram;
+- every candidate crop as a thumbnail, kept ones bright and rejected ones dimmed with the reason
+  (not alone, cut off, blurry, size jump, settling);
+- each handoff between channels: the fall time, the candidates in the window, and whether it
+  linked cleanly, started a new journey, or marked it unsure;
+- the crops sent to Brickognize, in order, with why each was chosen, and Brickognize's answer;
+- the full frame at key moments (landing, each handoff, the exit) with the boxes drawn, to see
+  what the camera saw.
+
+Debug data is kept for the last N journeys (say 200) or the current run, whichever is larger, in
+the data folder, and pruned after that; the sent crops are kept with the piece as now. The view
+also works in simulation, so the page can be built and tested before the hardware is ready.
+
+**Thresholds to tune on real runs:** the isolation margin, the blur threshold, the settle
+frames, the size factor, the handoff window, and how many crops to keep per channel. They go on
+the **Tuning** page with the others.
 
 ### Later, if wanted
 
