@@ -5,8 +5,11 @@ import (
 	"flag"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"goklippy/backend/config"
@@ -83,7 +86,8 @@ func main() {
 
 	sorterCtx, stopSorter := context.WithCancel(context.Background())
 	defer stopSorter()
-	if _, err := startSorter(sorterCtx, cfg.Sorter, db); err != nil {
+	machine, err := startSorter(sorterCtx, cfg.Sorter, db)
+	if err != nil {
 		slog.Error("failed to start the sorter", "error", err)
 		return
 	}
@@ -106,13 +110,31 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	// Ctrl+C or a stop request shuts down in order: the HTTP server, then the sorter,
+	// whose loop stops the motors and turns the light off before the process exits.
+	stopSignal, stopListening := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopListening()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.ListenAndServe() }()
 	slog.Info("backend listening", "port", cfg.Port)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		slog.Error("server failure", "error", err)
-		return
+
+	select {
+	case err := <-serveErr:
+		if err != nil && err != http.ErrServerClosed {
+			slog.Error("server failure", "error", err)
+		}
+	case <-stopSignal.Done():
+		slog.Info("shutting down")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = srv.Shutdown(shutdownCtx)
+		cancel()
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = srv.Shutdown(shutdownCtx)
+	stopSorter()
+	select {
+	case <-machine.Done():
+		slog.Info("sorter stopped")
+	case <-time.After(5 * time.Second):
+		slog.Warn("sorter did not stop in time")
+	}
 }

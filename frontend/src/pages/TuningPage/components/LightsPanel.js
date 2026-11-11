@@ -25,7 +25,9 @@ const LightsPanel = ({ logic }) => {
       <div className={styles.row}>
         <div className={styles.rowText}>
           <strong>Turn on when sorting starts</strong>
-          <span className={styles.muted}>The cameras need it. Starting or resuming a sort switches it on; it stays on afterwards.</span>
+          <span className={styles.muted}>
+            The cameras need it. Starting or resuming a sort switches it on. Stopping, an error or the backend exiting always switches it off.
+          </span>
         </div>
         <div className={styles.rowInput}>
           <input type="checkbox" checked={onWhenSorting} onChange={(e) => logic.set('lights', 'onWhenSorting', e.target.checked)} />

@@ -3,6 +3,7 @@ package sorter
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,4 +38,36 @@ func TestMachineLightsOnWhenSorting(t *testing.T) {
 	assert.False(t, m.Snapshot().Lights.On, "the light can be switched off while paused")
 	require.NoError(t, do(t, m, CommandResume))
 	assert.True(t, m.Snapshot().Lights.On, "resuming turns it back on")
+
+	require.NoError(t, do(t, m, CommandStop))
+	assert.False(t, m.Snapshot().Lights.On, "stopping always turns it off")
+}
+
+func TestMachineLightsOffWhenAnErrorStopsIt(t *testing.T) {
+	m, hw := startMachine(t)
+	require.NoError(t, do(t, m, CommandHome))
+	waitForState(t, m, StateReady)
+	require.NoError(t, do(t, m, CommandStart))
+	require.True(t, hw.LightsStatus().On)
+
+	require.NoError(t, m.send(context.Background(), request{do: func() error {
+		m.stopForError("test error")
+		return nil
+	}}))
+	assert.False(t, hw.LightsStatus().On)
+	assert.False(t, m.Snapshot().Lights.On)
+}
+
+func TestMachineLightsOffWhenTheBackendExits(t *testing.T) {
+	settings := func() MachineSettings { return DefaultMachineSettings() }
+	hw := NewSimHardware(settings)
+	hw.TimeScale = 0
+	m := NewMachine(hw, settings, 5*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	go m.Run(ctx)
+
+	require.NoError(t, m.SetLights(context.Background(), true))
+	cancel()
+	<-m.Done()
+	assert.False(t, hw.LightsStatus().On)
 }

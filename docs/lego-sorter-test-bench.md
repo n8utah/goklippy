@@ -77,10 +77,14 @@ an `[output_pin <slot>]` (keeping the name of one already on that pin, such as `
 any old `[extruder]`, `[heater_bed]` or `[fan]` on the same pin, since two outputs on one pin is a
 config error. The slot then shows on/off buttons, which is the quickest wiring check.
 
+For safety the light starts off (`value: 0`) and goes off whenever the machine stops: on Stop,
+when an error stops it, when the backend exits, and on an MCU shutdown (`shutdown_value: 0`). A
+board reset also puts it back to `value`.
+
 The **Light** button on the Dashboard switches it, at any time, sorting included. Starting or
 resuming a sort turns it on if **Turn on when sorting starts** is ticked on the Tuning page (the
-default). The Tuning page also holds the section name, `output_pin leds` by default. A board reset
-puts the light back to `value`.
+default). Pausing leaves it as it is. The Tuning page also holds the section name,
+`output_pin leds` by default.
 
 The mapping, gear ratios, speeds and index settings are saved on the server
 (`sorter_settings`, document `machine`; routines are document `routines`), so every browser and

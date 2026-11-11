@@ -108,6 +108,7 @@ type Machine struct {
 	requests chan request
 	progress chan jobProgress
 	results  chan jobResult
+	done     chan struct{} // closed when Run returns
 
 	snapMu sync.RWMutex
 	snap   Snapshot
@@ -143,6 +144,7 @@ func NewMachine(hw Hardware, settings func() MachineSettings, tick time.Duration
 		requests: make(chan request),
 		progress: make(chan jobProgress, 16),
 		results:  make(chan jobResult, 1),
+		done:     make(chan struct{}),
 		subs:     make(map[chan Snapshot]struct{}),
 		state:    StateStandby,
 		since:    time.Now().UTC(),
@@ -154,8 +156,13 @@ func NewMachine(hw Hardware, settings func() MachineSettings, tick time.Duration
 	return m
 }
 
-// Run is the control loop. It returns when ctx ends, stopping the motors if busy.
+// Done is closed once Run has returned, after its stop-time cleanup.
+func (m *Machine) Done() <-chan struct{} { return m.done }
+
+// Run is the control loop. It returns when ctx ends, stopping the motors if busy and
+// turning the light off. Call it once.
 func (m *Machine) Run(ctx context.Context) {
+	defer close(m.done)
 	ticker := time.NewTicker(m.tick)
 	defer ticker.Stop()
 	health := time.NewTicker(healthCheckEvery)
@@ -170,6 +177,7 @@ func (m *Machine) Run(ctx context.Context) {
 			if m.job != nil || m.state == StateRunning || m.state == StatePaused {
 				_ = m.hw.StopAll()
 			}
+			m.lightsOff()
 			return
 		case req := <-m.requests:
 			// Publish before replying, so a caller sees what its request changed.
@@ -229,6 +237,15 @@ func (m *Machine) lightsForSorting() {
 	}
 	if err := m.hw.SetLights(true); err != nil {
 		slog.Warn("sorter: light not turned on for sorting", "error", err)
+	}
+	m.refreshLights()
+}
+
+// lightsOff is part of every stop, for safety: the light is never left on by a
+// machine that isn't sorting. A failure is logged; it doesn't stop the stop.
+func (m *Machine) lightsOff() {
+	if err := m.hw.SetLights(false); err != nil {
+		slog.Warn("sorter: light not turned off", "error", err)
 	}
 	m.refreshLights()
 }
@@ -421,6 +438,7 @@ func (m *Machine) handle(req request) error {
 			m.job.cancel() // a recovery mid-way
 		}
 		m.endRun(time.Now().UTC())
+		m.lightsOff()
 		if err := m.hw.StopAll(); err != nil {
 			slog.Warn("sorter stop: motors did not all stop", "error", err)
 			return fmt.Errorf("stopped, but the motors did not all stop: %w", err)
@@ -607,6 +625,7 @@ func (m *Machine) stopForError(msg string) {
 		_ = m.hw.StopAll()
 		m.endRun(time.Now().UTC())
 	}
+	m.lightsOff()
 	m.setState(StateError, msg)
 }
 
