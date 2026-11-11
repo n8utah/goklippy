@@ -9,8 +9,7 @@ export function logMCU(phase, detail = {}) {
   if (!MCU_DEBUG) {
     return;
   }
-  const elapsed =
-    detail.elapsedMs != null ? `${detail.elapsedMs}ms` : undefined;
+  const elapsed = detail.elapsedMs != null ? `${detail.elapsedMs}ms` : undefined;
   console.info('[goklippy mcu]', phase, elapsed ?? '', detail);
 }
 
@@ -229,7 +228,9 @@ export function activateSortingProfile(id, mode) {
 }
 
 export async function deleteSortingProfile(id) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/profiles/${id}`, { method: 'DELETE' });
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/profiles/${id}`, {
+    method: 'DELETE',
+  });
   return parseJSON(response);
 }
 
@@ -250,7 +251,10 @@ export async function identifySorterPiece(files, pieceMm) {
   const form = new FormData();
   for (const file of files) form.append('image', file);
   if (pieceMm) form.append('piece_mm', String(pieceMm));
-  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/identify`, { method: 'POST', body: form });
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/identify`, {
+    method: 'POST',
+    body: form,
+  });
   return parseJSON(response);
 }
 
@@ -383,7 +387,11 @@ export function reviewSorterPiece(id, review) {
 
 /** Where a piece would go now; nothing is saved. */
 export function routeSorterPiece(partId, colorId, pieceMm) {
-  return postJSON('/api/v1/sorter/route', { part_id: partId, color_id: colorId, piece_mm: pieceMm || 0 });
+  return postJSON('/api/v1/sorter/route', {
+    part_id: partId,
+    color_id: colorId,
+    piece_mm: pieceMm || 0,
+  });
 }
 
 function wsBaseUrl() {

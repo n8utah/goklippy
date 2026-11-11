@@ -36,7 +36,9 @@ function normalizeSegment(seg) {
 }
 
 function normalizeRoutine(routine) {
-  const segments = Array.isArray(routine.segments) ? routine.segments.map(normalizeSegment) : defaultSegments();
+  const segments = Array.isArray(routine.segments)
+    ? routine.segments.map(normalizeSegment)
+    : defaultSegments();
   return {
     id: routine.id || newRoutineId(),
     name: routine.name || 'Untitled routine',
@@ -96,4 +98,10 @@ export function oidsForRoutine(routine, stepperObjects) {
   return oidsForMembers(routine.members, stepperObjects);
 }
 
-export { stepperMemberKey, oidsForMembers, labelForMemberKey, clampStepperSpeed, DEFAULT_STEPPER_SPEED };
+export {
+  stepperMemberKey,
+  oidsForMembers,
+  labelForMemberKey,
+  clampStepperSpeed,
+  DEFAULT_STEPPER_SPEED,
+};

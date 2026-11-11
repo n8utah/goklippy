@@ -1,4 +1,4 @@
-import {
+﻿import {
   BrowserRouter,
   Link,
   Navigate,
@@ -12,6 +12,7 @@ import {
 import AppFrame from './components/AppFrame/AppFrame';
 import { MCUSessionProvider } from './context/MCUSessionContext';
 import { START_PATH } from './helpers/navigation';
+import { MachineSettingsProvider } from './helpers/sorterSettings';
 import { SorterStateProvider } from './helpers/sorterState';
 import BinsPage from './pages/BinsPage/BinsPage';
 import BoardEditorPage from './pages/BoardEditorPage/BoardEditorPage';
@@ -25,7 +26,7 @@ import JourneysPage from './pages/JourneysPage/JourneysPage';
 import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
 import RecordsPage from './pages/RecordsPage/RecordsPage';
 import SorterPage from './pages/SorterPage/SorterPage';
-import TuningPage from './pages/TuningPage/TuningPage';
+import SettingsPage from './pages/SettingsPage/SettingsPage';
 import UiKitPage from './pages/UiKitPage/UiKitPage';
 
 const WIRING_PATH = '/machine/board/wiring';
@@ -52,7 +53,7 @@ const RecordsRoute = () => {
   );
 };
 
-/** Machine › Board: Connection, Wiring and Board picture, today's three pages. */
+/** Machine â€º Board: Connection, Wiring and Board picture, today's three pages. */
 const BoardRoute = () => {
   const navigate = useNavigate();
   const { part = 'connection' } = useParams();
@@ -89,9 +90,9 @@ const NotFound = () => (
   <div className="ds rounded-xl border border-border bg-card p-6">
     <p className="font-display text-lg font-semibold">No page here</p>
     <p className="mt-1 text-sm text-muted-foreground">
-      This address isn’t a page in goklippy. Search with Ctrl K, or{' '}
+      This address isnâ€™t a page in goklippy. Search with Ctrl K, or{' '}
       <Link to={START_PATH} className="font-medium text-primary-text underline">
-        go to Run › Sort
+        go to Run â€º Sort
       </Link>
       .
     </p>
@@ -103,95 +104,91 @@ const App = () => (
   <BrowserRouter>
     <MCUSessionProvider>
       <SorterStateProvider>
-        <Routes>
-          <Route element={<AppFrame />}>
-            <Route index element={<Navigate to={START_PATH} replace />} />
+        <MachineSettingsProvider>
+          <Routes>
+            <Route element={<AppFrame />}>
+              <Route index element={<Navigate to={START_PATH} replace />} />
 
-            <Route path="run">
-              <Route index element={<Navigate to="sort" replace />} />
-              <Route path="sort" element={<SortRoute />} />
-              <Route path="records" element={<RecordsRoute />} />
+              <Route path="run">
+                <Route index element={<Navigate to="sort" replace />} />
+                <Route path="sort" element={<SortRoute />} />
+                <Route path="records" element={<RecordsRoute />} />
+              </Route>
+
+              <Route path="rules">
+                <Route index element={<Navigate to="profiles" replace />} />
+                <Route
+                  path="profiles"
+                  element={
+                    <Legacy>
+                      <ProfilesPage />
+                    </Legacy>
+                  }
+                />
+                <Route
+                  path="bins"
+                  element={
+                    <Legacy>
+                      <BinsPage />
+                    </Legacy>
+                  }
+                />
+              </Route>
+
+              <Route path="machine">
+                <Route index element={<Navigate to="board" replace />} />
+                <Route path="board" element={<BoardRoute />} />
+                <Route path="board/:part" element={<BoardRoute />} />
+                <Route path="channels" element={<ChannelsRoute />} />
+                <Route
+                  path="chute"
+                  element={
+                    <Legacy>
+                      <ChutePage />
+                    </Legacy>
+                  }
+                />
+                <Route
+                  path="cameras"
+                  element={
+                    <Legacy>
+                      <CamerasPage />
+                    </Legacy>
+                  }
+                />
+              </Route>
+
+              <Route path="diagnose">
+                <Route index element={<Navigate to="journeys" replace />} />
+                <Route
+                  path="journeys"
+                  element={
+                    <Legacy>
+                      <JourneysPage />
+                    </Legacy>
+                  }
+                />
+              </Route>
+
+              <Route path="system">
+                <Route index element={<Navigate to="settings" replace />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="settings/:section" element={<SettingsPage />} />
+                <Route
+                  path="account"
+                  element={
+                    <Legacy>
+                      <HomePage />
+                    </Legacy>
+                  }
+                />
+                <Route path="ui-kit" element={<UiKitPage />} />
+              </Route>
+
+              <Route path="*" element={<NotFound />} />
             </Route>
-
-            <Route path="rules">
-              <Route index element={<Navigate to="profiles" replace />} />
-              <Route
-                path="profiles"
-                element={
-                  <Legacy>
-                    <ProfilesPage />
-                  </Legacy>
-                }
-              />
-              <Route
-                path="bins"
-                element={
-                  <Legacy>
-                    <BinsPage />
-                  </Legacy>
-                }
-              />
-            </Route>
-
-            <Route path="machine">
-              <Route index element={<Navigate to="board" replace />} />
-              <Route path="board" element={<BoardRoute />} />
-              <Route path="board/:part" element={<BoardRoute />} />
-              <Route path="channels" element={<ChannelsRoute />} />
-              <Route
-                path="chute"
-                element={
-                  <Legacy>
-                    <ChutePage />
-                  </Legacy>
-                }
-              />
-              <Route
-                path="cameras"
-                element={
-                  <Legacy>
-                    <CamerasPage />
-                  </Legacy>
-                }
-              />
-            </Route>
-
-            <Route path="diagnose">
-              <Route index element={<Navigate to="journeys" replace />} />
-              <Route
-                path="journeys"
-                element={
-                  <Legacy>
-                    <JourneysPage />
-                  </Legacy>
-                }
-              />
-            </Route>
-
-            <Route path="system">
-              <Route index element={<Navigate to="settings" replace />} />
-              <Route
-                path="settings"
-                element={
-                  <Legacy>
-                    <TuningPage />
-                  </Legacy>
-                }
-              />
-              <Route
-                path="account"
-                element={
-                  <Legacy>
-                    <HomePage />
-                  </Legacy>
-                }
-              />
-              <Route path="ui-kit" element={<UiKitPage />} />
-            </Route>
-
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
+          </Routes>
+        </MachineSettingsProvider>
       </SorterStateProvider>
     </MCUSessionProvider>
   </BrowserRouter>

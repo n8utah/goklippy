@@ -19,7 +19,7 @@ export default function TopBar({ logic }) {
         className="hidden h-10 w-full max-w-sm items-center gap-2 rounded-md border border-input bg-card px-3 text-sm text-muted-foreground hover:border-border-strong sm:flex"
       >
         <Search className="size-4" aria-hidden />
-        <span className="flex-1 text-left">Search pages…</span>
+        <span className="flex-1 text-left">Search settings, pages, actions…</span>
         <kbd className="rounded border border-border px-1.5 font-mono text-[11px]">Ctrl K</kbd>
       </button>
       <Button

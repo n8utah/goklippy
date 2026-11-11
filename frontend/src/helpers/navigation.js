@@ -1,5 +1,7 @@
 import { Activity, ListFilter, Play, Settings2, Wrench } from 'lucide-react';
 
+import { SETTING_SECTIONS } from './settingsRegistry';
+
 /**
  * Every group and page in the app, in rail order (docs/ui-ux-spec.md, "Pages"). The rail,
  * its flyouts, the page tabs, the phone's bottom bar and search all read from here, so a
@@ -101,6 +103,7 @@ export const NAV_GROUPS = [
         label: 'Settings',
         path: '/system/settings',
         about: 'Every machine setting, by section',
+        parts: SETTING_SECTIONS.map(({ id, label }) => ({ id, label })),
       },
       {
         id: 'account',

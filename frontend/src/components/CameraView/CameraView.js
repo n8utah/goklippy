@@ -71,8 +71,8 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onPick, compac
     if (!onPick) return;
     const rect = e.currentTarget.getBoundingClientRect();
     onPick({
-      x: Math.round(((e.clientX - rect.left) / rect.width) * w / sx),
-      y: Math.round(((e.clientY - rect.top) / rect.height) * h / sy),
+      x: Math.round((((e.clientX - rect.left) / rect.width) * w) / sx),
+      y: Math.round((((e.clientY - rect.top) / rect.height) * h) / sy),
     });
   };
 
@@ -87,26 +87,46 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onPick, compac
     const r1 = zones.ring.inner_radius * s;
     const r2 = zones.ring.outer_radius * s;
     const re = zones.ring.exit_radius * s;
-    const precise = zones.precise_width > 0 ? { start: zones.exit.start - zones.precise_width, end: zones.exit.start } : null;
+    const precise =
+      zones.precise_width > 0
+        ? { start: zones.exit.start - zones.precise_width, end: zones.exit.start }
+        : null;
     overlay = (
       <>
         <circle cx={cx} cy={cy} r={r1} className={styles.ring} />
         <circle cx={cx} cy={cy} r={r2} className={styles.ring} />
-        <path d={arcPath(cx, cy, r1, r2, zones.drop.start, zones.drop.end)} className={styles.drop} />
-        {precise && <path d={arcPath(cx, cy, r1, r2, precise.start, precise.end)} className={styles.precise} />}
-        <path d={arcPath(cx, cy, r1, re, zones.exit.start, zones.exit.end)} className={styles.exit} />
+        <path
+          d={arcPath(cx, cy, r1, r2, zones.drop.start, zones.drop.end)}
+          className={styles.drop}
+        />
+        {precise && (
+          <path
+            d={arcPath(cx, cy, r1, r2, precise.start, precise.end)}
+            className={styles.precise}
+          />
+        )}
+        <path
+          d={arcPath(cx, cy, r1, re, zones.exit.start, zones.exit.end)}
+          className={styles.exit}
+        />
         <circle cx={cx} cy={cy} r={4} className={styles.center} />
       </>
     );
   }
 
   return (
-    <div className={compact ? styles.viewCompact : styles.view} onClick={pick} role={onPick ? 'button' : undefined}>
+    <div
+      className={compact ? styles.viewCompact : styles.view}
+      onClick={pick}
+      role={onPick ? 'button' : undefined}
+    >
       <img
         src={sorterCameraStreamURL(channel)}
         alt={`Camera over ${channel}`}
         className={styles.stream}
-        onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+        onLoad={(e) =>
+          setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
+        }
         onError={() => setFailed(true)}
       />
       {showOverlay && (
@@ -114,7 +134,13 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onPick, compac
           {overlay}
           {observation?.pieces?.map((p, i) => (
             <g key={i}>
-              <rect x={p.box.x1} y={p.box.y1} width={p.box.x2 - p.box.x1} height={p.box.y2 - p.box.y1} className={styles.box} />
+              <rect
+                x={p.box.x1}
+                y={p.box.y1}
+                width={p.box.x2 - p.box.x1}
+                height={p.box.y2 - p.box.y1}
+                className={styles.box}
+              />
               {p.track_id ? (
                 <text x={p.box.x1} y={p.box.y1 - 4} className={styles.label}>
                   #{p.track_id}

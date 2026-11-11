@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 import { getSorterSettings, putSorterSettings } from './api';
 
@@ -49,7 +49,7 @@ export const DEFAULT_SORTER_SETTINGS = {
     c4: { stepper: 'stepper_e0', forward: true, gear: 130 / 12 },
   },
   routines: {},
-  // The pulsing feeder (C1–C3) and the classification platter (C4); see the Tuning page.
+  // The pulsing feeder (C1â€“C3) and the classification platter (C4); see System › Settings (helpers/settingsRegistry.js).
   feeder: {
     dropPulseDeg: 30,
     dropPauseMs: 100,
@@ -87,7 +87,7 @@ export const DEFAULT_SORTER_SETTINGS = {
   },
   // The machine's light: an [output_pin] in the board config (RAMPS D10).
   lights: { output: 'output_pin leds', onWhenSorting: true },
-  // The motors' 12 V supply read through a divider (10 kΩ over 4.7 kΩ); see the Tuning page.
+  // The motors' 12 V supply read through a divider (10 kÎ© over 4.7 kÎ©); see System › Settings (helpers/settingsRegistry.js).
   supply: {
     sensor: 'voltage_sensor supply',
     topOhms: 10000,
@@ -96,7 +96,7 @@ export const DEFAULT_SORTER_SETTINGS = {
     calibration: 1,
     minVolts: 10.5,
   },
-  // Which frames of a tracked piece are good pictures of it; see the Tuning page.
+  // Which frames of a tracked piece are good pictures of it; see System › Settings (helpers/settingsRegistry.js).
   pictures: {
     isolationPx: 12,
     settleFrames: 3,
@@ -225,12 +225,29 @@ export function useServerDocument(name, storageKey, initial, normalize) {
 
 const localMachineSettings = () => normalizeSorterSettings(readLocal(MACHINE_STORAGE_KEY));
 
-/** The sorter's "machine" settings document. */
-export function useMachineSettings() {
-  return useServerDocument(
+const MachineSettingsContext = createContext(null);
+
+/**
+ * One copy of the "machine" settings document for the whole app, so a page, the
+ * Settings page and the quick editor never hold different copies and overwrite each
+ * other's changes.
+ */
+export function MachineSettingsProvider({ children }) {
+  const doc = useServerDocument(
     'machine',
     MACHINE_STORAGE_KEY,
     localMachineSettings,
     normalizeSorterSettings,
   );
+  return <MachineSettingsContext.Provider value={doc}>{children}</MachineSettingsContext.Provider>;
+}
+
+/**
+ * The sorter's "machine" settings document: [value, setValue, syncError, savedCount].
+ * Needs MachineSettingsProvider above it.
+ */
+export function useMachineSettings() {
+  const ctx = useContext(MachineSettingsContext);
+  if (!ctx) throw new Error('useMachineSettings must be used within MachineSettingsProvider');
+  return ctx;
 }

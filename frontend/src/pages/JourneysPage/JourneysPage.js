@@ -19,8 +19,8 @@ const JourneysPage = () => {
       <h2 className={styles.title}>Piece journeys</h2>
       <p className={appStyles.muted}>
         Every piece the cameras tracked, newest first: each frame of it, which made good pictures
-        for identifying it, and why the rest didn&apos;t. For tuning the picture rules on the Tuning
-        page. Updates live while sorting.
+        for identifying it, and why the rest didn&apos;t. For tuning the picture rules under System
+        › Settings › Pictures. Updates live while sorting.
       </p>
       {logic.error && <p className={styles.alert}>{logic.error}</p>}
       <div className={styles.layout}>

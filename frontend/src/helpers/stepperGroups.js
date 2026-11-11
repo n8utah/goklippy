@@ -9,7 +9,10 @@ export const MAX_STEPPER_SPEED = 50000;
 /** @typedef {{ id: string, name: string, members: string[], speeds?: Record<string, number> }} StepperGroup */
 
 export function clampStepperSpeed(value) {
-  return Math.min(MAX_STEPPER_SPEED, Math.max(MIN_STEPPER_SPEED, Math.round(value) || MIN_STEPPER_SPEED));
+  return Math.min(
+    MAX_STEPPER_SPEED,
+    Math.max(MIN_STEPPER_SPEED, Math.round(value) || MIN_STEPPER_SPEED),
+  );
 }
 
 export function scaleStepperSpeed(value, factor) {
@@ -57,9 +60,7 @@ export function stepperMemberKey(obj) {
 /** Resolve group member keys to live stepper OIDs. */
 export function oidsForMembers(memberKeys, stepperObjects) {
   const keys = new Set(memberKeys);
-  return stepperObjects
-    .filter((obj) => keys.has(stepperMemberKey(obj)))
-    .map((obj) => obj.oid);
+  return stepperObjects.filter((obj) => keys.has(stepperMemberKey(obj))).map((obj) => obj.oid);
 }
 
 export function labelForMemberKey(key, stepperObjects) {

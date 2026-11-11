@@ -20,6 +20,7 @@ test('every page URL opens inside the frame', async ({ page }) => {
     ['/machine/cameras', 'Machine'],
     ['/diagnose/journeys', 'Diagnose'],
     ['/system/settings', 'System'],
+    ['/system/settings/power', 'System'],
   ];
   for (const [url, group] of pages) {
     await page.goto(url);

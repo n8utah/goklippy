@@ -222,3 +222,14 @@ Each step keeps the app working and is its own commit.
   - Board's Config file tab is still the Config file switch inside Wiring.
   - Old pages render inside `.legacy-page`, which stays light in dark mode.
   - Stop stops the run (or else cancels the running task) and any motor turned by hand.
+- **Step 3** (2026-11-11): done. The registry is `src/helpers/settingsRegistry.js` (eight
+  sections, 50 settings), read and written through `src/helpers/useSetting.js`; one shared copy
+  of the machine document (`MachineSettingsProvider`). `SettingField`, `SettingQuickEditor`
+  (opened with `useQuickEditor().open(key)`), System › Settings at
+  `/system/settings/<section>` (Tuning is gone), and search over settings, pages and actions,
+  with recent and suggested when empty and ">" for actions only. For now:
+  - Wiring (which stepper drives what), calibrated geometry and camera picture size stay on their
+    pages, where they're measured; the registry holds what a person tunes.
+  - `stopped: true` settings (platter sectors) are marked "Change while stopped", not locked.
+  - No action asks for an input yet (such as turning a channel by an amount).
+  - Pages show inline SettingFields as they're rebuilt in step 4.

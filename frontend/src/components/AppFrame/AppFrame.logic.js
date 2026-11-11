@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
 import { useMCUSession } from '../../context/MCUSessionContext';
-import { cancelSorterJob, setSorterLights, sorterCommand } from '../../helpers/api';
+import {
+  blinkSorterLights,
+  cancelSorterJob,
+  setSorterLights,
+  sorterCommand,
+} from '../../helpers/api';
 import { findLocation } from '../../helpers/navigation';
+import { pushRecent } from '../../helpers/recent';
 import { useSorterState } from '../../helpers/sorterState';
+import { useTheme } from '../../helpers/theme';
+
+/** True when a key press is going into a text field. */
+const isTyping = (el) =>
+  el?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName);
 
 /** True while the media query matches, following changes. */
 function useMediaQuery(query) {
@@ -53,6 +64,8 @@ export function jobProgress(job) {
 
 export function useAppFrameLogic() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { resolved: resolvedTheme, setTheme } = useTheme();
   const { group, page, part } = findLocation(location.pathname);
   const { state, connected } = useSorterState();
   const mcu = useMCUSession();
@@ -63,23 +76,36 @@ export function useAppFrameLogic() {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const isPhone = useMediaQuery('(max-width: 639px)');
 
-  // Ctrl+K (⌘K on a Mac) opens search from anywhere.
+  // Ctrl+K (⌘K on a Mac) opens search from anywhere, and so does "/" when not typing.
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setSearchOpen((open) => !open);
+      } else if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTyping(e.target)) {
+        e.preventDefault();
+        setSearchOpen(true);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // A new page closes the panels that led there.
+  // A new page closes the panels that led there, and goes on search's recent list.
+  const pagePath = page?.path;
   useEffect(() => {
     setStatusOpen(false);
     setSearchOpen(false);
-  }, [location.pathname]);
+    if (pagePath) pushRecent('page', location.pathname, pagePath);
+  }, [location.pathname, pagePath]);
+
+  // The quick editor's setting, or null.
+  const [editKey, setEditKey] = useState(null);
+  const openSetting = useCallback((key) => {
+    pushRecent('setting', key);
+    setSearchOpen(false);
+    setEditKey(key);
+  }, []);
 
   const run = useCallback(async (fn) => {
     setBusy(true);
@@ -118,6 +144,102 @@ export function useAppFrameLogic() {
   const cancelJob = () => run(() => cancelSorterJob());
   const toggleLights = () => run(() => setSorterLights(!state?.lights?.on));
 
+  const canHome = !busy && s && s !== 'running' && s !== 'homing' && !job;
+  const canStart = !busy && s === 'ready' && !job;
+  const canPause = !busy && s === 'running';
+  const canResume = !busy && s === 'paused' && !job;
+  const canStop = !busy && (sorting || Boolean(job) || handMoving);
+  const lightsOK = connected && !state?.lights?.message;
+  const boardConnected = Boolean(state?.hardware?.connected);
+
+  /**
+   * What search can do, in order of how likely it's wanted: the first allowed ones are the
+   * suggestions when search is empty. `moves` says it moves the machine; `why` is shown
+   * when it isn't allowed now.
+   */
+  const actions = [
+    job && {
+      id: 'cancel-task',
+      label: `Cancel ${job.name}`,
+      keywords: 'cancel task job abort',
+      allowed: !busy,
+      run: cancelJob,
+    },
+    !boardConnected && {
+      id: 'connect-board',
+      label: 'Connect the board',
+      keywords: 'board serial port usb ramps',
+      allowed: true,
+      run: () => navigate('/machine/board'),
+    },
+    {
+      id: 'start',
+      label: 'Start sorting',
+      keywords: 'run go begin',
+      moves: true,
+      allowed: canStart,
+      why: s === 'standby' ? 'Home first' : 'Only when ready',
+      run: () => command('start'),
+    },
+    {
+      id: 'resume',
+      label: 'Resume sorting',
+      keywords: 'continue unpause',
+      moves: true,
+      allowed: canResume,
+      why: 'Only when paused',
+      run: () => command('resume'),
+    },
+    {
+      id: 'pause',
+      label: 'Pause sorting',
+      keywords: 'hold wait',
+      allowed: canPause,
+      why: 'Only while sorting',
+      run: () => command('pause'),
+    },
+    {
+      id: 'stop',
+      label: 'Stop everything',
+      keywords: 'halt emergency end run',
+      allowed: canStop,
+      why: 'Nothing is moving',
+      run: stop,
+    },
+    {
+      id: 'home',
+      label: 'Home the machine',
+      keywords: 'chute endstop start hardware',
+      moves: true,
+      allowed: canHome,
+      why: 'Not while sorting or busy',
+      run: () => command('home'),
+    },
+    {
+      id: 'light',
+      label: state?.lights?.on ? 'Turn the light off' : 'Turn the light on',
+      keywords: 'lamp leds d10 switch',
+      allowed: !busy && lightsOK,
+      why: state?.lights?.message || 'No backend',
+      run: toggleLights,
+    },
+    {
+      id: 'blink',
+      label: 'Blink the light for 30 s',
+      keywords: 'lamp leds d10 test wiring flash',
+      allowed: !busy && lightsOK && !sorting,
+      why: sorting ? 'Not while sorting' : state?.lights?.message || 'No backend',
+      run: () => run(() => blinkSorterLights(30)),
+    },
+    {
+      id: 'theme',
+      label: resolvedTheme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme',
+      keywords: 'dark mode light mode appearance colors',
+      allowed: true,
+      run: () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'),
+    },
+  ].filter(Boolean);
+
   return {
     group,
     page,
@@ -135,13 +257,17 @@ export function useAppFrameLogic() {
     statusOpen,
     setStatusOpen,
     stop,
-    canStop: !busy && (sorting || Boolean(job) || handMoving),
+    canStop,
     command,
     cancelJob,
     toggleLights,
-    canHome: !busy && s && s !== 'running' && s !== 'homing' && !job,
-    canStart: !busy && s === 'ready' && !job,
-    canPause: !busy && s === 'running',
-    canResume: !busy && s === 'paused' && !job,
+    canHome,
+    canStart,
+    canPause,
+    canResume,
+    actions,
+    editKey,
+    openSetting,
+    closeSetting: () => setEditKey(null),
   };
 }
