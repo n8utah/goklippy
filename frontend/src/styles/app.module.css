@@ -1,9 +1,5 @@
-.nav {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
+/* Shared styles of the pages from before the new UI (see src/styles/globals.css for the
+   new one). The app's frame is components/AppFrame. */
 
 .navButton,
 .navButtonActive {
@@ -20,33 +16,6 @@
   background: #0ea5e9;
   border-color: #0284c7;
   color: #ffffff;
-}
-
-.appPage {
-  min-height: 100vh;
-  background: radial-gradient(circle at top, #cffafe, #e0e7ff 45%, #f8fafc);
-  padding: 24px;
-  box-sizing: border-box;
-}
-
-.appShell {
-  width: min(1200px, 100%);
-  margin: 0 auto;
-}
-
-.header {
-  margin-bottom: 16px;
-}
-
-.title {
-  margin: 0;
-  font-size: 28px;
-  color: #0f172a;
-}
-
-.subtitle {
-  margin: 6px 0 0;
-  color: #475569;
 }
 
 .card {

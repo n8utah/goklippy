@@ -207,3 +207,18 @@ Until linking across channels (phase 9 step 2) exists, a piece shows the stages 
 5. **Machine › Overview** checklist, and Home's setup progress.
 
 Each step keeps the app working and is its own commit.
+
+### Progress
+
+- **Step 1** (2026-11-11): done. `src/styles/globals.css`, `src/components/ui/`, the UI kit
+  at System › UI kit.
+- **Step 2** (2026-11-11): done. `src/components/AppFrame/`, the page list in
+  `src/helpers/navigation.js`, routes in `src/App.js`, and one shared sorter WebSocket
+  (`SorterStateProvider`). For now:
+  - `/` opens Run › Sort and `/machine` opens Board, until Home and Overview are built; neither
+    is in the rail yet.
+  - Motor bench isn't listed: its controls are still on Board › Wiring.
+  - Search finds pages and their parts; settings and actions come with step 3.
+  - Board's Config file tab is still the Config file switch inside Wiring.
+  - Old pages render inside `.legacy-page`, which stays light in dark mode.
+  - Stop stops the run (or else cancels the running task) and any motor turned by hand.

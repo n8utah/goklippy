@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('auth flow: login, refresh, and logout', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/system/account');
 
   await page.getByLabel('Email').fill('admin@admin.com');
   await page.getByLabel('Password').fill('admin');
