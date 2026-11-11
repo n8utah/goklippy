@@ -28,12 +28,17 @@ Each decision has options; the recommendation is a starting point to argue with.
 them one at a time, generate ideas where needed, decide, and record the decision here.
 
 ### 1. Menu structure (information architecture)
-What groups and pages exist. Proposal (canvas board 1): **Run** (Sort, Records), **Sorting rules**
+**Decided (2026-11-11): five groups by job.** **Run** (Sort, Records), **Sorting rules**
 (Profiles, Bins), **Machine** (Overview checklist, Board, Channels, Chute, Cameras), **Diagnose**
 (Piece journeys, Motor bench), **System** (Settings, Account). Merges: Devices + Board Setup +
 Overlay Editor → Board (tabs); LEGO Sorter splits into Channels and the distributor part of Chute;
-Tuning → Settings. Open questions: is Piece journeys under Diagnose or Records? Does Motor bench
-deserve a page or live inside Board?
+Tuning → Settings.
+
+- **Piece journeys:** a Diagnose page for looking further back. Run › Sort shows a rolling
+  history of the most recently sorted pieces; clicking one opens its journey in a modal. Diagnose
+  › Piece journeys (and a piece in Records) opens the same modal.
+- **Motor bench:** its own page under Diagnose (raw stepper jogs, servo angles, all-stepper
+  controls), so Board stays about wiring and Channels about the sorter.
 
 ### 2. App frame and navigation
 How the menu is shown.
@@ -44,7 +49,9 @@ How the menu is shown.
   control-room screen.
 - **C. Icon rail + task hub home.** Slim icons, a home page of tasks with the setup checklist
   first. Friendliest for occasional use; icons alone need labels to be learnable.
-- Recommendation: **A**, with C's setup checklist as Machine › Overview.
+- **Decided (2026-11-11): C, the icon rail with a home hub.** Next: how a group's pages are
+  reached from the rail (tabs under the page header, a flyout from the rail, or a hub page per
+  group); mocked on the canvas.
 
 ### 3. Always-visible machine status
 What's on every page. Recommendation: state (and run), board, motor power, light, the running
