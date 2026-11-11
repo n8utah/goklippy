@@ -102,6 +102,45 @@ says so and keeps changes in that browser only, without overwriting the server l
 C4 indexing has an **Accel** setting (rpm per second, default 60; 0 turns the ramp off). Each index
 move speeds up and slows down on a trapezoid instead of starting and stopping at full speed.
 
+## Cameras (Cameras page)
+
+**Setup** lists every camera Windows has. **Show picture** gives a live view (wave a hand in front
+of it to see which one it is), and **Watches** puts it over C2, C3 or C4. Leave the laptop's own
+camera on Not used. A camera watches one channel; choosing a camera for a channel that has one
+replaces it. The **Channels** list says how each assigned camera is doing, and a red note names
+any assigned camera that isn't plugged in. Each channel's tab then draws its zones and captures
+the empty channel.
+
+**How cameras are recognized.** Identical cameras share a name ("USB Camera"), so they're saved by
+their DirectShow device path, such as
+`@device_pnp_\\?\usb#vid_0bda&pid_5844&mi_00#7&3390689c&0&0000#{…}\global`. These cameras have no
+serial number, so Windows builds the `7&3390689c&…` part from the USB port: **keep each camera in
+the same USB port** (label the cables). Moved to another port it shows up as a new camera, and its
+channel reports it missing until it's assigned again. The card shows the short form,
+`0bda:5844 · 3390689c` (USB vendor:product · port instance).
+
+**ffmpeg.** Device paths need a current ffmpeg; the 2013 one from a Python package (first on
+PATH here) only lists names. A current one is installed with `winget install Gyan.FFmpeg`, and
+with the ffmpeg setting empty the backend uses winget's
+(`%LOCALAPPDATA%\Microsoft\WinGet\Links\ffmpeg.exe`) before PATH. The Setup view shows which
+ffmpeg and version it found.
+
+**Sizes.** Every camera opens at the size under All cameras, picked from 320×240 to 1280×720
+(1280×720 by default, to start sharp and lower as needed). It must be one each camera offers:
+**Check sizes** on a camera's card lists them and warns if it isn't. The frame rate isn't asked
+of the camera (most offer only 30 fps); ffmpeg drops frames down to the FPS setting. The USB
+camera here offers 160×120 to 1280×720 in MJPEG at 30 fps, and runs a steady 10 fps at
+1280×720 using about a fifth of a CPU core each for ffmpeg and the backend.
+
+The detector's defaults scale with the size: the smallest piece by pixel count (120 px at
+640×480, 360 at 1280×720) and its sampling step by width (every 2nd pixel at 640, every 4th at
+1280), so a large frame costs about what a small one does. Changing the size needs a new
+empty-channel picture on each channel; the channel says so until it has one.
+
+A camera is opened once and shared: a channel using it and a preview of it watch the same
+capture, so previewing an assigned camera doesn't disturb it. A preview stops 15 s after the page
+stops watching it.
+
 ## Units
 
 Everything on the page is in rotor terms: rpm, degrees, slots and bins. Each motor's **Gearing**

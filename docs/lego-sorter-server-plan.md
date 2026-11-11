@@ -175,7 +175,7 @@ and `models/sort_e2e_test.go` sorts known pieces end to end on SQLite and checks
 |---|---|
 | 0 Foundations | Built. Bench check: C4 index with acceleration. |
 | 1 Distribution | Built. Needs the chute's home switch fitted, then homing, calibration and test-every-bin. |
-| 2 Cameras and zones | Built: `logic/camera` (ffmpeg per camera, MJPEG split into frames, device list), live streams, the **Cameras** page with the zone editor and empty-channel capture. Tested with ffmpeg's test picture. Needs the three cameras and a current ffmpeg. |
+| 2 Cameras and zones | Built: `logic/camera` (ffmpeg per camera, MJPEG split into frames, device list with DirectShow device paths, sizes each camera offers), one shared capture per camera (`logic/sorter/camera_pool.go`), live streams, and the **Cameras** page: Setup to preview every camera and pick which watches C2/C3/C4, then the zone editor and empty-channel capture per channel. Tested with the USB camera over C2 and ffmpeg 9 (winget). Needs the other two cameras. |
 | 3 Perception | Built: `logic/vision` (zones, observations, box merging, angular tracker, background-difference detector) and `sorter.Perception`. Needs real frames to tune the detector's sensitivity. |
 | 4 Feeder | Built: `logic/sorter/feeder.go`, tuned on the **Tuning** page. Flags a piece that won't ride for recovery. |
 | 5 Platter (C4) | Built: `logic/sorter/platter.go`, a slot model of the 5-sector carousel. Brickognize built and checked live. |

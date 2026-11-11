@@ -41,17 +41,107 @@ func GetSorterCameras(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"simulated": false, "channels": sorterPerception.Statuses()})
 }
 
-// ListSorterCameraDevices GET /sorter/cameras/devices: what ffmpeg can open.
+// cameraDevice is a found camera and the channels set to use it.
+type cameraDevice struct {
+	camera.Device
+	Channels []string `json:"channels"`
+}
+
+// ListSorterCameraDevices GET /sorter/cameras/devices: the cameras ffmpeg can open,
+// which ffmpeg, and which channel each is assigned to. Assignments saved by name
+// (before device paths were known) match every camera of that name.
 func ListSorterCameraDevices(c *gin.Context) {
-	devices, err := camera.ListDevices(c.Request.Context(), sorterSettings.Machine().Cameras.Ffmpeg)
+	cs := sorterSettings.Machine().Cameras
+	list, err := camera.ListDevices(c.Request.Context(), cs.Ffmpeg)
+	devices := make([]cameraDevice, 0, len(list.Devices))
+	ids := make([]string, 0, len(list.Devices))
+	for _, d := range list.Devices {
+		cd := cameraDevice{Device: d, Channels: []string{}}
+		for _, ch := range sorter.CameraChannels {
+			if assigned := cs.Devices[string(ch)]; assigned != "" && (assigned == d.ID || assigned == d.Name) {
+				cd.Channels = append(cd.Channels, string(ch))
+			}
+		}
+		devices = append(devices, cd)
+		ids = append(ids, d.ID)
+	}
+	if sorterPerception != nil {
+		sorterPerception.NoteDevices(ids)
+	}
+	resp := gin.H{"devices": devices, "ffmpeg": list.FFmpeg, "version": list.Version}
+	if list.Warning != "" {
+		resp["warning"] = list.Warning
+	}
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"devices": []string{}, "error": err.Error()})
+		resp["error"] = err.Error()
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// previewDevice reads ?device= for the preview routes.
+func previewDevice(c *gin.Context) (string, bool) {
+	if sorterPerception == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "the machine is simulated: there are no cameras to preview"})
+		return "", false
+	}
+	device := c.Query("device")
+	if device == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "device is required"})
+		return "", false
+	}
+	return device, true
+}
+
+// GetSorterCameraPreviewStatus GET /sorter/cameras/preview/status?device=: starts (or
+// keeps) a preview capture and says how it's doing.
+func GetSorterCameraPreviewStatus(c *gin.Context) {
+	device, ok := previewDevice(c)
+	if !ok {
 		return
 	}
-	if devices == nil {
-		devices = []string{}
+	_, _, status, err := sorterPerception.Preview(device)
+	switch {
+	case errors.Is(err, sorter.ErrUnknownDevice):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusOK, gin.H{"camera": status})
 	}
-	c.JSON(http.StatusOK, gin.H{"devices": devices})
+}
+
+// ListSorterCameraModes GET /sorter/cameras/modes?device=: the sizes a listed camera
+// offers, so the page can warn when the chosen size isn't one of them.
+func ListSorterCameraModes(c *gin.Context) {
+	device, ok := previewDevice(c)
+	if !ok {
+		return
+	}
+	if !sorterPerception.MayOpen(device) {
+		c.JSON(http.StatusNotFound, gin.H{"error": sorter.ErrUnknownDevice.Error()})
+		return
+	}
+	modes, err := camera.ListModes(c.Request.Context(), sorterSettings.Machine().Cameras.Ffmpeg, device)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"modes": []camera.Mode{}, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"modes": modes})
+}
+
+// StreamSorterCameraPreview GET /sorter/cameras/preview/stream?device=: MJPEG of any
+// listed camera, assigned or not, for picking which camera goes where.
+func StreamSorterCameraPreview(c *gin.Context) {
+	device, ok := previewDevice(c)
+	if !ok {
+		return
+	}
+	if _, _, _, err := sorterPerception.Preview(device); errors.Is(err, sorter.ErrUnknownDevice) {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	streamMJPEG(c, func() ([]byte, time.Time, bool) {
+		jpg, at, _, err := sorterPerception.Preview(device) // each call keeps it running
+		return jpg, at, err == nil
+	})
 }
 
 // GetSorterCameraFrame GET /sorter/cameras/:channel/frame: the newest JPEG.
@@ -77,6 +167,11 @@ func StreamSorterCamera(c *gin.Context) {
 	if !ok {
 		return
 	}
+	streamMJPEG(c, func() ([]byte, time.Time, bool) { return sorterFeed.JPEG(ch) })
+}
+
+// streamMJPEG sends each new frame from next until the viewer goes away.
+func streamMJPEG(c *gin.Context, next func() ([]byte, time.Time, bool)) {
 	// A stream runs as long as it's watched; lift the server's write timeout.
 	_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Time{})
 	const boundary = "goklippyframe"
@@ -93,7 +188,7 @@ func StreamSorterCamera(c *gin.Context) {
 			return
 		case <-ticker.C:
 		}
-		jpg, at, ok := sorterFeed.JPEG(ch)
+		jpg, at, ok := next()
 		if !ok || !at.After(last) {
 			continue
 		}

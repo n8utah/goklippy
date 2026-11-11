@@ -165,6 +165,103 @@
   width: 90px;
 }
 
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setup .alert {
+  margin: 0;
+}
+
+.deviceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.deviceCard,
+.deviceCardOn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.deviceCardOn {
+  border-color: #0284c7;
+  background: #f8fbff;
+}
+
+.deviceHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.deviceText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.previewImg,
+.previewOff {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.previewOff {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.modes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.warnText {
+  font-size: 13px;
+  color: #92400e;
+}
+
+.channelRow {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 2px 12px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.channelRow .hint {
+  grid-column: 2;
+}
+
 @media (max-width: 860px) {
   .layout {
     grid-template-columns: 1fr;

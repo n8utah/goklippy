@@ -37,7 +37,7 @@ func TestPerceptionWithFfmpegTestPicture(t *testing.T) {
 	require.Eventually(t, func() bool { return p.Statuses()[ChannelC4].Message != "" }, 5*time.Second, 20*time.Millisecond)
 	st := p.Statuses()[ChannelC4]
 	assert.True(t, st.Camera.Running)
-	assert.Equal(t, 640, st.FrameW)
+	assert.Equal(t, current.Cameras.Width, st.FrameW, "opened at the configured size")
 	assert.Contains(t, st.Message, "zones", "no zones yet")
 	assert.False(t, p.Observation(ChannelC4).Valid)
 

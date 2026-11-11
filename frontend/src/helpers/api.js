@@ -300,6 +300,20 @@ export function captureSorterBackground(channel) {
 }
 
 /** MJPEG stream URL for an <img>. */
+/** Live MJPEG of any listed camera (by its device id), assigned or not. */
+export function sorterCameraPreviewURL(device) {
+  return `${API_BASE_URL}/api/v1/sorter/cameras/preview/stream?device=${encodeURIComponent(device)}`;
+}
+
+/** The sizes a camera offers: { modes: [{ width, height, fps, format }], error? }. */
+export function listSorterCameraModes(device) {
+  return getJSON(`/api/v1/sorter/cameras/modes?device=${encodeURIComponent(device)}`);
+}
+
+export function getSorterCameraPreviewStatus(device) {
+  return getJSON(`/api/v1/sorter/cameras/preview/status?device=${encodeURIComponent(device)}`);
+}
+
 export function sorterCameraStreamURL(channel) {
   return `${API_BASE_URL}/api/v1/sorter/cameras/${channel}/stream`;
 }

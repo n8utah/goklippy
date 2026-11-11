@@ -213,7 +213,9 @@ func DefaultMachineSettings() MachineSettings {
 		Cameras: CameraSettings{
 			Devices: map[string]string{},
 			Zones:   map[string]vision.ChannelZones{},
-			Width:   640, Height: 480, Fps: 10,
+			// The cameras' largest common size; lower it on the Cameras page if the
+			// laptop can't keep up.
+			Width: 1280, Height: 720, Fps: 10,
 		},
 		Lights: LightsSettings{Output: "output_pin leds", OnWhenSorting: true},
 	}

@@ -70,7 +70,9 @@ export const DEFAULT_SORTER_SETTINGS = {
     idleIndexMs: 1500,
   },
   // Which camera watches each channel (c2, c3, c4) and where its zones are.
-  cameras: { devices: {}, zones: {}, width: 640, height: 480, fps: 10, ffmpeg: '', threshold: 0, minArea: 0 },
+  // devices maps a channel to its camera's id (device path); deviceNames keeps a label
+  // for each, to name a camera that's unplugged.
+  cameras: { devices: {}, deviceNames: {}, zones: {}, width: 1280, height: 720, fps: 10, ffmpeg: '', threshold: 0, minArea: 0 },
   // The machine's light: an [output_pin] in the board config (RAMPS D10).
   lights: { output: 'output_pin leds', onWhenSorting: true },
 };

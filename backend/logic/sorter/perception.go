@@ -49,15 +49,17 @@ type CameraStatus struct {
 type Perception struct {
 	settings func() MachineSettings
 	dataDir  string
+	pool     *cameraPool
 
 	mu    sync.Mutex
 	chans map[Channel]*perceptionChannel
+	known map[string]bool // devices the last listing found, which may be previewed
 }
 
 type perceptionChannel struct {
 	cfg      camera.Config
-	cam      *camera.Camera
-	cancel   context.CancelFunc
+	cam      *camera.Camera     // from the pool, shared with previews
+	cancel   context.CancelFunc // stops this channel's frame processing
 	detector *vision.BackgroundDetector
 	tracker  *vision.Tracker
 
@@ -68,7 +70,12 @@ type perceptionChannel struct {
 }
 
 func NewPerception(settings func() MachineSettings, dataDir string) *Perception {
-	return &Perception{settings: settings, dataDir: dataDir, chans: map[Channel]*perceptionChannel{}}
+	return &Perception{
+		settings: settings, dataDir: dataDir,
+		pool:  newCameraPool(context.Background()),
+		chans: map[Channel]*perceptionChannel{},
+		known: map[string]bool{},
+	}
 }
 
 const reconcileEvery = time.Second
@@ -79,6 +86,7 @@ func (p *Perception) Run(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		p.reconcile(ctx)
+		p.pool.sweep(time.Now())
 		select {
 		case <-ctx.Done():
 			p.mu.Lock()
@@ -86,10 +94,62 @@ func (p *Perception) Run(ctx context.Context) {
 				c.cancel()
 			}
 			p.mu.Unlock()
+			p.pool.stopAll()
 			return
 		case <-ticker.C:
 		}
 	}
+}
+
+// cameraConfig is how every camera is opened, from the settings.
+func cameraConfig(cs CameraSettings, device string) camera.Config {
+	return camera.Config{Device: device, Width: cs.Width, Height: cs.Height, Fps: cs.Fps, Ffmpeg: cs.Ffmpeg}
+}
+
+// TestDevice is ffmpeg's test picture, which can always be previewed.
+const TestDevice = "lavfi:testsrc"
+
+var ErrUnknownDevice = errors.New("that camera isn't in the last device list; look for cameras again")
+
+// NoteDevices records what a device listing found: those may be previewed.
+func (p *Perception) NoteDevices(ids []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.known = map[string]bool{}
+	for _, id := range ids {
+		p.known[id] = true
+	}
+}
+
+// MayOpen is whether a device may be handed to ffmpeg from a request: one the last
+// listing found, one a channel is set to, or the test picture.
+func (p *Perception) MayOpen(device string) bool {
+	if device == "" {
+		return false
+	}
+	p.mu.Lock()
+	allowed := p.known[device] || device == TestDevice
+	p.mu.Unlock()
+	for _, d := range p.settings().Cameras.Devices {
+		allowed = allowed || d == device
+	}
+	return allowed
+}
+
+// Preview is a camera's newest frame for the Cameras page, whether or not a channel
+// uses it. The first call starts its capture; it keeps running while it's watched.
+// Only listed devices, assigned ones and the test picture can be previewed: the
+// device goes to ffmpeg.
+func (p *Perception) Preview(device string) ([]byte, time.Time, camera.Status, error) {
+	if !p.MayOpen(device) {
+		return nil, time.Time{}, camera.Status{}, ErrUnknownDevice
+	}
+	cam := p.pool.preview(cameraConfig(p.settings().Cameras, device))
+	f, ok := cam.Latest()
+	if !ok {
+		return nil, time.Time{}, cam.Status(), ErrNoFrame
+	}
+	return f.JPEG, f.At, cam.Status(), nil
 }
 
 // reconcile starts, stops or restarts cameras whose settings changed.
@@ -98,42 +158,54 @@ func (p *Perception) reconcile(ctx context.Context) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, ch := range CameraChannels {
-		want := camera.Config{Device: cs.Devices[string(ch)], Width: cs.Width, Height: cs.Height, Fps: cs.Fps, Ffmpeg: cs.Ffmpeg}
+		want := cameraConfig(cs, cs.Devices[string(ch)])
 		cur := p.chans[ch]
 		if cur != nil && cur.cfg == want {
-			cur.detector.Threshold, cur.detector.MinArea = detectorParams(cs)
+			// Same frame size, so the step (which the background was sampled at) stays.
+			cur.detector.Threshold, cur.detector.MinArea, _ = detectorParams(cs)
 			continue
 		}
 		if cur != nil {
 			cur.cancel()
+			p.pool.release(cur.cfg.Device)
 			delete(p.chans, ch)
 		}
 		if want.Device == "" {
 			continue
 		}
 		cctx, cancel := context.WithCancel(ctx)
-		pc := &perceptionChannel{cfg: want, cam: camera.New(want), cancel: cancel, detector: vision.NewBackgroundDetector(), tracker: vision.NewTracker()}
-		pc.detector.Threshold, pc.detector.MinArea = detectorParams(cs)
+		pc := &perceptionChannel{cfg: want, cam: p.pool.acquire(want), cancel: cancel, detector: vision.NewBackgroundDetector(), tracker: vision.NewTracker()}
+		pc.detector.Threshold, pc.detector.MinArea, pc.detector.Step = detectorParams(cs)
 		if bg, err := p.loadBackground(ch); err == nil {
 			pc.detector.SetBackground(bg)
 		}
 		p.chans[ch] = pc
-		go pc.cam.Run(cctx)
 		go p.process(cctx, ch, pc)
 		slog.Info("camera started", "channel", ch, "device", want.Device)
 	}
 }
 
-func detectorParams(cs CameraSettings) (threshold, minArea int) {
+// The detector's defaults are for a 640×480 frame.
+const detectorBaseW, detectorBaseH = 640, 480
+
+// detectorParams are the detector's settings for the cameras' frame size. Unset ones
+// scale from the 640×480 defaults: the smallest piece by pixel count, and the sampling
+// step by width, so a 1280×720 frame costs about what a 640×480 one does.
+func detectorParams(cs CameraSettings) (threshold, minArea, step int) {
 	d := vision.NewBackgroundDetector()
-	threshold, minArea = d.Threshold, d.MinArea
+	threshold, minArea, step = d.Threshold, d.MinArea, d.Step
+	if cs.Width > 0 && cs.Height > 0 {
+		scale := float64(cs.Width*cs.Height) / (detectorBaseW * detectorBaseH)
+		minArea = max(1, int(float64(d.MinArea)*scale+0.5))
+		step = max(d.Step, d.Step*cs.Width/detectorBaseW)
+	}
 	if cs.Threshold > 0 {
 		threshold = cs.Threshold
 	}
 	if cs.MinArea > 0 {
 		minArea = cs.MinArea
 	}
-	return threshold, minArea
+	return threshold, minArea, step
 }
 
 // mergeGap joins detections this close (pixels): one piece in two colors.
