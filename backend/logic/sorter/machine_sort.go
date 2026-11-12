@@ -345,14 +345,47 @@ var c4ShakeOff = []RecoveryMove{
 	{Shake: "max"},
 }
 
-// onDidntFall shakes a piece off C4's exit, harder each time; if it's still there the
-// sort stops for the operator.
+// onDidntFall frees a piece still at C4's exit after the turn that should have dropped
+// it. Most just need a little more turning: C4 turns on Platter.FallNudgeDeg at a time
+// (up to FallNudges), checking after each, then back as far so its sectors stay where
+// the platter expects them. Only then is it shaken, harder each time; if it's still
+// there the sort stops for the operator.
 func (m *Machine) onDidntFall() {
 	runner := m.recovery()
+	ps := m.settings().Platter
 	var freed bool
-	err := m.startJob("Recovery: shake a piece off the classification channel", func(ctx context.Context, report reportFunc) error {
+	steps := max(0, ps.FallNudges) + len(c4ShakeOff)
+	err := m.startJob("Recovery: get a piece off the classification channel", func(ctx context.Context, report reportFunc) error {
+		gone := func() bool {
+			obs := runner.freshObs(ctx, ChannelC4, time.Now())
+			return obs.Valid && !obs.InExit
+		}
+		turned := 0.0
+		for i := 0; i < ps.FallNudges && ps.FallNudgeDeg > 0; i++ {
+			report(i+1, steps, fmt.Sprintf("Turn C4 on %g° (%g° so far) to let it fall", ps.FallNudgeDeg, turned+ps.FallNudgeDeg))
+			if err := runner.turn(ctx, ChannelC4, ps.FallNudgeDeg); err != nil {
+				return err
+			}
+			turned += ps.FallNudgeDeg
+			if err := waitFor(ctx, recoverySettle); err != nil {
+				return err
+			}
+			if gone() {
+				freed = true
+				break
+			}
+		}
+		if turned > 0 {
+			// Back to where the sectors were, freed or not.
+			if err := runner.turn(ctx, ChannelC4, -turned); err != nil {
+				return err
+			}
+			if freed {
+				return nil
+			}
+		}
 		for i, mv := range c4ShakeOff {
-			report(i+1, len(c4ShakeOff), runner.describe(mv, ChannelC4))
+			report(ps.FallNudges+i+1, steps, runner.describe(mv, ChannelC4))
 			if err := runner.move(ctx, ChannelC4, mv); err != nil {
 				return err
 			}
@@ -362,7 +395,7 @@ func (m *Machine) onDidntFall() {
 			if mv.TurnDeg < 0 {
 				continue // backed up: it comes back to the exit on the next move
 			}
-			if obs := runner.freshObs(ctx, ChannelC4, time.Now()); obs.Valid && !obs.InExit {
+			if gone() {
 				freed = true
 				return nil
 			}
@@ -375,7 +408,7 @@ func (m *Machine) onDidntFall() {
 		m.raiseIncident(Incident{
 			Kind:    IncidentDidntFall,
 			Title:   "A piece won't fall off the classification channel",
-			Message: "It stays at C4's exit, and shaking it harder and harder didn't free it (often a tyre). Take it off, then press Done.",
+			Message: "It stays at C4's exit: turning C4 on a little, then shaking it harder and harder, didn't free it (often a tyre). Take it off, then press Done.",
 		})
 	})
 	if err != nil {

@@ -309,6 +309,14 @@ type PlatterSettings struct {
 	// fall, C3 drops nothing (the channels before it pause) and it drops at once
 	// rather than after IdleIndexMs, so a landing piece never holds a finished one.
 	ClearExitFirst bool `json:"clearExitFirst"`
+	// After the turn that drops a piece, the exit may show it for FallWaitMs more (it's
+	// sliding off) before it counts as not fallen. One that didn't is first turned on
+	// FallNudgeDeg at a time, up to FallNudges times, checking after each (it most
+	// often just needs a little more turning), then turned back as far, and only then
+	// shaken.
+	FallWaitMs   int     `json:"fallWaitMs"`
+	FallNudgeDeg float64 `json:"fallNudgeDeg"`
+	FallNudges   int     `json:"fallNudges"`
 }
 
 // ChannelSettings maps one rotating channel to its stepper.
@@ -452,6 +460,7 @@ func DefaultMachineSettings() MachineSettings {
 			Sectors: 5, ExitSector: 2,
 			IdentifyTimeoutMs: 20000, SettleMs: 250, BurstFrames: 6, StallMs: 30000, IdleIndexMs: 1500,
 			SendFrames: 4, UpstreamFrames: 4, OtherViews: 3,
+			FallWaitMs: 800, FallNudgeDeg: 6, FallNudges: 5,
 			ClearExitFirst: true,
 		},
 		Cameras: CameraSettings{

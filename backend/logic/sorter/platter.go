@@ -100,8 +100,10 @@ type Platter struct {
 	lastProgress time.Time
 	stallRaised  bool
 	recent       []Piece // last pieces delivered, newest first
-	// checkFall: after a drop, the next settled frame must show the exit clear.
+	// checkFall: after a drop, a settled frame must show the exit clear by fallBy
+	// (Platter.FallWaitMs after it settled): a piece may still be sliding off.
 	checkFall bool
+	fallBy    time.Time
 	// severalUntil: C3 just dropped more than one piece at once; a landing before
 	// this is a double (ExpectSeveral).
 	severalUntil time.Time
@@ -704,8 +706,8 @@ func (p *Platter) maybeIndex(now time.Time, settings MachineSettings) {
 	} else if drop.state < slotIdentifying && drop.piece.Status != PieceMultiDrop {
 		return // still landing or being photographed
 	}
-	if !p.distributionReady(now, exit) {
-		return
+	if (p.checkFall && now.Before(p.fallBy)) || !p.distributionReady(now, exit) {
+		return // still watching the last piece fall off; or the chute isn't set
 	}
 	done, err := p.deps.HW.MoveChannel(ChannelC4, 360/float64(len(p.slots)), settings.IndexRpm)
 	if err != nil {
@@ -740,6 +742,7 @@ func (p *Platter) finishIndex(now time.Time, ps PlatterSettings) {
 	p.settleUntil = now.Add(time.Duration(ps.SettleMs) * time.Millisecond)
 	p.freeSince = p.settleUntil
 	p.checkFall = fallen != nil
+	p.fallBy = p.settleUntil.Add(time.Duration(ps.FallWaitMs) * time.Millisecond)
 	p.progress(now)
 }
 
@@ -749,6 +752,9 @@ func (p *Platter) finishIndex(now time.Time, ps PlatterSettings) {
 func (p *Platter) verifyFall(now time.Time, obs vision.Observation) {
 	if !p.checkFall || !obs.Valid || obs.At.Before(p.settleUntil) {
 		return
+	}
+	if obs.InExit && now.Before(p.fallBy) {
+		return // still sliding off the edge: give it a moment before calling it stuck
 	}
 	p.checkFall = false
 	if !obs.InExit || len(p.recent) == 0 {
