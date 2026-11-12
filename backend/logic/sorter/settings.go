@@ -289,8 +289,16 @@ type PlatterSettings struct {
 	// SettleMs is the wait after an index before photographing or trusting the
 	// camera.
 	SettleMs int `json:"settleMs"`
-	// BurstFrames is how many photos of each piece go to Brickognize (≤ 8).
+	// BurstFrames is how many photos of each piece C4 takes (≤ 8); SendFrames of them,
+	// the whole piece in view and sharpest, go to Brickognize together, the rest are
+	// spares (platter_identify.go).
 	BurstFrames int `json:"burstFrames"`
+	SendFrames  int `json:"sendFrames"`
+	// UpstreamFrames: up to this many of the piece's pictures from C2 and C3 go in one
+	// more request alongside C4's (0: none). OtherViews: when nothing named it, up to
+	// this many spares are sent again, each alone (0: none).
+	UpstreamFrames int `json:"upstreamFrames"`
+	OtherViews     int `json:"otherViews"`
 	// StallMs: no progress for this long with a piece aboard raises an incident.
 	StallMs int `json:"stallMs"`
 	// IdleIndexMs: with pieces aboard and none landing for this long, index anyway
@@ -443,6 +451,7 @@ func DefaultMachineSettings() MachineSettings {
 		Platter: PlatterSettings{
 			Sectors: 5, ExitSector: 2,
 			IdentifyTimeoutMs: 20000, SettleMs: 250, BurstFrames: 6, StallMs: 30000, IdleIndexMs: 1500,
+			SendFrames: 4, UpstreamFrames: 4, OtherViews: 3,
 			ClearExitFirst: true,
 		},
 		Cameras: CameraSettings{

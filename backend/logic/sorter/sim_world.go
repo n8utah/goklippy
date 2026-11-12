@@ -1,9 +1,11 @@
 package sorter
 
 import (
+	"bytes"
 	"context"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"math"
 	"math/rand/v2"
 	"sync"
@@ -33,7 +35,6 @@ type SimWorld struct {
 	rng      *rand.Rand
 	onRotor  map[Channel][]*simPiece // pieces riding each channel
 	landedC4 []SimPart               // parts in the order they landed on C4
-	asked    int                     // how many of them Brickognize has named
 	falls    []SimFall
 	frameAt  time.Time
 	ignores  spotIgnores // stuck pieces worked around, as Perception does
@@ -329,19 +330,38 @@ func (w *SimWorld) frameLocked(ch Channel) (image.Image, time.Time) {
 }
 
 // Identify names the next piece that landed on C4, as Brickognize would.
+// partInPhoto is the landed part whose colour is nearest the photo's middle; the
+// caller holds the lock.
+func (w *SimWorld) partInPhoto(jpg []byte) (SimPart, bool) {
+	img, err := jpeg.Decode(bytes.NewReader(jpg))
+	if err != nil {
+		return SimPart{}, false
+	}
+	b := img.Bounds()
+	r, g, bl, _ := img.At((b.Min.X+b.Max.X)/2, (b.Min.Y+b.Max.Y)/2).RGBA()
+	var best SimPart
+	bestD := math.Inf(1)
+	for _, p := range w.landedC4 {
+		d := math.Abs(float64(r>>8)-float64(p.RGB.R)) + math.Abs(float64(g>>8)-float64(p.RGB.G)) + math.Abs(float64(bl>>8)-float64(p.RGB.B))
+		if d < bestD {
+			best, bestD = p, d
+		}
+	}
+	return best, bestD < 60 // JPEG shifts colours a little; grey background matches none
+}
+
 func (w *SimWorld) Identify(_ context.Context, jpegs [][]byte) (brickognize.Result, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if len(jpegs) == 0 {
 		return brickognize.Result{}, brickognize.ErrNoImages
 	}
-	if w.asked >= len(w.landedC4) {
-		return brickognize.Result{Items: []brickognize.Item{}, Colors: []brickognize.Color{}}, nil
-	}
-	part := w.landedC4[w.asked]
-	w.asked++
+	// Named from the picture, as the real one is, so asking several times about one
+	// piece (with different photos) gets the same answer: the landed part whose colour
+	// is nearest the first photo's middle.
 	res := brickognize.Result{ListingID: "sim", Items: []brickognize.Item{}, Colors: []brickognize.Color{}}
-	if part.Unknown {
+	part, ok := w.partInPhoto(jpegs[0])
+	if !ok || part.Unknown {
 		return res, nil
 	}
 	res.Items = append(res.Items, brickognize.Item{ID: part.ID, Name: part.Name, Category: part.Category, Score: 0.95})

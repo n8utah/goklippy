@@ -525,6 +525,68 @@ func (r *JourneyRecorder) ForPiece(pieceID string) ([]byte, error) {
 	return nil, ErrNoJourney
 }
 
+// UpstreamCrops is up to max of the sharpest pictures kept of this piece on C2 and C3,
+// sharpest first and taking turns between the channels, read from disk. A journey only
+// joins tracks whose handoff was certain (exactly one piece could have been it), so
+// these are pictures of this piece, never another's. None when the piece has no
+// journey yet or it began on C4.
+func (r *JourneyRecorder) UpstreamCrops(pieceID string, max int) [][]byte {
+	if pieceID == "" || max <= 0 {
+		return nil
+	}
+	type pic struct {
+		path  string
+		sharp float64
+	}
+	byCh := map[Channel][]pic{}
+	r.mu.Lock()
+	var j *Journey
+	for _, st := range r.open {
+		if st.j.PieceID == pieceID {
+			j = st.j
+			break
+		}
+	}
+	for i := len(r.recent) - 1; j == nil && i >= 0; i-- {
+		if r.recent[i].PieceID == pieceID {
+			j = r.recent[i]
+		}
+	}
+	if j != nil {
+		for _, t := range j.Tracks {
+			if t.Channel != ChannelC2 && t.Channel != ChannelC3 {
+				continue
+			}
+			for _, f := range t.Frames {
+				if f.Kept && f.Crop != "" {
+					byCh[t.Channel] = append(byCh[t.Channel], pic{filepath.Join(r.dir, j.ID, f.Crop), f.Sharpness})
+				}
+			}
+		}
+	}
+	r.mu.Unlock()
+
+	for _, pics := range byCh {
+		sort.Slice(pics, func(a, b int) bool { return pics[a].sharp > pics[b].sharp })
+	}
+	var out [][]byte
+	for round := 0; len(out) < max; round++ {
+		took := false
+		for _, ch := range []Channel{ChannelC3, ChannelC2} {
+			if round < len(byCh[ch]) && len(out) < max {
+				if data, err := os.ReadFile(byCh[ch][round].path); err == nil {
+					out = append(out, data)
+				}
+				took = true
+			}
+		}
+		if !took {
+			break
+		}
+	}
+	return out
+}
+
 // judge decides about one frame of a piece, and returns the pictures to save.
 func (r *JourneyRecorder) judge(st *journeyState, obs vision.Observation, i int, img image.Image, z vision.ChannelZones, ps PicturesSettings) []save {
 	p := obs.Pieces[i]

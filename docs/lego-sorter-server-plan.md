@@ -467,6 +467,14 @@ records the piece id (`GET /sorter/pieces/:id/journey`, shown in the journey mod
 is `pictures.handoffMs` (1500 ms). `TestSortLinksJourneysAcrossChannels` sorts in the full
 simulation and checks every piece has C2 → C3 → C4 linked.
 
+Step 3 as built (2026-11-12, `platter_identify.go`, after Sorter V2's two_piece/base.py): of
+C4's burst (`burstFrames`, 6) the photos with the whole piece in view, sharpest first, up to
+`sendFrames` (4) are sent together; at the same time the most settled one alone, and with
+`upstreamFrames` (4) C4's plus the piece's sharpest kept C2/C3 crops (its journey, linked only
+on certain handoffs). The most confident answer naming a part wins. If none does, up to
+`otherViews` (3) unsent photos least like those sent go again, each alone. The simulated
+Brickognize names a piece by the colour in the photo, so several requests per piece agree.
+
 Still to do: splits and joins (marking a journey unsure) aren't detected; tune step 1 on C3 once
 its camera sees the whole bowl and the light works (the sharpness minimum especially: the
 simulator's crisp squares score in the thousands), and the window once two real channels have

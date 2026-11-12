@@ -59,6 +59,7 @@ func (m *Machine) AttachSorting(deps SortDeps) {
 		OnDidntFall: m.onDidntFall,
 	})
 	if deps.Journeys != nil {
+		st.platter.deps.Upstream = deps.Journeys.UpstreamCrops
 		st.platter.deps.OnLanded = func(pieceID string, at time.Time) {
 			if id := deps.Journeys.NotePiece(pieceID, at); id != "" {
 				slog.Info("piece linked to its journey", "piece", pieceID, "journey", id)

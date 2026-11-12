@@ -46,6 +46,9 @@ type PlatterDeps struct {
 	OnDidntFall func()
 	// OnLanded is told when a piece lands and gets its record, with the frame's time.
 	OnLanded func(pieceID string, at time.Time)
+	// Upstream gives up to max pictures of the piece from C2 and C3 (its journey), to
+	// send Brickognize alongside C4's. Nil: C4's alone.
+	Upstream func(pieceID string, max int) [][]byte
 }
 
 type slotState int
@@ -75,9 +78,10 @@ type platterSlot struct {
 }
 
 type identResult struct {
-	pieceID string
-	result  brickognize.Result
-	err     error
+	pieceID  string
+	result   brickognize.Result
+	err      error
+	strategy string // which request's answer it is (platter_identify.go)
 }
 
 // Platter runs C4. Step it from the control loop; it never blocks.
@@ -406,21 +410,9 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 	p.progress(now)
 	shots, id := s.shots, s.piece.ID
 	go func() {
-		// Cut here, off the control loop: a full-size frame takes a while to decode.
-		var frames [][]byte
-		for _, sh := range shots {
-			jpg, err := sh.crop()
-			if err != nil {
-				slog.Warn("cropping a photo of a piece failed", "piece", id, "error", err)
-				continue
-			}
-			p.deps.Records.SaveImage(id, len(frames), jpg, true, sh.at)
-			frames = append(frames, jpg)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(ps.IdentifyTimeoutMs)*time.Millisecond)
-		defer cancel()
-		res, err := p.deps.Identifier.Identify(ctx, frames)
-		p.idents <- identResult{pieceID: id, result: res, err: err}
+		// Off the control loop: a full-size frame takes a while to decode, and
+		// Brickognize a while to answer (platter_identify.go).
+		p.idents <- p.identify(id, shots, ps)
 	}()
 }
 
