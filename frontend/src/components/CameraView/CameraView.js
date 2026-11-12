@@ -48,6 +48,22 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange,
   const [hover, setHover] = useState(null); // what the pointer would grab
   const [drag, setDrag] = useState(null); // { grab, p0, z0 }
   const viewRef = useRef(null);
+  const imgRef = useRef(null);
+
+  // A live stream fires load once, so a size changed mid-stream (a new camera size)
+  // is caught by looking again every second.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const img = imgRef.current;
+      if (!img?.naturalWidth) return;
+      setSize((cur) =>
+        cur?.w === img.naturalWidth && cur?.h === img.naturalHeight
+          ? cur
+          : { w: img.naturalWidth, h: img.naturalHeight },
+      );
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!showOverlay) return undefined;
@@ -198,11 +214,15 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange,
     <div
       ref={viewRef}
       className={cn(compact ? styles.viewCompact : styles.view, editing && styles.editing)}
-      style={
-        editing
-          ? { cursor: drag?.grab.kind === 'rotate' ? 'grabbing' : CURSORS[active?.kind] }
-          : undefined
-      }
+      style={{
+        // The frame's own shape, so the picture and its overlay aren't stretched.
+        aspectRatio: `${w} / ${h}`,
+        cursor: editing
+          ? drag?.grab.kind === 'rotate'
+            ? 'grabbing'
+            : CURSORS[active?.kind]
+          : undefined,
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -211,6 +231,7 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange,
       onDoubleClick={onDoubleClick}
     >
       <img
+        ref={imgRef}
         src={sorterCameraStreamURL(channel)}
         alt={`Camera over ${channel}`}
         className={styles.stream}

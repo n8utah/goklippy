@@ -51,6 +51,7 @@ type SimMove struct {
 	Channel Channel
 	Degrees float64
 	Rpm     float64
+	Accel   float64 // rpm per second; 0 for no ramp
 }
 
 func NewSimHardware(settings func() MachineSettings) *SimHardware {
@@ -71,6 +72,10 @@ func (h *SimHardware) SetConnected(connected bool) {
 }
 
 func (h *SimHardware) MoveChannel(ch Channel, deg, rpm float64) (<-chan error, error) {
+	return h.RampChannel(ch, deg, rpm, channelAccel(h.settings(), ch))
+}
+
+func (h *SimHardware) RampChannel(ch Channel, deg, rpm, accel float64) (<-chan error, error) {
 	if _, err := ParseChannel(string(ch)); err != nil {
 		return nil, err
 	}
@@ -84,8 +89,8 @@ func (h *SimHardware) MoveChannel(ch Channel, deg, rpm float64) (<-chan error, e
 	}
 	from := h.positions[ch]
 	h.positions[ch] += deg
-	h.moves = append(h.moves, SimMove{Channel: ch, Degrees: deg, Rpm: rpm})
-	d := moveDuration(deg, rpm, channelAccel(h.settings(), ch))
+	h.moves = append(h.moves, SimMove{Channel: ch, Degrees: deg, Rpm: rpm, Accel: accel})
+	d := moveDuration(deg, rpm, accel)
 	h.mu.Unlock()
 	total := seconds(d.Seconds() * h.TimeScale)
 	if total <= simMoveStep || (ch != ChannelC2 && ch != ChannelC3 && ch != ChannelC4) {

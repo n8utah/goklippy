@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import {
+  clearSorterChannels,
   getSorterBins,
   listSorterRuns,
   listSorterShakes,
@@ -112,6 +113,11 @@ export function useSortPageLogic() {
       return run(() => moveSorterChannel(channel, degrees, rpm));
     },
     shake: (channel, profile) => run(() => shakeSorterChannel(channel, profile)),
+    /** Run C2–C4 for the set time to empty them; with the chute in, into the bucket. */
+    clear: () => run(() => clearSorterChannels()),
+    clearSeconds: settings.feeder?.clearSeconds ?? 30,
+    clearRpm: settings.feeder?.clearRpm ?? 12,
+    chuteLeftOut: Boolean(settings.distributor?.leftOut),
     sorting: s === 'running',
     handsFree: Boolean(state?.hardware?.connected) && s !== 'running' && s !== 'homing' && !job,
     handsBlockedWhy: !state?.hardware?.connected

@@ -374,6 +374,11 @@ export function listSorterShakes() {
   return getJSON('/api/v1/sorter/shakes');
 }
 
+/** Run C2–C4 for the set time to empty them (into the bucket when the chute is in). */
+export function clearSorterChannels() {
+  return postJSON('/api/v1/sorter/channels/clear', {});
+}
+
 export function shakeSorterChannel(channel, profile) {
   return postJSON(`/api/v1/sorter/channels/${channel}/shake`, { profile });
 }

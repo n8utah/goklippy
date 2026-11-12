@@ -56,6 +56,7 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	sorterGroup.PUT("/settings/:name", routes.PutSorterSettings)
 	sorterGroup.GET("/state", routes.GetSorterState)
 	sorterGroup.POST("/commands", routes.SorterCommand)
+	sorterGroup.POST("/channels/clear", routes.ClearSorterChannels)
 	sorterGroup.POST("/channels/:channel/move", routes.MoveSorterChannel)
 	sorterGroup.POST("/channels/:channel/shake", routes.ShakeSorterChannel)
 	sorterGroup.GET("/shakes", routes.ListSorterShakes)

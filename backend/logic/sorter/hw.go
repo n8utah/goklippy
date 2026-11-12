@@ -46,6 +46,8 @@ type Hardware interface {
 	// acceleration setting. The returned channel receives once when the move should
 	// have finished.
 	MoveChannel(ch Channel, deg, rpm float64) (<-chan error, error)
+	// RampChannel is MoveChannel with its own ramp: accel in rpm per second, 0 for none.
+	RampChannel(ch Channel, deg, rpm, accel float64) (<-chan error, error)
 	// SelectLayer sends the next piece to one distribution layer: its servo goes to
 	// the open angle and the rest to closed. -1 selects none, so every layer is closed
 	// and pieces fall through to the bottom bucket.

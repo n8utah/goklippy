@@ -62,6 +62,9 @@ export const DEFAULT_SORTER_SETTINGS = {
     bulkPulseDeg: 10,
     bulkPauseMs: 1500,
     staleMs: 1000,
+    clearSeconds: 30,
+    clearRpm: 12,
+    clearAccel: 20,
   },
   platter: {
     sectors: 5,

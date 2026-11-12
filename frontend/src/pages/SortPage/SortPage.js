@@ -215,6 +215,10 @@ const SortPage = () => {
         sorting={logic.sorting}
         onTurn={logic.turn}
         onShake={logic.shake}
+        clearSeconds={logic.clearSeconds}
+        clearRpm={logic.clearRpm}
+        chuteLeftOut={logic.chuteLeftOut}
+        onClear={logic.clear}
       />
     </div>
   );

@@ -222,6 +222,12 @@ type FeederSettings struct {
 	BulkPauseMs  int     `json:"bulkPauseMs"`
 	// StaleMs: a camera frame older than this is no information.
 	StaleMs int `json:"staleMs"`
+	// Clear (Run › Sort) runs C2–C4 together for ClearSeconds at ClearRpm, one speed
+	// for all three and faster than sorting, to empty them. Each ramps up (and back
+	// down) at ClearAccel, rpm per second.
+	ClearSeconds int     `json:"clearSeconds"`
+	ClearRpm     float64 `json:"clearRpm"`
+	ClearAccel   float64 `json:"clearAccel"`
 }
 
 // PlatterSettings tune the classification platter (C4).
@@ -363,7 +369,10 @@ func DefaultMachineSettings() MachineSettings {
 			HoldAfterFallMs: 800,
 			MinMoveDeg:      0.1, MaxMoveDeg: 120,
 			BulkPulseDeg: 10, BulkPauseMs: 1500,
-			StaleMs: 1000,
+			StaleMs:      1000,
+			ClearSeconds: 30,
+			ClearRpm:     12,
+			ClearAccel:   20,
 		},
 		Platter: PlatterSettings{
 			Sectors: 5, ExitSector: 2,

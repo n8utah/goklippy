@@ -97,6 +97,10 @@ func (h *MCUHardware) stepperFor(s *mcu.Session, settings MachineSettings, ch Ch
 }
 
 func (h *MCUHardware) MoveChannel(ch Channel, deg, rpm float64) (<-chan error, error) {
+	return h.RampChannel(ch, deg, rpm, channelAccel(h.settings(), ch))
+}
+
+func (h *MCUHardware) RampChannel(ch Channel, deg, rpm, accelRpmS float64) (<-chan error, error) {
 	if rpm <= 0 {
 		return nil, fmt.Errorf("%s: speed must be positive", ch)
 	}
@@ -129,7 +133,7 @@ func (h *MCUHardware) MoveChannel(ch Channel, deg, rpm float64) (<-chan error, e
 		return doneAfter(0), nil
 	}
 
-	accel := channelAccel(settings, ch) / 60 * st.stepsPerRev
+	accel := accelRpmS / 60 * st.stepsPerRev
 	motorForward := (steps > 0) == st.forward
 	d, err := s.StepperMove(st.oid, motorForward, mcu.TrapezoidMove{
 		Steps:   int(math.Abs(steps)),

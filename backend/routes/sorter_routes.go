@@ -166,6 +166,16 @@ func sorterError(c *gin.Context, err error) {
 	c.JSON(status, gin.H{"error": err.Error()})
 }
 
+// ClearSorterChannels POST /sorter/channels/clear: runs C2–C4 for the set time to empty
+// them (into the bucket when the chute is in), as a job.
+func ClearSorterChannels(c *gin.Context) {
+	if err := sorterMachine.ClearChannels(c.Request.Context()); err != nil {
+		sorterError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // ListSorterShakes GET /sorter/shakes: the shake profiles, gentlest first.
 func ListSorterShakes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"shakes": sorter.ShakeProfiles})

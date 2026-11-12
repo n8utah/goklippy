@@ -1,6 +1,7 @@
-import { ArrowLeft, ArrowRight, ChevronDown, Waves } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronDown, Eraser, Waves } from 'lucide-react';
 import { useState } from 'react';
 
+import { useQuickEditor } from '@/components/SettingQuickEditor/SettingQuickEditor.logic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,10 +16,23 @@ import { cn } from '@/lib/utils';
 const CHANNELS = ['c1', 'c2', 'c3', 'c4'];
 
 /**
- * Turn a channel by hand or shake it to free a stuck piece. Folded away while sorting;
- * the controls say why when they can't be used.
+ * Turn a channel by hand, shake it to free a stuck piece, or clear C2–C4 (run them all
+ * for a set time so everything falls off). Folded away while sorting; the controls say
+ * why when they can't be used.
  */
-export default function ChannelControls({ shakes, disabled, why, sorting, onTurn, onShake }) {
+export default function ChannelControls({
+  shakes,
+  disabled,
+  why,
+  sorting,
+  onTurn,
+  onShake,
+  clearSeconds,
+  clearRpm,
+  chuteLeftOut,
+  onClear,
+}) {
+  const quickEditor = useQuickEditor();
   const [open, setOpen] = useState(!sorting);
   const [amount, setAmount] = useState(10);
   const [shake, setShake] = useState('heavy');
@@ -38,7 +52,7 @@ export default function ChannelControls({ shakes, disabled, why, sorting, onTurn
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <span>
-          <span className="block font-display font-semibold">Turn or shake a channel</span>
+          <span className="block font-display font-semibold">Turn, shake or clear channels</span>
           <span className="block text-sm text-muted-foreground">
             Moves the real channel at once{why ? ` · ${why}` : ''}
           </span>
@@ -79,6 +93,31 @@ export default function ChannelControls({ shakes, disabled, why, sorting, onTurn
                 </SelectContent>
               </Select>
             </label>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:ml-auto">
+              <Button variant="outline" disabled={disabled} onClick={onClear}>
+                <Eraser />
+                Clear C2–C4
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Runs all three for{' '}
+                <button
+                  type="button"
+                  onClick={() => quickEditor.open('feeder.clearSeconds')}
+                  className="font-medium text-primary-text hover:underline"
+                >
+                  {clearSeconds} s
+                </button>{' '}
+                at{' '}
+                <button
+                  type="button"
+                  onClick={() => quickEditor.open('feeder.clearRpm')}
+                  className="font-medium text-primary-text hover:underline"
+                >
+                  {clearRpm} rpm
+                </button>
+                {chuteLeftOut ? ', off the end of C4' : ', into the bucket'}
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {CHANNELS.map((ch) => (

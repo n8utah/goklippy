@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { getSorterCameraPreviewStatus, sorterCameraPreviewURL } from '@/helpers/api';
+import { cn } from '@/lib/utils';
 
 const STATUS_POLL_MS = 2000;
 
@@ -9,6 +10,7 @@ export default function DevicePreview({ deviceId }) {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0); // remounts the stream after a failure
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,10 +35,15 @@ export default function DevicePreview({ deviceId }) {
     <div className="flex flex-col gap-1">
       <img
         key={attempt}
-        className="aspect-[4/3] w-full rounded-lg bg-media object-contain"
+        // 4:3 until the first frame; then the camera's own shape, never stretched.
+        className={cn('w-full rounded-lg bg-media object-contain', !loaded && 'aspect-[4/3]')}
         src={sorterCameraPreviewURL(deviceId)}
         alt="Live picture"
-        onError={() => setTimeout(() => setAttempt((n) => n + 1), STATUS_POLL_MS)}
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          setLoaded(false);
+          setTimeout(() => setAttempt((n) => n + 1), STATUS_POLL_MS);
+        }}
       />
       <p className="text-xs text-muted-foreground">
         {error
