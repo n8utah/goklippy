@@ -214,6 +214,13 @@ type FeederSettings struct {
 	// ExitApproach: short of the exit zone, an exit pulse covers this share of the way
 	// there (at least ExitPulseDeg); 0 nudges ExitPulseDeg all the way.
 	ExitApproach float64 `json:"exitApproach"`
+	// ExitClearDeg: while a channel's lead is in its exit, the next piece is kept this
+	// far short of the opening, so two don't drop together (feeder_held.go); keyed
+	// "c2", "c3"; 0 off.
+	ExitClearDeg map[string]float64 `json:"exitClearDeg"`
+	// C3BusyStandoffDeg: while the platter turns or has a piece landing, C3 brings its
+	// lead only this far short of the precise zone. 0 off.
+	C3BusyStandoffDeg float64 `json:"c3BusyStandoffDeg"`
 	// HoldAfterFallMs is how long an exit pushes nothing after a piece falls off it,
 	// so the next channel sees it land before another can follow.
 	HoldAfterFallMs int     `json:"holdAfterFallMs"`
@@ -411,8 +418,10 @@ func DefaultMachineSettings() MachineSettings {
 		Feeder: FeederSettings{
 			DropPulseDeg: 30, DropPauseMs: 100,
 			ExitPulseDeg: 2, ExitPauseMs: 100, ExitApproach: 0.5,
-			HoldAfterFallMs: 800,
-			MinMoveDeg:      0.1, MaxMoveDeg: 120,
+			ExitClearDeg:      map[string]float64{"c2": 2, "c3": 2},
+			C3BusyStandoffDeg: 6,
+			HoldAfterFallMs:   800,
+			MinMoveDeg:        0.1, MaxMoveDeg: 120,
 			BulkPulseDeg: 10, BulkPauseMs: 1500,
 			StaleMs:         1000,
 			CarryRpm:        map[string]float64{"c1": 5, "c2": 12, "c3": 12},

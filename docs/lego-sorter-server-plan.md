@@ -427,6 +427,16 @@ Original scope:
   "anything in that area": a piece landing beside it or on it is still seen. Once it hasn't
   been seen for 10 s it's watched again; Run › Sort also has "Taken off? Watch again".
   Found on the machine: a LEGO wheel caught on C3's rim where the blue guide meets it.
+  From Sorter V2's current feeder (2026-11-12, `feeder_held.go`): a lead is *held* when its
+  channel has turned 45° under it while it moved under 3° (by distance turned, not pulses;
+  pieces touching the picture's edge aren't watched); short of the exit it must also have
+  stayed put 4 s. Held at C2's exit, C3 turns 8° up to 3 times to pull it off; at C3's exit it
+  waits through 180° of turning; then it's stuck and the recovery runs. *One piece in the
+  opening*: while the lead is in the exit the next piece is kept `exitClearDeg` (2°) back,
+  backing off or shaking the lead (back, then forward as far) up to 4 times before pushing
+  anyway. C3 stands off `c3BusyStandoffDeg` (6°) while the platter turns or a piece lands. A
+  piece that won't fall off C4 gets heavy, hard, back-and-forth, then max shakes, each
+  checked, then stops for the operator ("didnt_fall").
   Steps for a stuck piece (`machine_stuck.go`): shake (skipped if one stuck again within 2
   minutes near where one was freed: the shake only nudged it); then push it past
   (`feeder.pushPastStuck`: turn the channel before by `pushBumpDeg` so pieces drop in behind

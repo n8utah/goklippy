@@ -36,6 +36,10 @@ type Observation struct {
 	// RingRadius is the channel's outer radius in this frame's pixels, to judge how
 	// big a piece is, or how much of the channel is covered.
 	RingRadius float64 `json:"ring_radius,omitempty"`
+	// FrameW and FrameH are the picture's size, when known: a box touching its edge is
+	// partly out of sight.
+	FrameW int `json:"frame_w,omitempty"`
+	FrameH int `json:"frame_h,omitempty"`
 }
 
 // Covered is the share of the channel's ring the pieces' boxes cover (0 when the ring

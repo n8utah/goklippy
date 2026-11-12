@@ -126,30 +126,6 @@ func TestFeederExitPulseClosesTheGapThenNudges(t *testing.T) {
 	assert.InDelta(t, 6, moves[ChannelC3].Degrees, 1e-9)
 }
 
-// A piece the exit pulses don't move (on the rim beside the rotor) flags the channel
-// stuck after exitStuckAfter of them, rather than being nudged forever.
-func TestFeederExitPulsesThatMoveNothingAreStuck(t *testing.T) {
-	f := NewFeeder()
-	s := feederSettings()
-	now := time.Now()
-	onRim := func(at time.Time) vision.Observation { return obs(at, piece(vision.ZoneExit, -1)) }
-	for i := 0; i < exitStuckAfter+1; i++ {
-		now = now.Add(time.Second)
-		f.Step(FeederInput{Now: now, C2: obs(now), C3: onRim(now), PlatterReady: true}, s)
-	}
-	assert.Equal(t, []Channel{ChannelC3}, f.Stuck())
-
-	// One that creeps on each pulse isn't.
-	f = NewFeeder()
-	fwd := 10.0
-	for i := 0; i < exitStuckAfter+1; i++ {
-		now = now.Add(time.Second)
-		f.Step(FeederInput{Now: now, C2: obs(now), C3: obs(now, piece(vision.ZonePrecise, fwd)), PlatterReady: true}, s)
-		fwd -= 0.6
-	}
-	assert.Empty(t, f.Stuck())
-}
-
 func TestFeederHoldsAfterAFall(t *testing.T) {
 	f := NewFeeder()
 	s := feederSettings()

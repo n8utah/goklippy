@@ -57,6 +57,8 @@ export const DEFAULT_SORTER_SETTINGS = {
     exitPulseDeg: 2,
     exitPauseMs: 100,
     exitApproach: 0.5,
+    exitClearDeg: { c2: 2, c3: 2 },
+    c3BusyStandoffDeg: 6,
     holdAfterFallMs: 800,
     minMoveDeg: 0.1,
     maxMoveDeg: 120,

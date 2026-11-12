@@ -228,6 +228,20 @@ func (r recoveryRunner) probe(ctx context.Context, ch Channel, deg float64) (boo
 	return moved >= math.Abs(deg)/2, nil
 }
 
+// freshObs waits briefly for an observation of a frame taken after since.
+func (r recoveryRunner) freshObs(ctx context.Context, ch Channel, since time.Time) vision.Observation {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if obs := r.vision.Observation(ch); obs.Valid && !obs.At.Before(since) {
+			return obs
+		}
+		if waitFor(ctx, 20*time.Millisecond) != nil {
+			break
+		}
+	}
+	return r.vision.Observation(ch)
+}
+
 // freshLead waits briefly for a frame taken after since and returns its leading piece.
 func (r recoveryRunner) freshLead(ctx context.Context, ch Channel, since time.Time) (vision.PieceObs, bool) {
 	deadline := time.Now().Add(2 * time.Second)

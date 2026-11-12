@@ -159,6 +159,12 @@ func (p *Platter) roomForAnother(settings MachineSettings) bool {
 	return true
 }
 
+// Busy reports the platter turning, settling or with a piece in its drop sector:
+// C3 keeps its lead back from the exit (FeederInput.PlatterBusy).
+func (p *Platter) Busy(now time.Time) bool {
+	return p.indexDone != nil || p.slots[0] != nil || now.Before(p.settleUntil)
+}
+
 // TimeState is what C4 is doing now, for the time spent (time_spent.go): turning;
 // busy photographing, waiting on Brickognize or for the chute; waiting to turn with
 // pieces aboard; or empty.

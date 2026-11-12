@@ -48,6 +48,10 @@ type FeederInput struct {
 	C2, C3 vision.Observation
 	// PlatterReady is the classification platter's gate: C3 may drop a piece onto it.
 	PlatterReady bool
+	// PlatterBusy: the platter is turning or has a piece landing, so C3 keeps its lead
+	// Feeder.C3BusyStandoffDeg short of the exit (nothing waits at the lip to fall
+	// onto it mid-turn).
+	PlatterBusy bool
 }
 
 // Feeder decides C1–C3's pulses. It keeps its own timers; feed it every tick.
@@ -71,25 +75,21 @@ type feederChannel struct {
 	severalFell bool
 	// state: what it was doing at the last Step, for the time spent (time_spent.go).
 	state string
-	// A drop pulse should carry the leading piece forward. One that stays put
-	// pulse after pulse is held (most often still hanging off the channel above).
-	dropPending bool
-	dropLead    float64
-	stillPulses int
-	// exitStill: exit pulses in a row that left the leading piece where it was.
-	exitStill int
-	stuck     bool
+	// odometer: how far the channel has turned forward; watch: its leading piece
+	// against it, to tell a piece the channel can't move (feeder_held.go).
+	odometer float64
+	watch    heldWatch
+	stuck    bool
+	// One piece in the opening (feeder_held.go): back-offs and shakes made for the
+	// lead with this track id, and the forward half of a shake still owed.
+	exitTriesID int
+	exitTries   int
+	shakeOwed   float64
 	// Back-pressure: since when the leading piece has waited at the exit with
 	// nowhere to go (zero when it isn't), and whether that's lasted BackupMs.
 	waitingSince time.Time
 	backedUp     bool
 }
-
-// stuckAfter drop pulses without the leading piece moving flag the channel.
-const stuckAfter = 3
-
-// minAdvanceDeg is how far a drop pulse must carry the leading piece to count.
-const minAdvanceDeg = 1.0
 
 func NewFeeder() *Feeder {
 	return &Feeder{channels: map[Channel]*feederChannel{
@@ -120,7 +120,7 @@ func (f *Feeder) Stuck() []Channel {
 // Unstick lets a channel pulse again, after a recovery or the operator freed it.
 func (f *Feeder) Unstick(ch Channel) {
 	if c, ok := f.channels[ch]; ok {
-		c.stuck, c.stillPulses, c.dropPending, c.exitStill = false, 0, false, 0
+		c.stuck, c.watch = false, heldWatch{}
 	}
 }
 
@@ -178,13 +178,17 @@ const fallBackDeg = 1.0
 func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 	fs := settings.Feeder
 	var moves []FeederMove
+	// move turns ch; negative degrees turn it back (an exit backing off or shaking).
 	move := func(ch Channel, kind string, deg float64, pauseMs int, rpm, accel float64) {
-		if rpm <= 0 || deg < fs.MinMoveDeg {
+		if rpm <= 0 || math.Abs(deg) < fs.MinMoveDeg {
 			return
 		}
-		deg = math.Min(deg, fs.MaxMoveDeg)
+		deg = math.Copysign(math.Min(math.Abs(deg), fs.MaxMoveDeg), deg)
 		c := f.channels[ch]
 		c.busyUntil = in.Now.Add(moveDuration(deg, rpm, accel) + time.Duration(pauseMs)*time.Millisecond)
+		if deg > 0 {
+			c.odometer += deg
+		}
 		moves = append(moves, FeederMove{Channel: ch, Degrees: deg, Rpm: rpm, Accel: accel, Kind: kind})
 	}
 	// add moves at the channel's own speed (exit pulses, careful); carry at its carry
@@ -235,8 +239,21 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 			continue
 		}
 		f.noteFall(c, step.obs, in.Now, fs)
-		if f.noteStill(c, step.obs) {
-			c.state = TimeStuck
+		switch f.checkHeld(step.ch, c, step.obs, in.Now) {
+		case heldStuck:
+			c.stuck, c.state = true, TimeStuck
+			continue
+		case heldFreeTurn:
+			// C2's lead hangs onto C3: turn C3 a little to pull it off, unless that
+			// would push C3's own lead onto a platter that can't take it.
+			c.state = TimeBusy
+			c3Lead, c3Has := in.C3.Leading()
+			c3AtExit := c3Has && (c3Lead.Zone == vision.ZonePrecise || c3Lead.Zone == vision.ZoneExit)
+			if !in.Now.Before(f.channels[ChannelC3].busyUntil) && (!c3AtExit || in.PlatterReady) {
+				add(ChannelC3, "free", freeTurnDeg, fs.ExitPauseMs)
+				c.watch.turns++
+				c.watch.turnedAt = in.Now
+			}
 			continue
 		}
 		lead, ok := step.obs.Leading()
@@ -249,26 +266,31 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 			case in.Now.Before(c.holdUntil):
 				c.state = TimeBusy // pacing after a fall
 			case step.downstream:
-				c.atExit, c.leadForward, c.exitPending = atExitCount(step.obs), lead.ForwardToExit, true
-				add(step.ch, "exit", exitPulse(fs, lead.ForwardToExit), fs.ExitPauseMs)
+				f.exitMove(step.ch, c, step.obs, lead, fs, add)
 				c.state = TimeMoving
 			default:
 				c.state = TimeWaiting
 			}
 			continue
 		}
-		c.state = TimeMoving
 		// Short of the exit: stop the leading piece at the precise zone's start. A
 		// piece already just short of it creeps in by an exit pulse, so it can't be
-		// left needing a move too small to make.
-		// Carried at the carry speed, and further while the channel ahead is taking
-		// pieces, since it won't be waiting at the exit long.
+		// left needing a move too small to make. Carried at the carry speed, and
+		// further while the channel ahead is taking pieces, since it won't be waiting
+		// at the exit long. While the platter is busy C3 stops it further back still.
 		clearance := lead.ForwardToExit - preciseWidth(settings, step.ch)
+		if step.ch == ChannelC3 && in.PlatterBusy && fs.C3BusyStandoffDeg > 0 {
+			clearance -= fs.C3BusyStandoffDeg
+			if clearance <= 0 {
+				c.state = TimeWaiting // as close as it may come for now
+				continue
+			}
+		}
 		reach := fs.DropPulseDeg
 		if step.accepting {
 			reach = max(reach, fs.CarryPulseDeg)
 		}
-		c.dropPending, c.dropLead = true, lead.ForwardToExit
+		c.state = TimeMoving
 		carry(step.ch, "drop", math.Max(math.Min(reach, clearance), fs.ExitPulseDeg), fs.DropPauseMs)
 	}
 
@@ -339,30 +361,47 @@ func (f *Feeder) noteFall(c *feederChannel, obs vision.Observation, now time.Tim
 	fell := left < c.atExit || !ok || lead.ForwardToExit > c.leadForward+fallBackDeg
 	if fell {
 		c.falls++
-		c.exitStill = 0
 		c.holdUntil = now.Add(time.Duration(fs.HoldAfterFallMs) * time.Millisecond)
 		// Pieces only leave the exit by falling, so two fewer there is two fallen.
 		c.severalFell = c.atExit-left >= 2
-		return
-	}
-	// Still there: did the pulse bring it any nearer? A piece on the rim beside the
-	// rotor, or caught on the exit's edge, is nudged forever otherwise.
-	if c.leadForward-lead.ForwardToExit >= exitAdvanceDeg {
-		c.exitStill = 0
-		return
-	}
-	c.exitStill++
-	if c.exitStill >= exitStuckAfter {
-		c.stuck, c.exitStill = true, 0
 	}
 }
 
-// exitStuckAfter exit pulses in a row that don't bring the leading piece any nearer
-// the exit flag the channel stuck, as stuckAfter drop pulses do.
-const exitStuckAfter = 10
-
-// exitAdvanceDeg is how far an exit pulse must bring it on to count (pulses are small).
-const exitAdvanceDeg = 0.5
+// exitMove is the exit's next move for a lead in the opening: the forward half of a
+// shake still owed, or exitStep's push, back-off or shake (feeder_held.go).
+func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, lead vision.PieceObs,
+	fs FeederSettings, add func(Channel, string, float64, int)) {
+	push := func(deg float64) {
+		c.atExit, c.leadForward, c.exitPending = atExitCount(obs), lead.ForwardToExit, true
+		add(ch, "exit", deg, fs.ExitPauseMs)
+	}
+	if c.shakeOwed > 0 {
+		deg := c.shakeOwed
+		c.shakeOwed = 0
+		push(deg)
+		return
+	}
+	if c.exitTriesID != lead.TrackID {
+		c.exitTriesID, c.exitTries = lead.TrackID, 0
+	}
+	next, hasNext := 0.0, len(obs.Pieces) > 1
+	if hasNext {
+		next = obs.Pieces[1].ForwardToExit
+	}
+	st := exitStep(lead.ForwardToExit, next, hasNext, exitPulse(fs, lead.ForwardToExit),
+		fs.ExitPulseDeg, fs.ExitClearDeg[string(ch)], c.exitTries)
+	switch st.kind {
+	case exitStepBack:
+		c.exitTries++
+		add(ch, "back", -st.deg, fs.ExitPauseMs)
+	case exitStepShake:
+		c.exitTries++
+		c.shakeOwed = st.deg
+		add(ch, "back", -st.deg, 0)
+	default:
+		push(st.deg)
+	}
+}
 
 // TakeSeveralFell reports, once, that ch's last exit pulse sent more than one piece
 // off together: the channel after it got a double.
@@ -373,26 +412,6 @@ func (f *Feeder) TakeSeveralFell(ch Channel) bool {
 	}
 	c.severalFell = false
 	return true
-}
-
-// noteStill counts drop pulses that left the leading piece where it was, and flags
-// the channel once there are stuckAfter of them in a row.
-func (f *Feeder) noteStill(c *feederChannel, obs vision.Observation) bool {
-	if !c.dropPending {
-		return false
-	}
-	c.dropPending = false
-	lead, ok := obs.Leading()
-	if !ok || c.dropLead-lead.ForwardToExit >= minAdvanceDeg {
-		c.stillPulses = 0
-		return false
-	}
-	c.stillPulses++
-	if c.stillPulses >= stuckAfter {
-		c.stuck = true
-		return true
-	}
-	return false
 }
 
 func atExitCount(obs vision.Observation) int {

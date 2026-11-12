@@ -164,6 +164,7 @@ func (m *Machine) stepSorting(now time.Time) {
 		C2:           st.deps.Vision.Observation(ChannelC2),
 		C3:           st.deps.Vision.Observation(ChannelC3),
 		PlatterReady: st.platter.Ready(now),
+		PlatterBusy:  st.platter.Busy(now),
 	}, settings)
 	if st.feeder.TakeSeveralFell(ChannelC3) {
 		st.platter.ExpectSeveral(now) // the next landing on C4 is a double
@@ -331,13 +332,51 @@ func (m *Machine) onPlatterStall(aboard int) {
 	m.recovering = ChannelC4
 }
 
-// onDidntFall shakes a piece off C4's exit.
+// c4ShakeOff is Sorter V2's c4_shake_off: shakes off a piece that rode C4's exit
+// instead of falling (often a tyre), harder each time, backing up and returning once
+// in between. Each step is checked; the turns cancel, so C4's sectors end where they
+// were.
+var c4ShakeOff = []RecoveryMove{
+	{Shake: "heavy"},
+	{Shake: "hard"},
+	{TurnDeg: -10},
+	{TurnDeg: 10},
+	{Shake: "max"},
+}
+
+// onDidntFall shakes a piece off C4's exit, harder each time; if it's still there the
+// sort stops for the operator.
 func (m *Machine) onDidntFall() {
 	runner := m.recovery()
+	var freed bool
 	err := m.startJob("Recovery: shake a piece off the classification channel", func(ctx context.Context, report reportFunc) error {
-		report(1, 1, "Shake C4: Heavy stuck")
-		return runner.shake(ctx, ChannelC4, "heavy")
-	}, nil)
+		for i, mv := range c4ShakeOff {
+			report(i+1, len(c4ShakeOff), runner.describe(mv, ChannelC4))
+			if err := runner.move(ctx, ChannelC4, mv); err != nil {
+				return err
+			}
+			if err := waitFor(ctx, recoverySettle); err != nil {
+				return err
+			}
+			if mv.TurnDeg < 0 {
+				continue // backed up: it comes back to the exit on the next move
+			}
+			if obs := runner.freshObs(ctx, ChannelC4, time.Now()); obs.Valid && !obs.InExit {
+				freed = true
+				return nil
+			}
+		}
+		return nil
+	}, func(err error) {
+		if err != nil || freed {
+			return
+		}
+		m.raiseIncident(Incident{
+			Kind:    IncidentDidntFall,
+			Title:   "A piece won't fall off the classification channel",
+			Message: "It stays at C4's exit, and shaking it harder and harder didn't free it (often a tyre). Take it off, then press Done.",
+		})
+	})
 	if err != nil {
 		slog.Warn("couldn't start shaking C4", "error", err)
 		return

@@ -333,6 +333,7 @@ func (p *Perception) observe(ch Channel, pc *perceptionChannel, img image.Image,
 	}
 	obs := vision.Observe(zones, boxes, mergeGap, at)
 	obs.Ignored = ignored
+	obs.FrameW, obs.FrameH = b.Dx(), b.Dy()
 	colors := make([][3]float64, len(obs.Pieces))
 	for i, piece := range obs.Pieces {
 		colors[i] = vision.MeanColor(img, piece.Box, 2)

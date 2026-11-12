@@ -252,6 +252,7 @@ func (w *SimWorld) Observation(ch Channel) vision.Observation {
 	w.mu.Unlock()
 	obs := vision.Observe(SimZones(), boxes, simMergeGap, now)
 	obs.Ignored = ignored
+	obs.FrameW, obs.FrameH = 640, 480
 	return obs
 }
 

@@ -19,6 +19,8 @@ const (
 	IncidentBoardLost           = "board_lost"
 	IncidentLandingStuck        = "landing_stuck"
 	IncidentLandingWorkedAround = "landing_worked_around"
+	// IncidentDidntFall: a piece stays at C4's exit after the escalating shake-off.
+	IncidentDidntFall = "didnt_fall"
 )
 
 // Ways an incident is resolved.
