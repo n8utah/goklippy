@@ -65,6 +65,10 @@ type platterSlot struct {
 	shots     []platterShot
 	lastFrame time.Time
 	sentAt    time.Time
+	// Settling: the newest observation looked at, and how many frames in a row the
+	// piece's box has stayed put. Photos start once it's still.
+	lastObs     time.Time
+	stillFrames int
 	// The bin it was routed to, once it is next to fall.
 	routed bool
 	choice BinChoice
@@ -94,6 +98,9 @@ type Platter struct {
 	recent       []Piece // last pieces delivered, newest first
 	// checkFall: after a drop, the next settled frame must show the exit clear.
 	checkFall bool
+	// severalUntil: C3 just dropped more than one piece at once; a landing before
+	// this is a double (ExpectSeveral).
+	severalUntil time.Time
 }
 
 const (
@@ -222,9 +229,16 @@ func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSet
 	if p.deps.RunID != nil {
 		s.piece.RunID = p.deps.RunID()
 	}
-	if len(inDrop) > 1 || touchingPieces(obs, inDrop[0].Box) {
+	several := now.Before(p.severalUntil)
+	p.severalUntil = time.Time{}
+	switch {
+	case len(inDrop) > 1 || touchingPieces(obs, inDrop[0].Box):
 		s.piece.Status = PieceMultiDrop
 		s.piece.AddProblem(ProblemDoubleFeed, "It landed with another piece, so it couldn't be photographed alone.", now)
+		s.state = slotResolved
+	case several:
+		s.piece.Status = PieceMultiDrop
+		s.piece.AddProblem(ProblemDoubleFeed, "More than one piece fell off C3 together, so it couldn't be photographed alone.", now)
 		s.state = slotResolved
 	}
 	p.slots[0] = s
@@ -254,8 +268,10 @@ func touchingPieces(obs vision.Observation, box vision.Box) bool {
 	return false
 }
 
-// linedUp: one box's span across x or y lies mostly inside the other's, as the parts
-// of one object stack (a minifigure's head over its torso).
+// linedUp: the parts of one object stacked, as a minifigure's head over its torso: one
+// box's span across x or y lies mostly inside the other's, and one is much the
+// smaller. Two pieces of about the same size end to end (a plate against a brick)
+// line up too, but are two pieces.
 func linedUp(a, b vision.Box) bool {
 	overlap := func(a1, a2, b1, b2 int) float64 {
 		span := min(a2-a1, b2-b1)
@@ -265,37 +281,80 @@ func linedUp(a, b vision.Box) bool {
 		}
 		return float64(shared) / float64(span)
 	}
+	small, big := min(a.Area(), b.Area()), max(a.Area(), b.Area())
+	if big <= 0 || float64(small) > partOfOneRatio*float64(big) {
+		return false
+	}
 	return overlap(a.X1, a.X2, b.X1, b.X2) >= 0.7 || overlap(a.Y1, a.Y2, b.Y1, b.Y2) >= 0.7
 }
 
-// capture photographs the piece in the drop sector, then sends the burst off.
+// partOfOneRatio: a lined-up part at most this share of the other's area can be part of
+// the same object.
+const partOfOneRatio = 0.5
+
+const (
+	// stillFramesNeeded: frames in a row the landed piece's box must stay put before
+	// it's photographed, so no photo is of it still sliding or bouncing.
+	stillFramesNeeded = 2
+	// settleMax: a piece still rocking after this long is photographed anyway.
+	settleMax = 2 * time.Second
+	// photoSkew: a frame and an observation (or a full-size frame) this far apart are
+	// different moments, and a box from one would miss the piece in the other.
+	photoSkew = 120 * time.Millisecond
+)
+
+// stillTol is how far a box may shift between frames and still count as not moving.
+func stillTol(b vision.Box) float64 {
+	return max(4, 0.08*boxSize(b))
+}
+
+// capture waits for the piece in the drop sector to lie still, photographs it, then
+// sends the burst off. A piece that moves while being photographed (bumped) starts
+// over; a second piece in the drop sector makes it a double.
 func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSettings) {
 	s := p.slots[0]
-	if s == nil {
+	if s == nil || s.state > slotCapturing || !obs.Valid || !obs.At.After(s.lastObs) {
 		return
 	}
-	if s.state == slotSettling {
-		if now.Sub(s.landedAt) < time.Duration(ps.SettleMs)*time.Millisecond {
+	s.lastObs = obs.At
+	if inDrop := dropPieces(obs); len(inDrop) > 1 {
+		p.markDouble(s, now, "Another piece landed with it, so it couldn't be photographed alone.")
+		return
+	}
+	lead, ok := dropPieceNear(obs, s.box)
+	if !ok {
+		return // not seen in this frame
+	}
+	moved := centerDist(lead.Box, s.box) > stillTol(s.box) || !similarArea(lead.Box.Area(), s.box.Area())
+	s.box = lead.Box
+	switch s.state {
+	case slotSettling:
+		if moved {
+			s.stillFrames = 0
+		} else {
+			s.stillFrames++
+		}
+		settled := now.Sub(s.landedAt) >= time.Duration(ps.SettleMs)*time.Millisecond
+		if !settled || (s.stillFrames < stillFramesNeeded && now.Sub(s.landedAt) < settleMax) {
 			return
 		}
 		s.state = slotCapturing
-	}
-	if s.state != slotCapturing {
-		return
-	}
-	if lead, ok := dropPiece(obs); ok {
-		s.box = lead.Box
+	case slotCapturing:
+		if moved {
+			// Bumped: these photos show it in different places; start again.
+			s.shots, s.stillFrames, s.state = nil, 0, slotSettling
+			return
+		}
 	}
 	frame, at, ok := p.deps.Vision.Frame(ChannelC4)
-	if !ok || !at.After(s.lastFrame) || at.Before(s.landedAt) {
+	if !ok || !at.After(s.lastFrame) || at.Before(s.landedAt) || absDuration(at.Sub(obs.At)) > photoSkew {
 		return
 	}
 	s.lastFrame = at
 	shot := platterShot{frame: frame, box: s.box, at: at}
 	if hr, ok := p.deps.Vision.(hiResSource); ok {
-		// The camera's full-size frame from the same moment, when it has one: the
-		// piece lies still on the platter, so the newest is the same picture.
-		if jpg, fullAt, scale, ok := hr.HiRes(ChannelC4); ok && scale > 1 && !fullAt.Before(s.landedAt) {
+		// The camera's full-size frame from the same moment, when it has one.
+		if jpg, fullAt, scale, ok := hr.HiRes(ChannelC4); ok && scale > 1 && absDuration(fullAt.Sub(at)) <= photoSkew {
 			shot.full, shot.scale = jpg, scale
 		}
 	}
@@ -364,14 +423,64 @@ func (sh platterShot) crop() ([]byte, error) {
 	return cropJPEG(sh.frame, sh.box)
 }
 
-func dropPiece(obs vision.Observation) (vision.PieceObs, bool) {
+// dropPieces are the pieces seen in the drop sector.
+func dropPieces(obs vision.Observation) []vision.PieceObs {
+	var out []vision.PieceObs
 	for _, o := range obs.Pieces {
 		if o.Zone == vision.ZoneDrop {
-			return o, true
+			out = append(out, o)
 		}
 	}
-	return vision.PieceObs{}, false
+	return out
 }
+
+// dropPieceNear is the piece in the drop sector nearest box: the one that landed.
+func dropPieceNear(obs vision.Observation, box vision.Box) (vision.PieceObs, bool) {
+	var best vision.PieceObs
+	found := false
+	for _, o := range dropPieces(obs) {
+		if !found || centerDist(o.Box, box) < centerDist(best.Box, box) {
+			best, found = o, true
+		}
+	}
+	return best, found
+}
+
+func absDuration(d time.Duration) time.Duration {
+	if d < 0 {
+		return -d
+	}
+	return d
+}
+
+// markDouble records the piece in the drop sector as having landed with another: it
+// isn't photographed, and goes to the bucket.
+func (p *Platter) markDouble(s *platterSlot, now time.Time, why string) {
+	if s.piece.Status == PieceMultiDrop {
+		return
+	}
+	s.piece.Status = PieceMultiDrop
+	s.piece.AddProblem(ProblemDoubleFeed, why, now)
+	s.state, s.shots = slotResolved, nil
+	p.deps.Records.SavePiece(s.piece)
+	p.progress(now)
+	slog.Info("piece landed with another", "piece", s.piece.ID)
+}
+
+// ExpectSeveral tells the platter that more than one piece just fell off C3 together:
+// the next landing is a double, however it looks.
+func (p *Platter) ExpectSeveral(now time.Time) {
+	// C3 sees them gone a frame or so after C4 sees them land, so a piece that landed
+	// just now is them.
+	if s := p.slots[0]; s != nil && s.state <= slotCapturing && now.Sub(s.landedAt) < expectSeveralFor {
+		p.markDouble(s, now, "More than one piece fell off C3 together, so it couldn't be photographed alone.")
+		return
+	}
+	p.severalUntil = now.Add(expectSeveralFor)
+}
+
+// expectSeveralFor: how long after C3 drops several at once a landing counts as them.
+const expectSeveralFor = 3 * time.Second
 
 // cropJPEG cuts the box (with a margin) out of the frame.
 func cropJPEG(frame image.Image, box vision.Box) ([]byte, error) {

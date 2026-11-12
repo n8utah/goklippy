@@ -133,6 +133,9 @@ func (m *Machine) stepSorting(now time.Time) {
 		C3:           st.deps.Vision.Observation(ChannelC3),
 		PlatterReady: st.platter.Ready(now),
 	}, settings)
+	if st.feeder.TakeSeveralFell(ChannelC3) {
+		st.platter.ExpectSeveral(now) // the next landing on C4 is a double
+	}
 	for _, mv := range moves {
 		if _, err := m.hw.MoveChannel(mv.Channel, mv.Degrees, mv.Rpm); err != nil {
 			slog.Warn("feeder move refused", "channel", mv.Channel, "error", err)

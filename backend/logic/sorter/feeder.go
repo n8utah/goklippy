@@ -58,6 +58,8 @@ type feederChannel struct {
 	leadForward float64
 	exitPending bool
 	falls       int
+	// severalFell: the last exit pulse sent more than one piece off at once.
+	severalFell bool
 	// A drop pulse should carry the leading piece forward. One that stays put
 	// pulse after pulse is held (most often still hanging off the channel above).
 	dropPending bool
@@ -241,11 +243,25 @@ func (f *Feeder) noteFall(c *feederChannel, obs vision.Observation, now time.Tim
 	}
 	c.exitPending = false
 	lead, ok := obs.Leading()
-	fell := atExitCount(obs) < c.atExit || !ok || lead.ForwardToExit > c.leadForward+fallBackDeg
+	left := atExitCount(obs)
+	fell := left < c.atExit || !ok || lead.ForwardToExit > c.leadForward+fallBackDeg
 	if fell {
 		c.falls++
 		c.holdUntil = now.Add(time.Duration(fs.HoldAfterFallMs) * time.Millisecond)
+		// Pieces only leave the exit by falling, so two fewer there is two fallen.
+		c.severalFell = c.atExit-left >= 2
 	}
+}
+
+// TakeSeveralFell reports, once, that ch's last exit pulse sent more than one piece
+// off together: the channel after it got a double.
+func (f *Feeder) TakeSeveralFell(ch Channel) bool {
+	c, ok := f.channels[ch]
+	if !ok || !c.severalFell {
+		return false
+	}
+	c.severalFell = false
+	return true
 }
 
 // noteStill counts drop pulses that left the leading piece where it was, and flags
