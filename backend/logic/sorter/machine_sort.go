@@ -39,6 +39,9 @@ type ChannelSummary struct {
 	InPrecise bool  `json:"in_precise"`
 	InExit    bool  `json:"in_exit"`
 	Falls     int   `json:"falls,omitempty"` // pieces pushed off its exit this run
+	// BackedUp: its leading piece is waiting at the exit, so the channel before it has
+	// stopped feeding it (feeder back-pressure).
+	BackedUp bool `json:"backed_up,omitempty"`
 }
 
 // AttachSorting wires in the sorting stations. Call it before Run.
@@ -314,7 +317,7 @@ func (m *Machine) sortSnapshot(snap *Snapshot) {
 	snap.Channels = map[Channel]ChannelSummary{}
 	for _, ch := range []Channel{ChannelC2, ChannelC3, ChannelC4} {
 		obs := st.deps.Vision.Observation(ch)
-		sum := ChannelSummary{Valid: obs.Valid, Pieces: len(obs.Pieces), InDrop: obs.InDrop, InPrecise: obs.InPrecise, InExit: obs.InExit, Falls: st.feeder.Falls(ch)}
+		sum := ChannelSummary{Valid: obs.Valid, Pieces: len(obs.Pieces), InDrop: obs.InDrop, InPrecise: obs.InPrecise, InExit: obs.InExit, Falls: st.feeder.Falls(ch), BackedUp: st.feeder.BackedUp(ch)}
 		if obs.Valid {
 			sum.AgeMs = now.Sub(obs.At).Milliseconds()
 		}

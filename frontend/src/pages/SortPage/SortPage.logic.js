@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import {
   clearSorterChannels,
   getSorterBins,
+  getSorterCameras,
   listSorterRuns,
   listSorterShakes,
   moveSorterChannel,
@@ -68,7 +69,30 @@ function useRunNumbers(runId) {
   };
 }
 
+const CAMERAS_POLL_MS = 3000;
+
+/** Each channel's camera: its device and, when it isn't seeing, why. */
+function useCameraStatuses() {
+  const [cameras, setCameras] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      getSorterCameras().then(
+        (data) => !cancelled && setCameras(data.channels ?? {}),
+        () => {},
+      );
+    load();
+    const timer = setInterval(load, CAMERAS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+  return cameras;
+}
+
 export function useSortPageLogic() {
+  const cameras = useCameraStatuses();
   const { state, connected } = useSorterState();
   const [settings] = useMachineSettings();
   const [busy, setBusy] = useState(false);
@@ -105,6 +129,7 @@ export function useSortPageLogic() {
     busy,
     numbers,
     shakes,
+    cameras,
     command: (name) => run(() => sorterCommand(name)),
     resolve: (action) => run(() => resolveSorterIncident(action)),
     /** Turn by hand at the channel's own speed. */

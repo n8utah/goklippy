@@ -20,6 +20,12 @@ import (
 // C1 has no camera: it nudges the bulk pile whenever C2's drop zone is clear. After
 // any move a channel waits for a camera frame taken after the move's pause before
 // deciding again, so it never acts on a picture of itself moving.
+//
+// Back-pressure: a channel whose leading piece has waited at its exit for
+// Feeder.BackupMs (the channel ahead can't take it, it's holding after a fall, or it's
+// stuck) is backed up, and the channel before it stops feeding it until it moves
+// again. That channel then backs up in turn, so a hold-up anywhere slows everything
+// before it instead of piling pieces onto the waiting channel to be dumped at once.
 
 // FeederMove is one pulse the feeder wants.
 type FeederMove struct {
@@ -58,6 +64,10 @@ type feederChannel struct {
 	dropLead    float64
 	stillPulses int
 	stuck       bool
+	// Back-pressure: since when the leading piece has waited at the exit with
+	// nowhere to go (zero when it isn't), and whether that's lasted BackupMs.
+	waitingSince time.Time
+	backedUp     bool
 }
 
 // stuckAfter drop pulses without the leading piece moving flag the channel.
@@ -106,6 +116,36 @@ func (f *Feeder) Falls(ch Channel) int {
 	return 0
 }
 
+// BackedUp reports whether a channel's leading piece has waited at its exit long
+// enough that the channel before it has stopped feeding it.
+func (f *Feeder) BackedUp(ch Channel) bool {
+	if c, ok := f.channels[ch]; ok {
+		return c.backedUp
+	}
+	return false
+}
+
+// noteWaiting updates a channel's back-pressure from its newest observation; canGo is
+// whether its exit may push now. It returns whether the channel is backed up.
+func (f *Feeder) noteWaiting(ch Channel, obs vision.Observation, canGo bool, now time.Time, fs FeederSettings) bool {
+	c := f.channels[ch]
+	waiting := c.stuck
+	if !waiting && obs.Valid && !canGo {
+		if lead, ok := obs.Leading(); ok && (lead.Zone == vision.ZonePrecise || lead.Zone == vision.ZoneExit) {
+			waiting = true
+		}
+	}
+	if !waiting {
+		c.waitingSince, c.backedUp = time.Time{}, false
+		return false
+	}
+	if c.waitingSince.IsZero() {
+		c.waitingSince = now
+	}
+	c.backedUp = now.Sub(c.waitingSince) >= time.Duration(max(0, fs.BackupMs))*time.Millisecond
+	return c.backedUp
+}
+
 // HoldingUntil is when a channel's exit stops holding after a fall.
 func (f *Feeder) HoldingUntil(ch Channel) time.Time {
 	if c, ok := f.channels[ch]; ok {
@@ -133,8 +173,16 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		moves = append(moves, FeederMove{Channel: ch, Degrees: deg, Rpm: rpm, Kind: kind})
 	}
 
+	// Back-pressure, downstream first: C3 waits on the platter, C2 on C3, C1 on C2.
+	// The short hold after a fall is pacing, not a hold-up, so it doesn't count.
+	c3BackedUp := f.noteWaiting(ChannelC3, in.C3, in.PlatterReady, in.Now, fs)
+	// C3 can take pieces: seen lately, its drop zone clear, not backed up. (Mid-move
+	// or holding after a fall it's busy, not held up.)
+	c3Accepting := in.C3.Valid && in.Now.Sub(in.C3.At) <= stale(fs) && !in.C3.InDrop && !c3BackedUp
+	c2BackedUp := f.noteWaiting(ChannelC2, in.C2, c3Accepting, in.Now, fs)
+
 	// C3 into the platter, then C2 into C3.
-	c3Ready := f.fresh(in.C3, ChannelC3, in.Now, fs) && !in.C3.InDrop &&
+	c3Ready := c3Accepting && f.fresh(in.C3, ChannelC3, in.Now, fs) &&
 		!in.Now.Before(f.channels[ChannelC3].holdUntil)
 	for _, step := range []struct {
 		ch         Channel
@@ -171,9 +219,9 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		add(step.ch, "drop", math.Max(math.Min(fs.DropPulseDeg, clearance), fs.ExitPulseDeg), fs.DropPauseMs)
 	}
 
-	// C1, blind: feed while C2's drop zone is clear.
+	// C1, blind: feed while C2's drop zone is clear and C2 isn't backed up.
 	c1 := f.channels[ChannelC1]
-	if !in.Now.Before(c1.busyUntil) && in.C2.Valid && in.Now.Sub(in.C2.At) <= stale(fs) && !in.C2.InDrop {
+	if !in.Now.Before(c1.busyUntil) && in.C2.Valid && in.Now.Sub(in.C2.At) <= stale(fs) && !in.C2.InDrop && !c2BackedUp {
 		add(ChannelC1, "bulk", fs.BulkPulseDeg, fs.BulkPauseMs)
 	}
 	return moves

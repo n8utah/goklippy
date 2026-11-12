@@ -300,6 +300,11 @@ flags.
 - The pulse decision per channel each tick (table above), with each channel's `moving_until`.
 - C1 blind: advance on a timer unless C2's drop zone is occupied.
 - Gates: C3 may only drop into C4 when the platter says it can take a piece.
+- Back-pressure (built 2026-11-12): a channel whose leading piece has waited at its exit for
+  `feeder.backupMs` (1 s) because the next channel can't take it is *backed up*; the channel
+  before it stops feeding it (C2's exit pulses, C1's bulk pulses) until it moves again, so a
+  hold-up cascades up the line instead of piling pieces onto the waiting channel to be dumped
+  together. The short hold after a fall and being mid-move don't count. Shown on Run › Sort.
 - Hold after a fall: fixed hold first; follow measured landing times (p90 + 0.3 s, clamped
   0.5–2.5 s, after 20 landings) later.
 - Exit move refinements from their tuning page (longest exit move, room kept for the next piece,

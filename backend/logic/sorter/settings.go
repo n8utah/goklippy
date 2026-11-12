@@ -222,6 +222,10 @@ type FeederSettings struct {
 	BulkPauseMs  int     `json:"bulkPauseMs"`
 	// StaleMs: a camera frame older than this is no information.
 	StaleMs int `json:"staleMs"`
+	// BackupMs: a channel whose leading piece has waited at its exit this long, with
+	// the next channel unable to take it, is backed up, and the channel before it
+	// stops feeding it until it moves again.
+	BackupMs int `json:"backupMs"`
 	// Clear (Run › Sort) runs C2–C4 together for ClearSeconds at ClearRpm, one speed
 	// for all three and faster than sorting, to empty them. Each ramps up (and back
 	// down) at ClearAccel, rpm per second.
@@ -370,6 +374,7 @@ func DefaultMachineSettings() MachineSettings {
 			MinMoveDeg:      0.1, MaxMoveDeg: 120,
 			BulkPulseDeg: 10, BulkPauseMs: 1500,
 			StaleMs:      1000,
+			BackupMs:     1000,
 			ClearSeconds: 30,
 			ClearRpm:     12,
 			ClearAccel:   20,

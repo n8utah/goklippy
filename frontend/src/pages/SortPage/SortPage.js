@@ -164,6 +164,7 @@ const SortPage = () => {
             key={ch.id}
             channel={ch}
             summary={state?.channels?.[ch.id]}
+            camera={logic.cameras[ch.id]}
             simulated={state?.hardware?.simulated}
           />
         ))}

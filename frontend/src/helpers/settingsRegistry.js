@@ -138,6 +138,16 @@ export const SETTING_SECTIONS = [
         help: 'An older frame counts as no information: the channel waits.',
       },
       {
+        key: 'feeder.backupMs',
+        label: 'Backed up after',
+        unit: 'ms',
+        step: 100,
+        min: 0,
+        max: 10000,
+        help: 'When a channel’s front piece has waited at its exit this long because the next channel can’t take it, the channel before stops feeding it until it moves again, and so on up the line. A hold-up anywhere slows everything before it instead of piling pieces up to be dumped at once. 0 reacts at once.',
+        keywords: 'back pressure backup backed up slow down pile jam flow',
+      },
+      {
         key: 'feeder.clearSeconds',
         label: 'Clear runs for',
         unit: 's',
