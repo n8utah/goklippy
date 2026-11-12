@@ -264,5 +264,10 @@ Each step keeps the app working and is its own commit.
   motor power (optional), profile; live ticks, each linking to where it's done), and Home shows
   its progress and next step until it's complete.
 
-Still to do after the build order: restyle the four earlier components above, and link pieces
-to their C2/C3 journeys (backend phase 9 step 2) so the journey modal shows every stage.
+- **Restyle** (2026-11-11): the board diagram, pin panel, picture editor
+  (`BoardPage/components/PictureEditor`, no longer a page) and the bench (Steppers and Servos
+  tabs at `/diagnose/bench/<part>`) are rebuilt on the design system; `app.module.css` and the
+  `.legacy-page` island are gone. Only `CameraView.module.css` (the camera overlay) remains.
+
+Still to do: link pieces to their C2/C3 journeys (backend phase 9 step 2) so the journey modal
+shows every stage.

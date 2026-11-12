@@ -4,10 +4,11 @@ import {
   getBoardProfileEditor,
   listBoardProfiles,
   updateBoardProfileHotspots,
-} from '../../helpers/api';
-import { defaultHotspotForSlot, resizeCircle, resizeRect } from '../../helpers/boardHotspots';
+} from '@/helpers/api';
+import { defaultHotspotForSlot, resizeCircle, resizeRect } from '@/helpers/boardHotspots';
 
-export function useBoardEditorPageLogic() {
+/** Board › Board picture: where each pin and connector sits on a board's photo. */
+export function usePictureEditorLogic() {
   const [profileIds, setProfileIds] = useState([]);
   const [profileId, setProfileId] = useState('ramps14');
   const [profileName, setProfileName] = useState('');
@@ -66,28 +67,32 @@ export function useBoardEditorPageLogic() {
     setDirty(true);
   }, []);
 
-  const removeHotspot = useCallback((id) => {
-    setHotspots((prev) => {
-      const removed = prev.find((h) => h.id === id);
-      const next = prev.filter((h) => h.id !== id);
-      if (removed?.slot_ids?.[0]) {
-        const slotId = removed.slot_ids[0];
-        const slot = slots[slotId];
-        if (slot) {
-          setAvailableSlots((avail) =>
-            [...avail, { id: slotId, label: slot.label, type: slot.type, group: slot.group }].sort(
-              (a, b) => a.label.localeCompare(b.label),
-            ),
-          );
+  const removeHotspot = useCallback(
+    (id) => {
+      setHotspots((prev) => {
+        const removed = prev.find((h) => h.id === id);
+        const next = prev.filter((h) => h.id !== id);
+        if (removed?.slot_ids?.[0]) {
+          const slotId = removed.slot_ids[0];
+          const slot = slots[slotId];
+          if (slot) {
+            setAvailableSlots((avail) =>
+              [
+                ...avail,
+                { id: slotId, label: slot.label, type: slot.type, group: slot.group },
+              ].sort((a, b) => a.label.localeCompare(b.label)),
+            );
+          }
         }
+        return next;
+      });
+      if (selectedId === id) {
+        setSelectedId(null);
       }
-      return next;
-    });
-    if (selectedId === id) {
-      setSelectedId(null);
-    }
-    setDirty(true);
-  }, [selectedId, slots]);
+      setDirty(true);
+    },
+    [selectedId, slots],
+  );
 
   const addHotspotForSlot = useCallback(
     (slotId) => {

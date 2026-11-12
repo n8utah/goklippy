@@ -1,5 +1,9 @@
+import { Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useMCUSession } from '@/context/MCUSessionContext';
 import {
   angleForMember,
   applyPlanForGroup,
@@ -15,19 +19,15 @@ import {
   scaleGroupAngles,
   servoMemberKey,
   SLOW_FACTOR,
-} from '../../../../helpers/servoGroups';
-import { useMCUSession } from '../../../../context/MCUSessionContext';
+} from '@/helpers/servoGroups';
 
-import styles from '../GlobalSteppersPanel/GlobalSteppersPanel.module.css';
-import appStyles from '../../../../styles/app.module.css';
+import { BenchCard, MemberPicker, SavedItem, ScaleButtons } from '../BenchUi';
 
-function emptyDraft() {
-  return { id: null, name: '', members: [], angles: {} };
-}
+const emptyDraft = () => ({ id: null, name: '', members: [], angles: {} });
 
-const ServoGroupsSection = ({ connected, busy, onRun }) => {
+/** Servos that move together, each to its own angle. */
+export default function ServoGroupsSection({ connected, busy, onRun }) {
   const { servoObjects, setServosAtAngles } = useMCUSession();
-
   const [groups, setGroups] = useState(() => loadServoGroups());
   const [draft, setDraft] = useState(null);
 
@@ -35,221 +35,159 @@ const ServoGroupsSection = ({ connected, busy, onRun }) => {
     saveServoGroups(groups);
   }, [groups]);
 
-  const memberOptions = servoObjects.map((obj) => ({
+  const options = servoObjects.map((obj) => ({
     key: servoMemberKey(obj),
-    label: obj.label || obj.slot_id || obj.section || `OID ${obj.oid}`,
+    label: obj.label || obj.slot_id || obj.section || `object ${obj.oid}`,
   }));
 
-  const beginCreate = () => setDraft(emptyDraft());
-
-  const beginEdit = (group) => {
-    setDraft({
-      id: group.id,
-      name: group.name,
-      members: [...group.members],
-      angles: { ...(group.angles || {}) },
-    });
-  };
-
-  const cancelDraft = () => setDraft(null);
-
-  const toggleMember = (key) => {
+  const toggle = (key) =>
     setDraft((prev) => {
-      if (!prev) return prev;
-      const isRemoving = prev.members.includes(key);
-      const members = isRemoving
-        ? prev.members.filter((item) => item !== key)
-        : [...prev.members, key];
+      const removing = prev.members.includes(key);
       const angles = { ...prev.angles };
-      if (!isRemoving && angles[key] == null) {
-        angles[key] = DEFAULT_SERVO_ANGLE;
-      }
-      return { ...prev, members, angles };
-    });
-  };
-
-  const setDraftMemberAngle = (key, value) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
+      if (!removing && angles[key] == null) angles[key] = DEFAULT_SERVO_ANGLE;
       return {
         ...prev,
-        angles: { ...prev.angles, [key]: clampServoAngle(value) },
+        members: removing ? prev.members.filter((k) => k !== key) : [...prev.members, key],
+        angles,
       };
     });
-  };
 
-  const saveDraft = () => {
-    if (!draft?.name.trim() || draft.members.length === 0) {
-      return;
-    }
-    const angles = {};
-    for (const key of draft.members) {
-      angles[key] = clampServoAngle(draft.angles?.[key] ?? DEFAULT_SERVO_ANGLE);
-    }
+  const save = () => {
+    if (!draft?.name.trim() || draft.members.length === 0) return;
+    const angles = Object.fromEntries(
+      draft.members.map((k) => [k, clampServoAngle(draft.angles?.[k] ?? DEFAULT_SERVO_ANGLE)]),
+    );
     const payload = {
       id: draft.id || newGroupId(),
       name: draft.name.trim(),
       members: draft.members,
       angles,
     };
-    setGroups((prev) => {
-      const idx = prev.findIndex((g) => g.id === payload.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = payload;
-        return next;
-      }
-      return [...prev, payload];
-    });
+    setGroups((prev) =>
+      prev.some((g) => g.id === payload.id)
+        ? prev.map((g) => (g.id === payload.id ? payload : g))
+        : [...prev, payload],
+    );
     setDraft(null);
   };
 
-  const deleteGroup = (id) => {
+  const remove = (id) => {
     setGroups((prev) => prev.filter((g) => g.id !== id));
-    if (draft?.id === id) {
-      setDraft(null);
-    }
+    if (draft?.id === id) setDraft(null);
   };
 
-  const groupOids = (group) => oidsForMembers(group.members, servoObjects);
-
-  const handleGroupApply = (group) => {
-    const plan = applyPlanForGroup(group, servoObjects);
-    onRun(() => setServosAtAngles(plan));
+  /** Saves the group's new angles and moves its servos there. */
+  const moveTo = (next) => {
+    setGroups((prev) => prev.map((g) => (g.id === next.id ? next : g)));
+    onRun(() => setServosAtAngles(applyPlanForGroup(next, servoObjects)));
   };
-
-  const handleGroupScale = (group, factor) => {
-    setGroups((prev) =>
-      prev.map((item) => (item.id === group.id ? scaleGroupAngles(item, factor) : item)),
-    );
-    onRun(async () => {
-      const plan = applyPlanForGroup(scaleGroupAngles(group, factor), servoObjects);
-      await setServosAtAngles(plan);
-    });
-  };
-
-  const handleGroupFlip = (group) => {
-    const flipped = flipGroupAngles(group);
-    setGroups((prev) => prev.map((item) => (item.id === group.id ? flipped : item)));
-    onRun(async () => {
-      const plan = applyPlanForGroup(flipped, servoObjects);
-      await setServosAtAngles(plan);
-    });
-  };
-
-  const formatMemberAngles = (group) =>
-    group.members
-      .map((key) => `${labelForMemberKey(key, servoObjects)} ${angleForMember(group, key)}°`)
-      .join(' · ');
 
   return (
-    <div className={styles.groupsBlock}>
-      <div className={styles.groupsHeader}>
-        <p className={styles.listLabel}>Groups</p>
-        <button
-          type="button"
-          className={styles.linkBtn}
-          disabled={Boolean(draft) || memberOptions.length === 0}
-          onClick={beginCreate}
+    <BenchCard
+      title="Groups"
+      about="Servos that move together, each to its own angle. Kept in this browser."
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={Boolean(draft) || options.length === 0}
+          onClick={() => setDraft(emptyDraft())}
         >
-          + New group
-        </button>
-      </div>
-
-      {memberOptions.length === 0 && (
-        <p className={appStyles.muted}>Configure servos on the board to build groups.</p>
+          <Plus /> New group
+        </Button>
+      }
+    >
+      {options.length === 0 && (
+        <p className="text-sm text-muted-foreground">Connect the board to list its servos.</p>
       )}
 
       {draft && (
-        <div className={styles.groupEditor}>
-          <label className={styles.label} htmlFor="servo-group-name">
-            Group name
+        <div className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-accent/40 p-4">
+          <label htmlFor="servo-group-name" className="flex flex-col gap-1.5 text-sm font-medium">
+            Name
+            <Input
+              id="servo-group-name"
+              value={draft.name}
+              placeholder="e.g. Layer doors"
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            />
           </label>
-          <input
-            id="servo-group-name"
-            className={styles.input}
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            placeholder="e.g. Probe servos"
+          <p className="text-sm font-medium">Servos and their angles</p>
+          <MemberPicker
+            options={options}
+            chosen={draft.members}
+            onToggle={toggle}
+            values={Object.fromEntries(
+              options.map(({ key }) => [key, draft.angles?.[key] ?? DEFAULT_SERVO_ANGLE]),
+            )}
+            onValue={(key, v) =>
+              setDraft((prev) => ({
+                ...prev,
+                angles: { ...prev.angles, [key]: clampServoAngle(v) },
+              }))
+            }
+            unit="°"
+            min={0}
+            max={180}
           />
-          <p className={styles.label}>Servos and angles</p>
-          <div className={styles.memberGrid}>
-            {memberOptions.map(({ key, label }) => {
-              const checked = draft.members.includes(key);
-              return (
-                <div key={key} className={styles.memberRow}>
-                  <label className={styles.memberCheck}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleMember(key)} />
-                    {label}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="180"
-                    className={styles.memberSpeedInput}
-                    disabled={!checked}
-                    value={checked ? (draft.angles?.[key] ?? DEFAULT_SERVO_ANGLE) : ''}
-                    onChange={(e) => setDraftMemberAngle(key, Number(e.target.value))}
-                    aria-label={`${label} angle`}
-                  />
-                </div>
-              );
-            })}
-          </div>
-          <div className={styles.editorActions}>
-            <button type="button" className={appStyles.button} disabled={busy} onClick={saveDraft}>
+          <div className="flex gap-2">
+            <Button
+              disabled={busy || !draft.name.trim() || draft.members.length === 0}
+              onClick={save}
+            >
               Save group
-            </button>
-            <button type="button" className={appStyles.buttonSecondary} onClick={cancelDraft}>
+            </Button>
+            <Button variant="ghost" onClick={() => setDraft(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      {groups.length === 0 && !draft && memberOptions.length > 0 && (
-        <p className={appStyles.muted}>No groups yet. Create one to control servos together.</p>
+      {groups.length === 0 && !draft && options.length > 0 && (
+        <p className="text-sm text-muted-foreground">No groups yet.</p>
       )}
-
-      <ul className={styles.groupList}>
+      <ul className="flex flex-col gap-3">
         {groups.map((group) => {
-          const oids = groupOids(group);
-          const available = oids.length;
-          const missing = group.members.length - available;
+          const oids = oidsForMembers(group.members, servoObjects);
+          const missing = group.members.length - oids.length;
+          const off = busy || !connected || oids.length === 0;
           return (
-            <li key={group.id} className={styles.groupCard}>
-              <div className={styles.groupCardHead}>
-                <span className={styles.groupName}>{group.name}</span>
-                <div className={styles.groupCardTools}>
-                  <button type="button" className={styles.linkBtn} onClick={() => beginEdit(group)}>
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.linkBtnDanger}
-                    onClick={() => deleteGroup(group.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-              <p className={styles.groupMembers}>{formatMemberAngles(group)}</p>
-              {missing > 0 && connected && (
-                <p className={styles.groupWarn}>{missing} member(s) not in current session</p>
-              )}
-              <div className={styles.groupActions}>
-                <button
-                  type="button"
-                  className={appStyles.button}
-                  disabled={busy || !connected || available === 0}
-                  onClick={() => handleGroupApply(group)}
+            <SavedItem
+              key={group.id}
+              name={group.name}
+              summary={group.members
+                .map((k) => `${labelForMemberKey(k, servoObjects)} ${angleForMember(group, k)}°`)
+                .join(' · ')}
+              notes={
+                missing > 0 && connected
+                  ? [`${missing} of its servos aren’t in the connected config.`]
+                  : []
+              }
+              onEdit={() =>
+                setDraft({
+                  id: group.id,
+                  name: group.name,
+                  members: [...group.members],
+                  angles: { ...(group.angles || {}) },
+                })
+              }
+              onDelete={() => remove(group.id)}
+            >
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={off}
+                  onClick={() =>
+                    onRun(() => setServosAtAngles(applyPlanForGroup(group, servoObjects)))
+                  }
                 >
-                  Apply
-                </button>
-                <button
-                  type="button"
-                  className={appStyles.buttonSecondary}
-                  disabled={busy || !connected || available === 0}
+                  Move
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={off}
                   onClick={() =>
                     onRun(() =>
                       setServosAtAngles(oids.map((oid) => ({ oid, angle: DEFAULT_SERVO_ANGLE }))),
@@ -257,42 +195,28 @@ const ServoGroupsSection = ({ connected, busy, onRun }) => {
                   }
                 >
                   Center
-                </button>
-                <button
-                  type="button"
-                  className={appStyles.buttonSecondary}
-                  disabled={busy || !connected || available === 0}
-                  onClick={() => handleGroupFlip(group)}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={off}
+                  onClick={() => moveTo(flipGroupAngles(group))}
                 >
                   Flip
-                </button>
+                </Button>
               </div>
-              <div className={styles.groupSpeedRow}>
-                <button
-                  type="button"
-                  className={styles.speedBtn}
-                  disabled={busy || !connected || group.members.length === 0}
-                  onClick={() => handleGroupScale(group, SLOW_FACTOR)}
-                >
-                  Lower
-                  <span className={styles.speedHint}>×{SLOW_FACTOR}</span>
-                </button>
-                <button
-                  type="button"
-                  className={styles.speedBtn}
-                  disabled={busy || !connected || group.members.length === 0}
-                  onClick={() => handleGroupScale(group, FAST_FACTOR)}
-                >
-                  Raise
-                  <span className={styles.speedHint}>×{FAST_FACTOR}</span>
-                </button>
-              </div>
-            </li>
+              <ScaleButtons
+                lower="Lower"
+                higher="Raise"
+                lowFactor={SLOW_FACTOR}
+                highFactor={FAST_FACTOR}
+                disabled={busy || !connected || group.members.length === 0}
+                onScale={(f) => moveTo(scaleGroupAngles(group, f))}
+              />
+            </SavedItem>
           );
         })}
       </ul>
-    </div>
+    </BenchCard>
   );
-};
-
-export default ServoGroupsSection;
+}

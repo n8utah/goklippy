@@ -52,8 +52,7 @@
   --idle: #78716c;
 }
 
-/* Native parts (number spinners, scrollbars, date pickers) follow the theme, but only
-   inside the new UI, so old pages keep their light controls until they move over. */
+/* Native parts (number spinners, scrollbars, date pickers) follow the theme. */
 .dark .ds,
 .dark.ds {
   color-scheme: dark;
@@ -94,18 +93,6 @@
 body {
   margin: 0;
   background: var(--background);
-}
-
-/* Pages from before the new UI, until build step 4 rebuilds them: always light, and on a
-   light ground of their own in dark mode. They inherit the frame's Inter. */
-.legacy-page {
-  color: #1c1917;
-  color-scheme: light;
-}
-.dark .legacy-page {
-  background: #f6f4f0;
-  border-radius: 18px;
-  padding: 16px;
 }
 
 /* Preflight, scoped to `ds` and kept at zero specificity so utilities always win. */

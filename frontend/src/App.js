@@ -67,7 +67,7 @@ const App = () => (
               <Route path="diagnose">
                 <Route index element={<Navigate to="journeys" replace />} />
                 <Route path="journeys" element={<JourneysPage />} />
-                <Route path="bench" element={<BenchPage />} />
+                <Route path="bench/:part?" element={<BenchPage />} />
               </Route>
 
               <Route path="system">

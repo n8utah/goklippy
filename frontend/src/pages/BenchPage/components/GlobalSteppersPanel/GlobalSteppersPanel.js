@@ -1,19 +1,18 @@
 import { useState } from 'react';
 
-import { useMCUSession } from '../../../../context/MCUSessionContext';
+import NumberField from '@/components/NumberField/NumberField';
+import { Button } from '@/components/ui/button';
+import { useMCUSession } from '@/context/MCUSessionContext';
+import { DEFAULT_STEPPER_SPEED, FAST_FACTOR, SLOW_FACTOR } from '@/helpers/stepperGroups';
 
+import { BenchCard, ScaleButtons } from '../BenchUi';
 import StepperGroupsSection from './StepperGroupsSection';
 import StepperRoutinesSection from './StepperRoutinesSection';
 
-import styles from './GlobalSteppersPanel.module.css';
-import appStyles from '../../../../styles/app.module.css';
-import { DEFAULT_STEPPER_SPEED, FAST_FACTOR, SLOW_FACTOR } from '../../../../helpers/stepperGroups';
+const stepperLabel = (obj) => obj.label || obj.slot_id || obj.section || `object ${obj.oid}`;
 
-function stepperLabel(obj) {
-  return obj.label || obj.slot_id || obj.section || `OID ${obj.oid}`;
-}
-
-const GlobalSteppersPanel = () => {
+/** Bench › Steppers: every stepper at once, groups of them, and repeating routines. */
+export default function GlobalSteppersPanel() {
   const {
     connected,
     stepperObjects,
@@ -23,15 +22,11 @@ const GlobalSteppersPanel = () => {
     reverseAllSteppers,
     scaleAllStepperSpeeds,
   } = useMCUSession();
-
   const [busy, setBusy] = useState(false);
   const [startSpeed, setStartSpeed] = useState(DEFAULT_STEPPER_SPEED);
   const [actionError, setActionError] = useState('');
-
-  const clampSpeed = (value) => Math.min(50000, Math.max(1, value));
-
-  const runningEntries = Object.entries(stepperJogState);
-  const hasRunning = runningEntries.length > 0;
+  const running = Object.entries(stepperJogState);
+  const none = !connected || stepperObjects.length === 0;
 
   const run = async (action) => {
     setBusy(true);
@@ -39,119 +34,89 @@ const GlobalSteppersPanel = () => {
     try {
       await action();
     } catch (err) {
-      setActionError(err.message || 'Stepper command failed');
+      setActionError(err.message || 'The stepper command failed');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <aside className={styles.panel}>
-      <h3 className={styles.heading}>All steppers</h3>
-      <p className={styles.subtitle}>Global controls for continuous jog</p>
-
-      {!connected && (
-        <p className={styles.connectHint}>Connect to run steppers. Groups can be edited anytime.</p>
-      )}
-
-      {actionError && <p className={styles.groupWarn}>{actionError}</p>}
-
-      <label className={styles.label} htmlFor="global-start-speed">
-        Start speed (steps/s)
-      </label>
-      <input
-        id="global-start-speed"
-        type="number"
-        min="1"
-        max="50000"
-        className={styles.input}
-        value={startSpeed}
-        disabled={busy || !connected}
-        onChange={(e) => setStartSpeed(clampSpeed(Number(e.target.value) || 1))}
-      />
-
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={appStyles.button}
-          disabled={busy || !connected || stepperObjects.length === 0}
-          onClick={() => run(() => startAllSteppers({ forward: true, speedHz: startSpeed }))}
-        >
-          Start all
-        </button>
-        <button
-          type="button"
-          className={appStyles.buttonSecondary}
-          disabled={busy || !connected || stepperObjects.length === 0}
-          onClick={() => run(stopAllSteppers)}
-        >
-          Stop all
-        </button>
-        <button
-          type="button"
-          className={appStyles.buttonSecondary}
-          disabled={busy || !connected || !hasRunning}
-          onClick={() => run(reverseAllSteppers)}
-        >
-          Reverse all
-        </button>
-      </div>
-
-      <div className={styles.speedRow}>
-        <button
-          type="button"
-          className={styles.speedBtn}
-          disabled={busy || !connected || !hasRunning}
-          onClick={() => run(() => scaleAllStepperSpeeds(SLOW_FACTOR))}
-        >
-          Slower
-          <span className={styles.speedHint}>×{SLOW_FACTOR}</span>
-        </button>
-        <button
-          type="button"
-          className={styles.speedBtn}
-          disabled={busy || !connected || !hasRunning}
-          onClick={() => run(() => scaleAllStepperSpeeds(FAST_FACTOR))}
-        >
-          Faster
-          <span className={styles.speedHint}>×{FAST_FACTOR}</span>
-        </button>
-      </div>
-
-      {connected && (
-        <div className={styles.listBlock}>
-          <p className={styles.listLabel}>Running</p>
-          {!hasRunning && <p className={appStyles.muted}>No continuous jogs active</p>}
-          {hasRunning && (
-            <ul className={styles.list}>
-              {runningEntries.map(([oidStr, state]) => {
-                const oid = Number(oidStr);
-                const obj = stepperObjects.find((item) => item.oid === oid);
-                return (
-                  <li key={oidStr} className={styles.listItem}>
-                    <span className={styles.listName}>
-                      {obj ? stepperLabel(obj) : `OID ${oid}`}
-                    </span>
-                    <span className={styles.listMeta}>
-                      {state.forward ? 'Fwd' : 'Rev'} · {state.speedHz} steps/s
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+    <div className="grid items-start gap-4 xl:grid-cols-2">
+      <BenchCard
+        title="All steppers"
+        about={
+          connected
+            ? `${stepperObjects.length} stepper${stepperObjects.length === 1 ? '' : 's'} in the connected config, jogging together.`
+            : 'Connect the board to run them. Groups and routines can be edited without it.'
+        }
+      >
+        {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+        <div className="flex flex-wrap items-end gap-2">
+          <NumberField
+            id="all-start-speed"
+            label="Start at"
+            value={startSpeed}
+            min={1}
+            max={50000}
+            unit="steps/s"
+            disabled={busy || !connected}
+            onChange={setStartSpeed}
+          />
+          <Button
+            disabled={busy || none}
+            onClick={() => run(() => startAllSteppers({ forward: true, speedHz: startSpeed }))}
+          >
+            Start all
+          </Button>
+          <Button variant="outline" disabled={busy || none} onClick={() => run(stopAllSteppers)}>
+            Stop all
+          </Button>
+          <Button
+            variant="outline"
+            disabled={busy || !connected || running.length === 0}
+            onClick={() => run(reverseAllSteppers)}
+          >
+            Reverse all
+          </Button>
         </div>
-      )}
-
+        <ScaleButtons
+          lower="Slower"
+          higher="Faster"
+          lowFactor={SLOW_FACTOR}
+          highFactor={FAST_FACTOR}
+          disabled={busy || !connected || running.length === 0}
+          onScale={(f) => run(() => scaleAllStepperSpeeds(f))}
+        />
+        {connected && (
+          <div>
+            <p className="mb-2 text-sm font-medium">Running now</p>
+            {running.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing jogging.</p>
+            ) : (
+              <ul className="divide-y divide-border rounded-md border border-border text-sm">
+                {running.map(([oidStr, state]) => {
+                  const obj = stepperObjects.find((o) => o.oid === Number(oidStr));
+                  return (
+                    <li key={oidStr} className="flex justify-between gap-2 px-3 py-2">
+                      <span>{obj ? stepperLabel(obj) : `object ${oidStr}`}</span>
+                      <span className="font-mono text-muted-foreground">
+                        {state.forward ? 'fwd' : 'rev'} {state.speedHz} steps/s
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </BenchCard>
       <StepperGroupsSection connected={connected} busy={busy} onRun={run} />
-
-      <StepperRoutinesSection connected={connected} busy={busy} onRun={run} />
-
-      {connected && stepperObjects.length > 0 && (
-        <p className={styles.footerMeta}>{stepperObjects.length} stepper(s) configured</p>
-      )}
-    </aside>
+      <StepperRoutinesSection
+        connected={connected}
+        busy={busy}
+        onRun={run}
+        className="xl:col-span-2"
+      />
+    </div>
   );
-};
-
-export default GlobalSteppersPanel;
+}

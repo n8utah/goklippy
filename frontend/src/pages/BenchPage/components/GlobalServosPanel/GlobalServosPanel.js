@@ -1,24 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
-import { useMCUSession } from '../../../../context/MCUSessionContext';
-
-import PCA9685Section from './PCA9685Section';
-import ServoGroupsSection from './ServoGroupsSection';
-
-import styles from '../GlobalSteppersPanel/GlobalSteppersPanel.module.css';
-import appStyles from '../../../../styles/app.module.css';
+import NumberField from '@/components/NumberField/NumberField';
+import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
+import { useMCUSession } from '@/context/MCUSessionContext';
 import {
   clampServoAngle,
   DEFAULT_SERVO_ANGLE,
   FAST_FACTOR,
   SLOW_FACTOR,
-} from '../../../../helpers/servoGroups';
+} from '@/helpers/servoGroups';
 
-function servoLabel(obj) {
-  return obj.label || obj.slot_id || obj.section || `OID ${obj.oid}`;
-}
+import { BenchCard, ScaleButtons } from '../BenchUi';
+import PCA9685Section from './PCA9685Section';
+import ServoGroupsSection from './ServoGroupsSection';
 
-const GlobalServosPanel = ({ pcaBoards = [], configBusy = false, onAddPCA9685Board }) => {
+const servoLabel = (obj) => obj.label || obj.slot_id || obj.section || `object ${obj.oid}`;
+
+/** Bench › Servos: every servo at once and one by one, groups of them, and PCA9685 boards. */
+export default function GlobalServosPanel({
+  pcaBoards = [],
+  configBusy = false,
+  onAddPCA9685Board,
+}) {
   const {
     connected,
     servoObjects,
@@ -30,10 +34,10 @@ const GlobalServosPanel = ({ pcaBoards = [], configBusy = false, onAddPCA9685Boa
     pcaStatus,
     checkPCA9685Boards,
   } = useMCUSession();
-
   const [busy, setBusy] = useState(false);
   const [applyAngle, setApplyAngle] = useState(DEFAULT_SERVO_ANGLE);
   const [moveError, setMoveError] = useState('');
+  const none = !connected || servoObjects.length === 0;
 
   const run = async (action) => {
     setBusy(true);
@@ -41,101 +45,73 @@ const GlobalServosPanel = ({ pcaBoards = [], configBusy = false, onAddPCA9685Boa
     try {
       await action();
     } catch (err) {
-      setMoveError(err.message || 'Servo move failed');
+      setMoveError(err.message || 'The servo move failed');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <aside className={styles.panel}>
-      <h3 className={styles.heading}>All servos</h3>
-      <p className={styles.subtitle}>Global angle controls</p>
-
-      {!connected && (
-        <p className={styles.connectHint}>Connect to move servos. Groups can be edited anytime.</p>
-      )}
-
-      <label className={styles.label} htmlFor="global-apply-angle">
-        Apply angle (°)
-      </label>
-      <input
-        id="global-apply-angle"
-        type="number"
-        min="0"
-        max="180"
-        className={styles.input}
-        value={applyAngle}
-        disabled={busy || !connected}
-        onChange={(e) => setApplyAngle(clampServoAngle(Number(e.target.value)))}
-      />
-
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={appStyles.button}
-          disabled={busy || !connected || servoObjects.length === 0}
-          onClick={() => run(() => setAllServosAngle(applyAngle))}
-        >
-          Apply all
-        </button>
-        <button
-          type="button"
-          className={appStyles.buttonSecondary}
-          disabled={busy || !connected || servoObjects.length === 0}
-          onClick={() => run(() => setAllServosAngle(DEFAULT_SERVO_ANGLE))}
-        >
-          Center all
-        </button>
-        <button
-          type="button"
-          className={appStyles.buttonSecondary}
-          disabled={busy || !connected || servoObjects.length === 0}
-          onClick={() => run(flipAllServos)}
-        >
-          Flip all
-        </button>
-      </div>
-
-      <div className={styles.speedRow}>
-        <button
-          type="button"
-          className={styles.speedBtn}
-          disabled={busy || !connected || servoObjects.length === 0}
-          onClick={() => run(() => scaleAllServoAngles(SLOW_FACTOR))}
-        >
-          Lower
-          <span className={styles.speedHint}>×{SLOW_FACTOR}</span>
-        </button>
-        <button
-          type="button"
-          className={styles.speedBtn}
-          disabled={busy || !connected || servoObjects.length === 0}
-          onClick={() => run(() => scaleAllServoAngles(FAST_FACTOR))}
-        >
-          Raise
-          <span className={styles.speedHint}>×{FAST_FACTOR}</span>
-        </button>
-      </div>
-
-      {moveError && <p className={styles.groupWarn}>{moveError}</p>}
-
-      {connected && servoObjects.length > 0 && (
-        <div className={styles.listBlock}>
-          <p className={styles.listLabel}>Individual</p>
-          <ul className={styles.list}>
-            {servoObjects.map((obj) => (
-              <ServoRow
-                key={obj.oid}
-                obj={obj}
-                angle={servoAngles[obj.oid] ?? DEFAULT_SERVO_ANGLE}
-                busy={busy}
-                onApply={(angle) => run(() => setServo(obj.oid, angle))}
-              />
-            ))}
-          </ul>
+    <div className="grid items-start gap-4 xl:grid-cols-2">
+      <BenchCard
+        title="All servos"
+        about={
+          connected
+            ? `${servoObjects.length} servo${servoObjects.length === 1 ? '' : 's'} in the connected config.`
+            : 'Connect the board to move them. Groups can be edited without it.'
+        }
+      >
+        {moveError && <p className="text-sm text-destructive">{moveError}</p>}
+        <div className="flex flex-wrap items-end gap-2">
+          <NumberField
+            id="all-servo-angle"
+            label="Angle"
+            value={applyAngle}
+            min={0}
+            max={180}
+            unit="°"
+            disabled={busy || !connected}
+            onChange={(v) => setApplyAngle(clampServoAngle(v))}
+          />
+          <Button disabled={busy || none} onClick={() => run(() => setAllServosAngle(applyAngle))}>
+            Move all
+          </Button>
+          <Button
+            variant="outline"
+            disabled={busy || none}
+            onClick={() => run(() => setAllServosAngle(DEFAULT_SERVO_ANGLE))}
+          >
+            Center all
+          </Button>
+          <Button variant="outline" disabled={busy || none} onClick={() => run(flipAllServos)}>
+            Flip all
+          </Button>
         </div>
-      )}
+        <ScaleButtons
+          lower="Lower"
+          higher="Raise"
+          lowFactor={SLOW_FACTOR}
+          highFactor={FAST_FACTOR}
+          disabled={busy || none}
+          onScale={(f) => run(() => scaleAllServoAngles(f))}
+        />
+        {connected && servoObjects.length > 0 && (
+          <div>
+            <p className="mb-2 text-sm font-medium">One by one</p>
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {servoObjects.map((obj) => (
+                <ServoRow
+                  key={obj.oid}
+                  obj={obj}
+                  angle={servoAngles[obj.oid] ?? DEFAULT_SERVO_ANGLE}
+                  busy={busy}
+                  onApply={(angle) => run(() => setServo(obj.oid, angle))}
+                />
+              ))}
+            </ul>
+          </div>
+        )}
+      </BenchCard>
 
       <ServoGroupsSection connected={connected} busy={busy} onRun={run} />
 
@@ -149,72 +125,40 @@ const GlobalServosPanel = ({ pcaBoards = [], configBusy = false, onAddPCA9685Boa
           onCheck={checkPCA9685Boards}
         />
       )}
-
-      {connected && servoObjects.length > 0 && (
-        <p className={styles.footerMeta}>{servoObjects.length} servo(s) configured</p>
-      )}
-    </aside>
-  );
-};
-
-function ServoRow({ obj, angle, busy, onApply }) {
-  const [localAngle, setLocalAngle] = useState(angle);
-
-  useEffect(() => {
-    setLocalAngle(angle);
-  }, [angle]);
-
-  return (
-    <li className={styles.listItem}>
-      <span className={styles.listName}>{servoLabel(obj)}</span>
-      <div className={styles.servoRowControls}>
-        <button
-          type="button"
-          className={styles.stepBtnInline}
-          aria-label="Decrease angle by 5"
-          disabled={busy}
-          onClick={() => setLocalAngle((prev) => clampServoAngle(prev - 5))}
-        >
-          −
-        </button>
-        <input
-          type="number"
-          min="0"
-          max="180"
-          className={styles.memberSpeedInput}
-          value={localAngle}
-          disabled={busy}
-          onChange={(e) => setLocalAngle(clampServoAngle(Number(e.target.value)))}
-        />
-        <button
-          type="button"
-          className={styles.stepBtnInline}
-          aria-label="Increase angle by 5"
-          disabled={busy}
-          onClick={() => setLocalAngle((prev) => clampServoAngle(prev + 5))}
-        >
-          +
-        </button>
-      </div>
-      <input
-        type="range"
-        min="0"
-        max="180"
-        value={localAngle}
-        disabled={busy}
-        className={styles.servoRange}
-        onChange={(e) => setLocalAngle(Number(e.target.value))}
-      />
-      <button
-        type="button"
-        className={appStyles.buttonSecondary}
-        disabled={busy}
-        onClick={() => onApply(localAngle)}
-      >
-        Apply
-      </button>
-    </li>
+    </div>
   );
 }
 
-export default GlobalServosPanel;
+function ServoRow({ obj, angle, busy, onApply }) {
+  const [local, setLocal] = useState(angle);
+  // Follow the angle when it's moved elsewhere (all, a group).
+  const [shown, setShown] = useState(angle);
+  if (angle !== shown) {
+    setShown(angle);
+    setLocal(angle);
+  }
+  return (
+    <li className="flex flex-wrap items-center gap-3 px-3 py-2">
+      <span className="w-28 truncate text-sm">{servoLabel(obj)}</span>
+      <Slider
+        min={0}
+        max={180}
+        step={1}
+        value={[local]}
+        disabled={busy}
+        aria-label={`${servoLabel(obj)} angle`}
+        className="min-w-32 flex-1"
+        onValueChange={([v]) => setLocal(v)}
+      />
+      <span className="w-10 text-right font-mono text-sm">{local}°</span>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || local === angle}
+        onClick={() => onApply(local)}
+      >
+        Move
+      </Button>
+    </li>
+  );
+}

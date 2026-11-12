@@ -1,56 +1,105 @@
+import { ArrowRight, Minus, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useMCUSession } from '../../../../context/MCUSessionContext';
+import NumberField from '@/components/NumberField/NumberField';
+import Segmented from '@/components/Segmented/Segmented';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
+import { useMCUSession } from '@/context/MCUSessionContext';
 import {
   DEFAULT_OUTPUT_TIMEOUT_S,
   MAX_OUTPUT_TIMEOUT_S,
   isOnOffSlot,
-} from '../../../../helpers/boardSlotConfig';
+} from '@/helpers/boardSlotConfig';
 
-import styles from './SlotPanel.module.css';
+const DIRECTIONS = [
+  { value: true, label: 'Forward' },
+  { value: false, label: 'Reverse' },
+];
+const MODES = [
+  { value: 'continuous', label: 'Continuous' },
+  { value: 'distance', label: 'Distance' },
+];
 
-import appStyles from '../../../../styles/app.module.css';
+function Block({ title, children }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-3">
+      {title && <p className="text-sm font-medium">{title}</p>}
+      {children}
+    </div>
+  );
+}
 
-/** Board › Wiring's side panel: what's wired to the picked pin, and trying it live. */
-const SlotPanel = ({
+function Stepper({ label, value, onChange, step, min, max, unit, id }) {
+  const clamp = (v) => Math.min(max, Math.max(min, v));
+  return (
+    <div className="flex flex-col gap-1.5 text-sm">
+      <label htmlFor={id} className="font-medium">
+        {label}
+      </label>
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label={`${label} down ${step}`}
+          onClick={() => onChange(clamp(value - step))}
+        >
+          <Minus />
+        </Button>
+        <Input
+          id={id}
+          type="number"
+          min={min}
+          max={max}
+          className="h-9 w-24 text-right font-mono"
+          value={value}
+          onChange={(e) => onChange(clamp(Number(e.target.value) || min))}
+        />
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label={`${label} up ${step}`}
+          onClick={() => onChange(clamp(value + step))}
+        >
+          <Plus />
+        </Button>
+        {unit && <span className="text-muted-foreground">{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Board › Wiring's side panel: what's wired to the picked pin, and with a board connected,
+ * trying it live (an output on and off, a servo's angle, a stepper's jog, a reading).
+ */
+export default function SlotPanel({
   hotspot,
-
   slots,
-
   slotStates,
-
   onUpdate,
-
   onClear,
-
   onOpenConfig,
-
   connected,
-
   liveObject,
-
   liveReading,
-
   onSetDigitalOut,
-
   onSetServo,
-
   onJogStepper,
-
   onStopStepper,
-}) => {
+}) {
   if (!hotspot) {
     return (
-      <aside className={styles.panel}>
-        <h3 className={styles.heading}>Pin</h3>
-
-        <p className={appStyles.muted}>
-          Click a pin on the board diagram to configure what is wired there.
+      <aside className="ds flex flex-col gap-2 rounded-xl border border-border bg-card p-5">
+        <h2 className="font-display text-lg font-semibold">Pin</h2>
+        <p className="text-sm text-muted-foreground">
+          Pick a pin or connector on the board to say what’s wired to it.
         </p>
-
         {connected && (
-          <p className={styles.liveHint}>
-            Live session active — connected slots show readings on the diagram.
+          <p className="text-sm text-muted-foreground">
+            Wired pins show their live readings on the board.
           </p>
         )}
       </aside>
@@ -58,36 +107,39 @@ const SlotPanel = ({
   }
 
   const slotId = hotspot.slot_ids?.[0];
-
   const slot = slots[slotId] || {};
-
   const state = slotStates[slotId] || { connected: false, label: slot.label || hotspot.label };
-
   const timeout = state.maxMcuDuration ?? DEFAULT_OUTPUT_TIMEOUT_S;
+  const onOff = isOnOffSlot(slot);
 
-  const handleConnect = () => {
+  const markWired = () =>
     onUpdate(slotId, {
       connected: true,
-
       label: state.label || slot.label || hotspot.label,
-
       type: slot.type,
-
       maxMcuDuration: timeout,
     });
-  };
 
   return (
-    <aside className={styles.panel}>
-      <h3 className={styles.heading}>{hotspot.label}</h3>
-
-      <p className={styles.meta}>Slot: {slotId}</p>
-
-      <p className={styles.meta}>
-        Type: {isOnOffSlot(slot) ? 'on/off output' : slot.type || 'unknown'}
-      </p>
-
-      <p className={styles.meta}>Accepts: {(hotspot.accepts || []).join(', ') || '—'}</p>
+    <aside className="ds flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-display text-lg font-semibold">{hotspot.label}</h2>
+          {state.connected ? (
+            <Badge variant="running">Wired</Badge>
+          ) : (
+            <Badge variant="idle">Not set up</Badge>
+          )}
+        </div>
+        <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 text-sm">
+          <dt className="text-muted-foreground">Slot</dt>
+          <dd className="font-mono">{slotId}</dd>
+          <dt className="text-muted-foreground">Type</dt>
+          <dd>{onOff ? 'on/off output' : slot.type || 'unknown'}</dd>
+          <dt className="text-muted-foreground">Takes</dt>
+          <dd>{(hotspot.accepts || []).join(', ') || '—'}</dd>
+        </dl>
+      </div>
 
       {connected && liveObject && (
         <LiveControls
@@ -102,94 +154,79 @@ const SlotPanel = ({
       )}
 
       {!connected && (
-        <>
-          <label className={styles.label} htmlFor="slot-label">
+        <div className="flex flex-col gap-4">
+          <label htmlFor="slot-label" className="flex flex-col gap-1.5 text-sm font-medium">
             Label
+            <Input
+              id="slot-label"
+              value={state.label || ''}
+              onChange={(e) =>
+                onUpdate(slotId, { ...state, label: e.target.value, localOnly: true })
+              }
+            />
           </label>
 
-          <input
-            id="slot-label"
-            className={styles.input}
-            value={state.label || ''}
-            onChange={(event) =>
-              onUpdate(slotId, { ...state, label: event.target.value, localOnly: true })
-            }
-          />
-
-          {isOnOffSlot(slot) && (
-            <>
-              <label className={styles.label} htmlFor="slot-timeout">
-                Safety timeout (seconds, 0 = off)
-              </label>
-              <input
+          {onOff && (
+            <div className="flex flex-col gap-1.5">
+              <NumberField
                 id="slot-timeout"
-                className={styles.input}
-                type="number"
-                min="0"
-                max={MAX_OUTPUT_TIMEOUT_S}
-                step="0.5"
+                label="Safety timeout (0: off)"
                 value={timeout}
-                onChange={(event) => {
-                  const v = Number(event.target.value);
-                  if (event.target.value !== '' && v >= 0 && v <= MAX_OUTPUT_TIMEOUT_S) {
-                    onUpdate(slotId, { ...state, maxMcuDuration: v, localOnly: true });
-                  }
-                }}
+                min={0}
+                max={MAX_OUTPUT_TIMEOUT_S}
+                step={0.5}
+                unit="s"
+                onChange={(v) => onUpdate(slotId, { ...state, maxMcuDuration: v, localOnly: true })}
               />
-              <p className={styles.meta}>
+              <p className="text-xs text-muted-foreground">
                 If the backend stops refreshing this output for this long (it crashed, or the USB
                 cable came out), the board shuts down: the output and every motor stop. Up to{' '}
                 {MAX_OUTPUT_TIMEOUT_S} s.
               </p>
-            </>
+            </div>
           )}
 
-          {slot.defaults?.sensor_type && !isOnOffSlot(slot) && (
-            <>
-              <label className={styles.label}>Sensor type</label>
-
-              <input className={styles.input} readOnly value={slot.defaults.sensor_type} />
-            </>
+          {slot.defaults?.sensor_type && !onOff && (
+            <p className="text-sm">
+              <span className="text-muted-foreground">Sensor type</span>{' '}
+              <span className="font-mono">{slot.defaults.sensor_type}</span>
+            </p>
           )}
 
           {slot.pins && (
-            <div className={styles.pinBlock}>
-              <p className={styles.label}>Pins</p>
-
-              <ul className={styles.pinList}>
+            <div className="text-sm">
+              <p className="mb-1 font-medium">Pins</p>
+              <ul className="grid grid-cols-2 gap-x-3 font-mono text-xs">
                 {Object.entries(slot.pins).map(([key, value]) => (
                   <li key={key}>
-                    {key}: {value}
+                    <span className="text-muted-foreground">{key}</span> {value}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          <div className={styles.actions}>
-            <button type="button" className={appStyles.button} onClick={handleConnect}>
-              {state.connected ? 'Update' : 'Mark connected'}
-            </button>
-
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={markWired}>{state.connected ? 'Update' : 'Mark as wired'}</Button>
             {state.connected && (
-              <button
-                type="button"
-                className={appStyles.buttonSecondary}
-                onClick={() => onClear(slotId)}
-              >
+              <Button variant="outline" onClick={() => onClear(slotId)}>
                 Clear
-              </button>
+              </Button>
             )}
           </div>
-        </>
+        </div>
       )}
 
-      <button type="button" className={styles.linkButton} onClick={onOpenConfig}>
-        Edit in config file →
+      <button
+        type="button"
+        onClick={onOpenConfig}
+        className="flex items-center gap-1 self-start text-sm font-medium text-primary-text hover:underline"
+      >
+        Edit in the config file <ArrowRight className="size-4" aria-hidden />
       </button>
     </aside>
   );
-};
+}
 
 function LiveControls({
   slot,
@@ -200,40 +237,30 @@ function LiveControls({
   onJogStepper,
   onStopStepper,
 }) {
-  const kind = liveObject.kind;
-
-  const oid = liveObject.oid;
-
+  const { kind, oid } = liveObject;
   const isServo = kind === 'pwm_out' && liveObject.meta?.device === 'servo';
 
   if (kind === 'analog_in' || slot.type === 'thermistor') {
     const val = liveReading?.value;
-
-    const display = val != null ? `${Number(val).toFixed(3)} (${liveReading?.unit || 'adc'})` : '—';
-
     return (
-      <div className={styles.liveBlock}>
-        <p className={styles.liveLabel}>Live reading</p>
-
-        <p className={styles.liveValue}>{display}</p>
-
-        <p className={styles.meta}>Section: {liveObject.section}</p>
-      </div>
+      <Block title="Live reading">
+        <p className="font-mono text-2xl">
+          {val != null ? Number(val).toFixed(3) : '—'}{' '}
+          <span className="text-sm text-muted-foreground">{liveReading?.unit || 'adc'}</span>
+        </p>
+        <p className="text-xs text-muted-foreground">Section {liveObject.section}</p>
+      </Block>
     );
   }
-
   if (kind === 'endstop') {
-    const triggered = liveReading?.value ? 'TRIGGERED' : 'open';
-
     return (
-      <div className={styles.liveBlock}>
-        <p className={styles.liveLabel}>Endstop</p>
-
-        <p className={styles.liveValue}>{triggered}</p>
-      </div>
+      <Block title="Switch">
+        <Badge variant={liveReading?.value ? 'warning' : 'idle'} className="self-start">
+          {liveReading?.value ? 'Pressed' : 'Open'}
+        </Badge>
+      </Block>
     );
   }
-
   if (kind === 'digital_out' || (kind === 'pwm_out' && !isServo)) {
     return (
       <DigitalOutControl
@@ -243,11 +270,7 @@ function LiveControls({
       />
     );
   }
-
-  if (isServo) {
-    return <ServoControl oid={oid} onSetServo={onSetServo} />;
-  }
-
+  if (isServo) return <ServoControl oid={oid} onSetServo={onSetServo} />;
   if (kind === 'stepper') {
     return (
       <StepperControl
@@ -258,43 +281,36 @@ function LiveControls({
       />
     );
   }
-
   return (
-    <div className={styles.liveBlock}>
-      <p className={styles.meta}>
-        Configured ({kind}) — OID {oid}
+    <Block>
+      <p className="text-sm text-muted-foreground">
+        Set up ({kind}), object <span className="font-mono">{oid}</span>.
       </p>
-    </div>
+    </Block>
   );
 }
 
 function DigitalOutControl({ oid, onSetDigitalOut, label }) {
   const [on, setOn] = useState(false);
-
   const [busy, setBusy] = useState(false);
-
   const toggle = async () => {
     setBusy(true);
-
     try {
-      const next = !on;
-
-      await onSetDigitalOut(oid, next);
-
-      setOn(next);
+      await onSetDigitalOut(oid, !on);
+      setOn(!on);
     } finally {
       setBusy(false);
     }
   };
-
   return (
-    <div className={styles.liveBlock}>
-      <p className={styles.liveLabel}>{label}</p>
-
-      <button type="button" className={appStyles.button} disabled={busy} onClick={toggle}>
-        {on ? 'Turn off' : 'Turn on'}
-      </button>
-    </div>
+    <Block title={label}>
+      <div className="flex items-center gap-3">
+        <Button disabled={busy} onClick={toggle}>
+          {on ? 'Turn off' : 'Turn on'}
+        </Button>
+        <span className="text-sm text-muted-foreground">{on ? 'On' : 'Off'}</span>
+      </div>
+    </Block>
   );
 }
 
@@ -302,138 +318,87 @@ function ServoControl({ oid, onSetServo }) {
   const { servoAngles } = useMCUSession();
   const [angle, setAngle] = useState(servoAngles[oid] ?? 90);
   const [busy, setBusy] = useState(false);
+  // Follow the angle when it's changed elsewhere (the bench, a group).
+  const [known, setKnown] = useState(servoAngles[oid]);
+  if (servoAngles[oid] != null && servoAngles[oid] !== known) {
+    setKnown(servoAngles[oid]);
+    setAngle(servoAngles[oid]);
+  }
 
-  useEffect(() => {
-    if (servoAngles[oid] != null) {
-      setAngle(servoAngles[oid]);
-    }
-  }, [servoAngles, oid]);
-
-  const clampAngle = (value) => Math.min(180, Math.max(0, Math.round(value) || 0));
-
-  const apply = async (nextAngle = angle) => {
+  const apply = async (next = angle) => {
     setBusy(true);
     try {
-      const applied = await onSetServo(oid, nextAngle);
-      if (applied != null) {
-        setAngle(applied);
-      }
+      const applied = await onSetServo(oid, next);
+      if (applied != null) setAngle(applied);
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className={styles.liveBlock}>
-      <p className={styles.liveLabel}>Servo position</p>
-      <div className={styles.speedRow}>
-        <button
-          type="button"
-          className={styles.stepBtn}
-          aria-label="Decrease angle by 5"
-          disabled={busy}
-          onClick={() => setAngle((prev) => clampAngle(prev - 5))}
-        >
-          ▼
-        </button>
-        <input
-          type="number"
-          min="0"
-          max="180"
-          className={styles.input}
-          value={angle}
-          disabled={busy}
-          onChange={(e) => setAngle(clampAngle(Number(e.target.value)))}
-        />
-        <button
-          type="button"
-          className={styles.stepBtn}
-          aria-label="Increase angle by 5"
-          disabled={busy}
-          onClick={() => setAngle((prev) => clampAngle(prev + 5))}
-        >
-          ▲
-        </button>
-      </div>
-      <input
-        type="range"
-        min="0"
-        max="180"
+    <Block title="Servo angle">
+      <Stepper
+        id={`servo-${oid}`}
+        label="Angle"
         value={angle}
-        disabled={busy}
-        onChange={(e) => setAngle(Number(e.target.value))}
-        onMouseUp={() => apply()}
-        onTouchEnd={() => apply()}
-        className={styles.range}
+        onChange={setAngle}
+        step={5}
+        min={0}
+        max={180}
+        unit="°"
       />
-      <p className={styles.meta}>{angle}°</p>
-      <button type="button" className={appStyles.button} disabled={busy} onClick={() => apply()}>
-        Set angle
-      </button>
-    </div>
+      <Slider
+        min={0}
+        max={180}
+        step={1}
+        value={[angle]}
+        disabled={busy}
+        aria-label="Servo angle"
+        onValueChange={([v]) => setAngle(v)}
+        onValueCommit={([v]) => apply(v)}
+      />
+      <Button disabled={busy} onClick={() => apply()} className="self-start">
+        Move to {angle}°
+      </Button>
+    </Block>
   );
 }
 
 function StepperControl({ oid, liveReading, onJogStepper, onStopStepper }) {
   const { isStepperRunning, setStepperRunning } = useMCUSession();
-
   const [forward, setForward] = useState(true);
-
   const [speedHz, setSpeedHz] = useState(500);
-
   const [mode, setMode] = useState('continuous');
-
   const [steps, setSteps] = useState(200);
-
   const [busy, setBusy] = useState(false);
   const running = isStepperRunning(oid);
   const paramsRef = useRef({ forward: true, speedHz: 500 });
 
-  const clampSpeed = (value) => Math.min(50000, Math.max(1, value));
-
-  const adjustSpeed = (delta) => {
-    setSpeedHz((prev) => clampSpeed(prev + delta));
-  };
-
   const applyContinuousJog = useCallback(
-    async (params) => {
-      await onJogStepper(oid, { forward: params.forward, speedHz: params.speedHz, steps: 0 });
-    },
+    (params) => onJogStepper(oid, { forward: params.forward, speedHz: params.speedHz, steps: 0 }),
     [oid, onJogStepper],
   );
 
+  // A running jog follows direction at once and speed after a moment's typing.
   useEffect(() => {
-    if (!running || mode !== 'continuous') {
-      return undefined;
-    }
-
+    if (!running || mode !== 'continuous') return undefined;
     const prev = paramsRef.current;
-    if (prev.forward === forward && prev.speedHz === speedHz) {
-      return undefined;
-    }
-
-    const onlySpeed = prev.forward === forward && prev.speedHz !== speedHz;
+    if (prev.forward === forward && prev.speedHz === speedHz) return undefined;
+    const onlySpeed = prev.forward === forward;
     paramsRef.current = { forward, speedHz };
-
-    const delay = onlySpeed ? 150 : 0;
-    const timer = setTimeout(() => {
-      applyContinuousJog({ forward, speedHz }).catch(() => setStepperRunning(oid, false));
-    }, delay);
-
+    const timer = setTimeout(
+      () => applyContinuousJog({ forward, speedHz }).catch(() => setStepperRunning(oid, false)),
+      onlySpeed ? 150 : 0,
+    );
     return () => clearTimeout(timer);
   }, [forward, speedHz, running, mode, applyContinuousJog, oid, setStepperRunning]);
 
   const run = async () => {
     setBusy(true);
     try {
-      const stepCount = mode === 'distance' ? steps : 0;
       paramsRef.current = { forward, speedHz };
-      await onJogStepper(oid, { forward, speedHz, steps: stepCount });
-      if (mode === 'continuous') {
-        setStepperRunning(oid, true);
-      } else {
-        setStepperRunning(oid, false);
-      }
+      await onJogStepper(oid, { forward, speedHz, steps: mode === 'distance' ? steps : 0 });
+      setStepperRunning(oid, mode === 'continuous');
     } finally {
       setBusy(false);
     }
@@ -448,141 +413,52 @@ function StepperControl({ oid, liveReading, onJogStepper, onStopStepper }) {
     }
   };
 
-  const handleModeChange = async (nextMode) => {
-    if (running && mode === 'continuous' && nextMode !== 'continuous') {
-      await stop();
-    }
-    setMode(nextMode);
+  const changeMode = async (next) => {
+    if (running && mode === 'continuous' && next !== 'continuous') await stop();
+    setMode(next);
   };
 
-  const livePosition = liveReading?.value;
-  const positionDisplay = livePosition != null ? Number(livePosition) : null;
-
   return (
-    <div className={styles.liveBlock}>
-      <p className={styles.liveLabel}>Stepper jog</p>
-
-      <label className={styles.label}>Direction</label>
-
-      <div className={styles.segmentRow}>
-        <button
-          type="button"
-          className={forward ? appStyles.navButtonActive : appStyles.navButton}
-          onClick={() => setForward(true)}
-        >
-          Forward
-        </button>
-
-        <button
-          type="button"
-          className={!forward ? appStyles.navButtonActive : appStyles.navButton}
-          onClick={() => setForward(false)}
-        >
-          Reverse
-        </button>
+    <Block title="Jog the motor">
+      <div className="flex flex-wrap gap-2">
+        <Segmented label="Direction" value={forward} options={DIRECTIONS} onChange={setForward} />
+        <Segmented label="Mode" value={mode} options={MODES} onChange={changeMode} />
       </div>
-
-      <label className={styles.label} htmlFor="stepper-speed">
-        Speed (steps/s)
-      </label>
-
-      <div className={styles.speedRow}>
-        <button
-          type="button"
-          className={styles.stepBtn}
-          aria-label="Decrease speed by 100"
-          onClick={() => adjustSpeed(-100)}
-        >
-          ▼
-        </button>
-
-        <input
-          id="stepper-speed"
-          type="number"
-          min="1"
-          max="50000"
-          className={styles.input}
-          value={speedHz}
-          onChange={(e) => setSpeedHz(clampSpeed(Number(e.target.value) || 1))}
-        />
-
-        <button
-          type="button"
-          className={styles.stepBtn}
-          aria-label="Increase speed by 100"
-          onClick={() => adjustSpeed(100)}
-        >
-          ▲
-        </button>
-      </div>
-
-      <label className={styles.label}>Mode</label>
-
-      <div className={styles.segmentRow}>
-        <button
-          type="button"
-          className={mode === 'continuous' ? appStyles.navButtonActive : appStyles.navButton}
-          onClick={() => handleModeChange('continuous')}
-        >
-          Continuous
-        </button>
-
-        <button
-          type="button"
-          className={mode === 'distance' ? appStyles.navButtonActive : appStyles.navButton}
-          onClick={() => handleModeChange('distance')}
-        >
-          Distance
-        </button>
-      </div>
-
+      <Stepper
+        id={`speed-${oid}`}
+        label="Speed"
+        value={speedHz}
+        onChange={setSpeedHz}
+        step={100}
+        min={1}
+        max={50000}
+        unit="steps/s"
+      />
       {mode === 'distance' && (
-        <>
-          <label className={styles.label} htmlFor="stepper-steps">
-            Steps
-          </label>
-
-          <input
-            id="stepper-steps"
-            type="number"
-            min="1"
-            max="1000000"
-            className={styles.input}
-            value={steps}
-            onChange={(e) => setSteps(Number(e.target.value))}
-          />
-        </>
+        <NumberField
+          id={`steps-${oid}`}
+          label="Steps"
+          value={steps}
+          min={1}
+          max={1000000}
+          onChange={setSteps}
+        />
       )}
-
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={appStyles.button}
-          disabled={busy || (mode === 'continuous' && running)}
-          onClick={run}
-        >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button disabled={busy || (mode === 'continuous' && running)} onClick={run}>
           {mode === 'continuous' ? 'Run' : `Run ${steps} steps`}
-        </button>
+        </Button>
         {mode === 'continuous' && running && (
-          <button
-            type="button"
-            className={appStyles.buttonSecondary}
-            disabled={busy}
-            onClick={stop}
-          >
+          <Button variant="outline" disabled={busy} onClick={stop}>
             Stop
-          </button>
+          </Button>
+        )}
+        {liveReading?.value != null && (
+          <span className="ml-auto text-sm text-muted-foreground">
+            at <span className="font-mono text-foreground">{Number(liveReading.value)}</span> steps
+          </span>
         )}
       </div>
-
-      {positionDisplay != null && (
-        <>
-          <p className={styles.meta}>Position</p>
-          <p className={styles.liveValue}>{positionDisplay} steps</p>
-        </>
-      )}
-    </div>
+    </Block>
   );
 }
-
-export default SlotPanel;

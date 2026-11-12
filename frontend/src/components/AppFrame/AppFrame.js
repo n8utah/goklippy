@@ -20,8 +20,7 @@ import TopBar from './components/TopBar';
  * from tablet up, the bottom bar on phones, the top bar with search, status and Stop, the
  * page's header and tabs, and the setting quick editor any page can open.
  *
- * The frame's own parts carry `ds` (Tailwind's reset); the page area doesn't, so pages not
- * yet rebuilt keep their CSS modules untouched.
+ * The frame's parts and each page's root carry `ds` (Tailwind's scoped reset).
  */
 export default function AppFrame() {
   const logic = useAppFrameLogic();

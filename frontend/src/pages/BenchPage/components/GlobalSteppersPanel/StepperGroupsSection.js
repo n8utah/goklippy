@@ -1,5 +1,9 @@
+import { Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useMCUSession } from '@/context/MCUSessionContext';
 import {
   clampStepperSpeed,
   DEFAULT_STEPPER_SPEED,
@@ -14,17 +18,14 @@ import {
   SLOW_FACTOR,
   startPlanForGroup,
   stepperMemberKey,
-} from '../../../../helpers/stepperGroups';
-import { useMCUSession } from '../../../../context/MCUSessionContext';
+} from '@/helpers/stepperGroups';
 
-import styles from './GlobalSteppersPanel.module.css';
-import appStyles from '../../../../styles/app.module.css';
+import { BenchCard, MemberPicker, SavedItem, ScaleButtons } from '../BenchUi';
 
-function emptyDraft() {
-  return { id: null, name: '', members: [], speeds: {} };
-}
+const emptyDraft = () => ({ id: null, name: '', members: [], speeds: {} });
 
-const StepperGroupsSection = ({ connected, busy, onRun }) => {
+/** Steppers that start, stop, reverse and change speed together, each at its own speed. */
+export default function StepperGroupsSection({ connected, busy, onRun }) {
   const {
     stepperObjects,
     stepperJogState,
@@ -33,7 +34,6 @@ const StepperGroupsSection = ({ connected, busy, onRun }) => {
     reverseSteppers,
     scaleStepperSpeeds,
   } = useMCUSession();
-
   const [groups, setGroups] = useState(() => loadStepperGroups());
   const [draft, setDraft] = useState(null);
 
@@ -41,260 +41,186 @@ const StepperGroupsSection = ({ connected, busy, onRun }) => {
     saveStepperGroups(groups);
   }, [groups]);
 
-  const memberOptions = stepperObjects.map((obj) => ({
+  const options = stepperObjects.map((obj) => ({
     key: stepperMemberKey(obj),
-    label: obj.label || obj.slot_id || obj.section || `OID ${obj.oid}`,
+    label: obj.label || obj.slot_id || obj.section || `object ${obj.oid}`,
   }));
 
-  const beginCreate = () => {
-    setDraft(emptyDraft());
-  };
-
-  const beginEdit = (group) => {
-    setDraft({
-      id: group.id,
-      name: group.name,
-      members: [...group.members],
-      speeds: { ...(group.speeds || {}) },
-    });
-  };
-
-  const cancelDraft = () => setDraft(null);
-
-  const toggleMember = (key) => {
+  const toggle = (key) =>
     setDraft((prev) => {
-      if (!prev) return prev;
-      const isRemoving = prev.members.includes(key);
-      const members = isRemoving
-        ? prev.members.filter((item) => item !== key)
-        : [...prev.members, key];
+      const removing = prev.members.includes(key);
       const speeds = { ...prev.speeds };
-      if (!isRemoving && speeds[key] == null) {
-        speeds[key] = DEFAULT_STEPPER_SPEED;
-      }
-      return { ...prev, members, speeds };
-    });
-  };
-
-  const setDraftMemberSpeed = (key, value) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
+      if (!removing && speeds[key] == null) speeds[key] = DEFAULT_STEPPER_SPEED;
       return {
         ...prev,
-        speeds: { ...prev.speeds, [key]: clampStepperSpeed(value) },
+        members: removing ? prev.members.filter((k) => k !== key) : [...prev.members, key],
+        speeds,
       };
     });
-  };
 
-  const saveDraft = () => {
-    if (!draft?.name.trim() || draft.members.length === 0) {
-      return;
-    }
-    const speeds = {};
-    for (const key of draft.members) {
-      speeds[key] = clampStepperSpeed(draft.speeds?.[key] ?? DEFAULT_STEPPER_SPEED);
-    }
+  const save = () => {
+    if (!draft?.name.trim() || draft.members.length === 0) return;
+    const speeds = Object.fromEntries(
+      draft.members.map((k) => [k, clampStepperSpeed(draft.speeds?.[k] ?? DEFAULT_STEPPER_SPEED)]),
+    );
     const payload = {
       id: draft.id || newGroupId(),
       name: draft.name.trim(),
       members: draft.members,
       speeds,
     };
-    setGroups((prev) => {
-      const idx = prev.findIndex((g) => g.id === payload.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = payload;
-        return next;
-      }
-      return [...prev, payload];
-    });
+    setGroups((prev) =>
+      prev.some((g) => g.id === payload.id)
+        ? prev.map((g) => (g.id === payload.id ? payload : g))
+        : [...prev, payload],
+    );
     setDraft(null);
   };
 
-  const deleteGroup = (id) => {
+  const remove = (id) => {
     setGroups((prev) => prev.filter((g) => g.id !== id));
-    if (draft?.id === id) {
-      setDraft(null);
-    }
+    if (draft?.id === id) setDraft(null);
   };
 
-  const groupOids = (group) => oidsForMembers(group.members, stepperObjects);
-
-  const groupHasRunning = (group) => {
-    const oids = groupOids(group);
-    return oids.some((oid) => stepperJogState[oid]);
-  };
-
-  const handleGroupStart = (group) => {
-    const plan = startPlanForGroup(group, stepperObjects);
-    onRun(() => startSteppersAtSpeeds(plan));
-  };
-
-  const handleGroupScale = (group, factor) => {
-    const oids = groupOids(group);
-    setGroups((prev) =>
-      prev.map((item) => (item.id === group.id ? scaleGroupSpeeds(item, factor) : item)),
-    );
+  const scale = (group, factor) => {
+    const oids = oidsForMembers(group.members, stepperObjects);
+    setGroups((prev) => prev.map((g) => (g.id === group.id ? scaleGroupSpeeds(g, factor) : g)));
     onRun(async () => {
-      if (oids.some((oid) => stepperJogState[oid])) {
-        await scaleStepperSpeeds(oids, factor);
-      }
+      if (oids.some((oid) => stepperJogState[oid])) await scaleStepperSpeeds(oids, factor);
     });
   };
 
-  const formatMemberSpeeds = (group) =>
-    group.members
-      .map((key) => `${labelForMemberKey(key, stepperObjects)} ${speedForMember(group, key)}`)
-      .join(' · ');
-
   return (
-    <div className={styles.groupsBlock}>
-      <div className={styles.groupsHeader}>
-        <p className={styles.listLabel}>Groups</p>
-        <button
-          type="button"
-          className={styles.linkBtn}
-          disabled={Boolean(draft) || memberOptions.length === 0}
-          onClick={beginCreate}
+    <BenchCard
+      title="Groups"
+      about="Steppers that start, stop, reverse and change speed together, each at its own speed. Kept in this browser."
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={Boolean(draft) || options.length === 0}
+          onClick={() => setDraft(emptyDraft())}
         >
-          + New group
-        </button>
-      </div>
-
-      {memberOptions.length === 0 && (
-        <p className={appStyles.muted}>Configure steppers on the board to build groups.</p>
+          <Plus /> New group
+        </Button>
+      }
+    >
+      {options.length === 0 && (
+        <p className="text-sm text-muted-foreground">Connect the board to list its steppers.</p>
       )}
 
       {draft && (
-        <div className={styles.groupEditor}>
-          <label className={styles.label} htmlFor="group-name">
-            Group name
+        <div className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-accent/40 p-4">
+          <label htmlFor="group-name" className="flex flex-col gap-1.5 text-sm font-medium">
+            Name
+            <Input
+              id="group-name"
+              value={draft.name}
+              placeholder="e.g. Feeders"
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            />
           </label>
-          <input
-            id="group-name"
-            className={styles.input}
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            placeholder="e.g. XY axes"
+          <p className="text-sm font-medium">Steppers and their speeds</p>
+          <MemberPicker
+            options={options}
+            chosen={draft.members}
+            onToggle={toggle}
+            values={Object.fromEntries(
+              options.map(({ key }) => [key, draft.speeds?.[key] ?? DEFAULT_STEPPER_SPEED]),
+            )}
+            onValue={(key, v) =>
+              setDraft((prev) => ({
+                ...prev,
+                speeds: { ...prev.speeds, [key]: clampStepperSpeed(v) },
+              }))
+            }
+            unit="steps/s"
+            min={1}
+            max={50000}
           />
-          <p className={styles.label}>Steppers and speeds</p>
-          <div className={styles.memberGrid}>
-            {memberOptions.map(({ key, label }) => {
-              const checked = draft.members.includes(key);
-              return (
-                <div key={key} className={styles.memberRow}>
-                  <label className={styles.memberCheck}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleMember(key)} />
-                    {label}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="50000"
-                    className={styles.memberSpeedInput}
-                    disabled={!checked}
-                    value={checked ? (draft.speeds?.[key] ?? DEFAULT_STEPPER_SPEED) : ''}
-                    onChange={(e) => setDraftMemberSpeed(key, Number(e.target.value))}
-                    aria-label={`${label} speed`}
-                  />
-                </div>
-              );
-            })}
-          </div>
-          <div className={styles.editorActions}>
-            <button type="button" className={appStyles.button} disabled={busy} onClick={saveDraft}>
+          <div className="flex gap-2">
+            <Button
+              disabled={busy || !draft.name.trim() || draft.members.length === 0}
+              onClick={save}
+            >
               Save group
-            </button>
-            <button type="button" className={appStyles.buttonSecondary} onClick={cancelDraft}>
+            </Button>
+            <Button variant="ghost" onClick={() => setDraft(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      {groups.length === 0 && !draft && memberOptions.length > 0 && (
-        <p className={appStyles.muted}>No groups yet. Create one to control steppers together.</p>
+      {groups.length === 0 && !draft && options.length > 0 && (
+        <p className="text-sm text-muted-foreground">No groups yet.</p>
       )}
-
-      <ul className={styles.groupList}>
+      <ul className="flex flex-col gap-3">
         {groups.map((group) => {
-          const oids = groupOids(group);
-          const available = oids.length;
-          const missing = group.members.length - available;
+          const oids = oidsForMembers(group.members, stepperObjects);
+          const missing = group.members.length - oids.length;
+          const anyRunning = oids.some((oid) => stepperJogState[oid]);
           return (
-            <li key={group.id} className={styles.groupCard}>
-              <div className={styles.groupCardHead}>
-                <span className={styles.groupName}>{group.name}</span>
-                <div className={styles.groupCardTools}>
-                  <button type="button" className={styles.linkBtn} onClick={() => beginEdit(group)}>
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.linkBtnDanger}
-                    onClick={() => deleteGroup(group.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-              <p className={styles.groupMembers}>{formatMemberSpeeds(group)}</p>
-              {missing > 0 && connected && (
-                <p className={styles.groupWarn}>{missing} member(s) not in current session</p>
-              )}
-              <div className={styles.groupActions}>
-                <button
-                  type="button"
-                  className={appStyles.button}
-                  disabled={busy || !connected || available === 0}
-                  onClick={() => handleGroupStart(group)}
+            <SavedItem
+              key={group.id}
+              name={group.name}
+              summary={group.members
+                .map((k) => `${labelForMemberKey(k, stepperObjects)} ${speedForMember(group, k)}`)
+                .join(' · ')}
+              notes={
+                missing > 0 && connected
+                  ? [`${missing} of its steppers aren’t in the connected config.`]
+                  : []
+              }
+              onEdit={() =>
+                setDraft({
+                  id: group.id,
+                  name: group.name,
+                  members: [...group.members],
+                  speeds: { ...(group.speeds || {}) },
+                })
+              }
+              onDelete={() => remove(group.id)}
+            >
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={busy || !connected || oids.length === 0}
+                  onClick={() =>
+                    onRun(() => startSteppersAtSpeeds(startPlanForGroup(group, stepperObjects)))
+                  }
                 >
                   Start
-                </button>
-                <button
-                  type="button"
-                  className={appStyles.buttonSecondary}
-                  disabled={busy || !connected || available === 0}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || !connected || oids.length === 0}
                   onClick={() => onRun(() => stopSteppers(oids))}
                 >
                   Stop
-                </button>
-                <button
-                  type="button"
-                  className={appStyles.buttonSecondary}
-                  disabled={busy || !connected || !groupHasRunning(group)}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || !connected || !anyRunning}
                   onClick={() => onRun(() => reverseSteppers(oids))}
                 >
                   Reverse
-                </button>
+                </Button>
               </div>
-              <div className={styles.groupSpeedRow}>
-                <button
-                  type="button"
-                  className={styles.speedBtn}
-                  disabled={busy || !connected || group.members.length === 0}
-                  onClick={() => handleGroupScale(group, SLOW_FACTOR)}
-                >
-                  Slower
-                  <span className={styles.speedHint}>×{SLOW_FACTOR}</span>
-                </button>
-                <button
-                  type="button"
-                  className={styles.speedBtn}
-                  disabled={busy || !connected || group.members.length === 0}
-                  onClick={() => handleGroupScale(group, FAST_FACTOR)}
-                >
-                  Faster
-                  <span className={styles.speedHint}>×{FAST_FACTOR}</span>
-                </button>
-              </div>
-            </li>
+              <ScaleButtons
+                lower="Slower"
+                higher="Faster"
+                lowFactor={SLOW_FACTOR}
+                highFactor={FAST_FACTOR}
+                disabled={busy || !connected || group.members.length === 0}
+                onScale={(f) => scale(group, f)}
+              />
+            </SavedItem>
           );
         })}
       </ul>
-    </div>
+    </BenchCard>
   );
-};
-
-export default StepperGroupsSection;
+}

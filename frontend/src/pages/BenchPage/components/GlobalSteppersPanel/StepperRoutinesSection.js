@@ -1,6 +1,11 @@
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { useMCUSession } from '../../../../context/MCUSessionContext';
+import Segmented from '@/components/Segmented/Segmented';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useMCUSession } from '@/context/MCUSessionContext';
 import {
   clampStepperSpeed,
   DEFAULT_STEPPER_SPEED,
@@ -14,12 +19,21 @@ import {
   oidsForRoutine,
   saveStepperRoutines,
   stepperMemberKey,
-} from '../../../../helpers/stepperRoutines';
+} from '@/helpers/stepperRoutines';
 
-import styles from './GlobalSteppersPanel.module.css';
-import appStyles from '../../../../styles/app.module.css';
+import { BenchCard, MemberPicker, SavedItem } from '../BenchUi';
 
-const StepperRoutinesSection = ({ connected, busy, onRun }) => {
+const DIRECTIONS = [
+  { value: true, label: 'Forward' },
+  { value: false, label: 'Back' },
+];
+
+/**
+ * Repeating move patterns in motor steps: each segment turns forward or back so many steps
+ * at a speed, and the routine loops until stopped. (Channels' routines, in rotor degrees,
+ * are under Machine › Channels.)
+ */
+export default function StepperRoutinesSection({ connected, busy, onRun, className }) {
   const {
     stepperObjects,
     stepperRoutineOids,
@@ -27,7 +41,6 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
     startStepperRoutineForMembers,
     stopSteppers,
   } = useMCUSession();
-
   const [routines, setRoutines] = useState(() => loadStepperRoutines());
   const [draft, setDraft] = useState(null);
 
@@ -35,7 +48,7 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
     saveStepperRoutines(routines);
   }, [routines]);
 
-  const memberOptions = useMemo(
+  const options = useMemo(
     () =>
       stepperObjects.map((obj) => ({
         key: stepperMemberKey(obj),
@@ -44,329 +57,266 @@ const StepperRoutinesSection = ({ connected, busy, onRun }) => {
     [stepperObjects],
   );
 
-  const beginCreate = () => {
-    setDraft({
-      id: '',
-      name: '',
-      members: memberOptions.length === 1 ? [memberOptions[0].key] : [],
-      segments: defaultSegments(),
+  const patchDraft = (fn) => setDraft((prev) => (prev ? fn(prev) : prev));
+  const updateSegment = (id, patch) =>
+    patchDraft((d) => ({
+      ...d,
+      segments: d.segments.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    }));
+  const moveSegment = (id, delta) =>
+    patchDraft((d) => {
+      const i = d.segments.findIndex((s) => s.id === id);
+      const j = i + delta;
+      if (i < 0 || j < 0 || j >= d.segments.length) return d;
+      const segments = [...d.segments];
+      const [item] = segments.splice(i, 1);
+      segments.splice(j, 0, item);
+      return { ...d, segments };
     });
-  };
 
-  const beginEdit = (routine) => {
-    setDraft({
-      ...routine,
-      segments: routine.segments.map((seg) => ({ ...seg })),
-    });
-  };
-
-  const cancelDraft = () => setDraft(null);
-
-  const toggleMember = (key) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      const members = prev.members.includes(key)
-        ? prev.members.filter((item) => item !== key)
-        : [...prev.members, key];
-      return { ...prev, members };
-    });
-  };
-
-  const updateSegment = (segId, patch) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        segments: prev.segments.map((seg) => (seg.id === segId ? { ...seg, ...patch } : seg)),
-      };
-    });
-  };
-
-  const addSegment = () => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        segments: [
-          ...prev.segments,
-          { id: newSegmentId(), forward: true, steps: 50, speedHz: DEFAULT_STEPPER_SPEED },
-        ],
-      };
-    });
-  };
-
-  const removeSegment = (segId) => {
-    setDraft((prev) => {
-      if (!prev || prev.segments.length <= 1) return prev;
-      return { ...prev, segments: prev.segments.filter((seg) => seg.id !== segId) };
-    });
-  };
-
-  const moveSegment = (segId, delta) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      const idx = prev.segments.findIndex((seg) => seg.id === segId);
-      if (idx < 0) return prev;
-      const nextIdx = idx + delta;
-      if (nextIdx < 0 || nextIdx >= prev.segments.length) return prev;
-      const segments = [...prev.segments];
-      const [item] = segments.splice(idx, 1);
-      segments.splice(nextIdx, 0, item);
-      return { ...prev, segments };
-    });
-  };
-
-  const saveDraft = () => {
-    if (!draft?.name.trim() || draft.members.length === 0 || draft.segments.length === 0) {
-      return;
-    }
+  const save = () => {
+    if (!draft?.name.trim() || draft.members.length === 0 || draft.segments.length === 0) return;
     const payload = {
       id: draft.id || newRoutineId(),
       name: draft.name.trim(),
       members: draft.members,
-      segments: draft.segments.map((seg) => ({
-        ...seg,
-        steps: Math.max(1, Math.round(seg.steps) || 1),
-        speedHz: clampStepperSpeed(seg.speedHz),
+      segments: draft.segments.map((s) => ({
+        ...s,
+        steps: Math.max(1, Math.round(s.steps) || 1),
+        speedHz: clampStepperSpeed(s.speedHz),
       })),
     };
-    setRoutines((prev) => {
-      const idx = prev.findIndex((item) => item.id === payload.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = payload;
-        return next;
-      }
-      return [...prev, payload];
-    });
+    setRoutines((prev) =>
+      prev.some((r) => r.id === payload.id)
+        ? prev.map((r) => (r.id === payload.id ? payload : r))
+        : [...prev, payload],
+    );
     setDraft(null);
   };
 
-  const deleteRoutine = (id) => {
-    setRoutines((prev) => prev.filter((item) => item.id !== id));
-    if (draft?.id === id) {
-      setDraft(null);
-    }
-  };
-
-  const routineHasRunning = (routine) => {
-    const oids = oidsForRoutine(routine, stepperObjects);
-    return oids.some((oid) => stepperRoutineOids[oid]);
-  };
-
-  const handleStart = (routine) => {
-    onRun(() => startStepperRoutineForMembers(routine));
-  };
-
-  const handleStop = (routine) => {
-    const oids = oidsForRoutine(routine, stepperObjects);
-    onRun(() => stopSteppers(oids));
+  const remove = (id) => {
+    setRoutines((prev) => prev.filter((r) => r.id !== id));
+    if (draft?.id === id) setDraft(null);
   };
 
   return (
-    <div className={styles.routinesBlock}>
-      <div className={styles.groupsHeader}>
-        <p className={styles.listLabel}>Routines</p>
-        <button
-          type="button"
-          className={styles.linkBtn}
-          disabled={Boolean(draft) || memberOptions.length === 0}
-          onClick={beginCreate}
+    <BenchCard
+      className={className}
+      title="Routines"
+      about="Repeating patterns in motor steps: each segment turns forward or back so many steps, and the routine loops until stopped. Kept in this browser."
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={Boolean(draft) || options.length === 0}
+          onClick={() =>
+            setDraft({
+              id: '',
+              name: '',
+              members: options.length === 1 ? [options[0].key] : [],
+              segments: defaultSegments(),
+            })
+          }
         >
-          + New routine
-        </button>
-      </div>
-
-      <p className={styles.routinesHint}>
-        Build repeating move patterns — each segment runs forward or backward for a set number of
-        steps, then loops forever until stopped.
-      </p>
-
-      {memberOptions.length === 0 && (
-        <p className={appStyles.muted}>Configure steppers on the board to build routines.</p>
+          <Plus /> New routine
+        </Button>
+      }
+    >
+      {options.length === 0 && (
+        <p className="text-sm text-muted-foreground">Connect the board to list its steppers.</p>
       )}
 
       {draft && (
-        <div className={styles.groupEditor}>
-          <label className={styles.label} htmlFor="routine-name">
-            Routine name
-          </label>
-          <input
-            id="routine-name"
-            className={styles.input}
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            placeholder="e.g. Scan pattern"
-          />
-
-          <p className={styles.label}>Steppers</p>
-          <div className={styles.memberGrid}>
-            {memberOptions.map(({ key, label }) => (
-              <label key={key} className={styles.memberCheck}>
-                <input
-                  type="checkbox"
-                  checked={draft.members.includes(key)}
-                  onChange={() => toggleMember(key)}
-                />
-                {label}
-              </label>
-            ))}
+        <div className="grid gap-4 rounded-lg border border-primary/40 bg-accent/40 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+          <div className="flex flex-col gap-3">
+            <label htmlFor="routine-name" className="flex flex-col gap-1.5 text-sm font-medium">
+              Name
+              <Input
+                id="routine-name"
+                value={draft.name}
+                placeholder="e.g. Shake back and forth"
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
+            </label>
+            <p className="text-sm font-medium">Steppers</p>
+            <MemberPicker
+              options={options}
+              chosen={draft.members}
+              onToggle={(key) =>
+                patchDraft((d) => ({
+                  ...d,
+                  members: d.members.includes(key)
+                    ? d.members.filter((k) => k !== key)
+                    : [...d.members, key],
+                }))
+              }
+            />
           </div>
-
-          <p className={styles.label}>Segments</p>
-          <ul className={styles.segmentList}>
-            {draft.segments.map((seg, index) => (
-              <li key={seg.id} className={styles.segmentRow}>
-                <span className={styles.segmentIndex}>{index + 1}</span>
-                <select
-                  className={styles.segmentSelect}
-                  value={seg.forward ? 'fwd' : 'back'}
-                  onChange={(e) => updateSegment(seg.id, { forward: e.target.value === 'fwd' })}
-                  aria-label={`Segment ${index + 1} direction`}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium">Segments, in order</p>
+            <ol className="flex flex-col gap-2">
+              {draft.segments.map((seg, i) => (
+                <li
+                  key={seg.id}
+                  className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2"
                 >
-                  <option value="fwd">Forward</option>
-                  <option value="back">Backward</option>
-                </select>
-                <input
-                  type="number"
-                  min="1"
-                  className={styles.segmentStepsInput}
-                  value={seg.steps}
-                  onChange={(e) => updateSegment(seg.id, { steps: Number(e.target.value) })}
-                  aria-label={`Segment ${index + 1} steps`}
-                />
-                <span className={styles.segmentUnit}>steps</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="50000"
-                  className={styles.segmentSpeedInput}
-                  value={seg.speedHz}
-                  onChange={(e) => updateSegment(seg.id, { speedHz: Number(e.target.value) })}
-                  aria-label={`Segment ${index + 1} speed`}
-                />
-                <span className={styles.segmentUnit}>steps/s</span>
-                <div className={styles.segmentTools}>
-                  <button
-                    type="button"
-                    className={styles.iconBtn}
-                    disabled={index === 0}
-                    onClick={() => moveSegment(seg.id, -1)}
-                    aria-label="Move up"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.iconBtn}
-                    disabled={index === draft.segments.length - 1}
-                    onClick={() => moveSegment(seg.id, 1)}
-                    aria-label="Move down"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.iconBtnDanger}
-                    disabled={draft.segments.length <= 1}
-                    onClick={() => removeSegment(seg.id)}
-                    aria-label="Remove segment"
-                  >
-                    ×
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <button type="button" className={styles.linkBtn} onClick={addSegment}>
-            + Add segment
-          </button>
-
-          <div className={styles.editorActions}>
-            <button type="button" className={appStyles.button} disabled={busy} onClick={saveDraft}>
-              Save routine
-            </button>
-            <button type="button" className={appStyles.buttonSecondary} onClick={cancelDraft}>
-              Cancel
-            </button>
+                  <span className="flex size-7 items-center justify-center rounded-full bg-muted font-mono text-xs">
+                    {i + 1}
+                  </span>
+                  <Segmented
+                    label={`Segment ${i + 1} direction`}
+                    value={seg.forward}
+                    options={DIRECTIONS}
+                    onChange={(forward) => updateSegment(seg.id, { forward })}
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    className="h-9 w-24 text-right font-mono"
+                    value={seg.steps}
+                    aria-label={`Segment ${i + 1} steps`}
+                    onChange={(e) => updateSegment(seg.id, { steps: Number(e.target.value) })}
+                  />
+                  <span className="text-xs text-muted-foreground">steps at</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50000}
+                    className="h-9 w-24 text-right font-mono"
+                    value={seg.speedHz}
+                    aria-label={`Segment ${i + 1} speed`}
+                    onChange={(e) => updateSegment(seg.id, { speedHz: Number(e.target.value) })}
+                  />
+                  <span className="text-xs text-muted-foreground">steps/s</span>
+                  <span className="ml-auto flex">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Move up"
+                      disabled={i === 0}
+                      onClick={() => moveSegment(seg.id, -1)}
+                    >
+                      <ArrowUp />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Move down"
+                      disabled={i === draft.segments.length - 1}
+                      onClick={() => moveSegment(seg.id, 1)}
+                    >
+                      <ArrowDown />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Remove segment"
+                      className="text-destructive"
+                      disabled={draft.segments.length <= 1}
+                      onClick={() =>
+                        patchDraft((d) => ({
+                          ...d,
+                          segments: d.segments.filter((s) => s.id !== seg.id),
+                        }))
+                      }
+                    >
+                      <Trash2 />
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  patchDraft((d) => ({
+                    ...d,
+                    segments: [
+                      ...d.segments,
+                      {
+                        id: newSegmentId(),
+                        forward: true,
+                        steps: 50,
+                        speedHz: DEFAULT_STEPPER_SPEED,
+                      },
+                    ],
+                  }))
+                }
+              >
+                <Plus /> Add segment
+              </Button>
+              <span className="flex-1" />
+              <Button
+                disabled={busy || !draft.name.trim() || draft.members.length === 0}
+                onClick={save}
+              >
+                Save routine
+              </Button>
+              <Button variant="ghost" onClick={() => setDraft(null)}>
+                Cancel
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
-      {routines.length === 0 && !draft && memberOptions.length > 0 && (
-        <p className={appStyles.muted}>
-          No routines yet. Create one to run repeating step patterns.
-        </p>
+      {routines.length === 0 && !draft && options.length > 0 && (
+        <p className="text-sm text-muted-foreground">No routines yet.</p>
       )}
-
-      <ul className={styles.groupList}>
+      <ul className="grid gap-3 lg:grid-cols-2">
         {routines.map((routine) => {
           const oids = oidsForRoutine(routine, stepperObjects);
-          const available = oids.length;
-          const missing = routine.members.length - available;
-          const running = routineHasRunning(routine);
-          // Messages from members whose routine stopped on its own (backend-reported).
+          const missing = routine.members.length - oids.length;
+          const running = oids.some((oid) => stepperRoutineOids[oid]);
+          // Members whose routine stopped on its own, as the backend reported.
           const failures = [
             ...new Set(oids.map((oid) => stepperRoutineErrors[oid]).filter(Boolean)),
           ];
           return (
-            <li key={routine.id} className={styles.groupCard}>
-              <div className={styles.groupCardHead}>
-                <span className={styles.groupName}>
-                  {routine.name}
-                  {running && <span className={styles.runningBadge}>Running</span>}
-                </span>
-                <div className={styles.groupCardTools}>
-                  <button
-                    type="button"
-                    className={styles.linkBtn}
-                    onClick={() => beginEdit(routine)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.linkBtnDanger}
-                    onClick={() => deleteRoutine(routine.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-              <p className={styles.groupMembers}>{formatRoutineMembers(routine, stepperObjects)}</p>
-              <p className={styles.routinePattern}>{formatRoutinePattern(routine)}</p>
-              {missing > 0 && connected && (
-                <p className={styles.groupWarn}>{missing} member(s) not in current session</p>
-              )}
-              {failures.map((msg) => (
-                <p key={msg} className={styles.groupWarn}>
-                  Stopped on its own: {msg}
-                </p>
-              ))}
-              <div className={styles.groupActions}>
-                <button
-                  type="button"
-                  className={appStyles.button}
-                  disabled={busy || !connected || available === 0 || running}
-                  onClick={() => handleStart(routine)}
+            <SavedItem
+              key={routine.id}
+              name={routine.name}
+              badge={running && <Badge variant="running">Running</Badge>}
+              summary={
+                <>
+                  {formatRoutineMembers(routine, stepperObjects)}
+                  <span className="block font-mono text-xs">{formatRoutinePattern(routine)}</span>
+                </>
+              }
+              notes={[
+                ...(missing > 0 && connected
+                  ? [`${missing} of its steppers aren’t in the connected config.`]
+                  : []),
+                ...failures.map((m) => `Stopped on its own: ${m}`),
+              ]}
+              onEdit={() =>
+                setDraft({ ...routine, segments: routine.segments.map((s) => ({ ...s })) })
+              }
+              onDelete={() => remove(routine.id)}
+            >
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={busy || !connected || oids.length === 0 || running}
+                  onClick={() => onRun(() => startStepperRoutineForMembers(routine))}
                 >
                   Run
-                </button>
-                <button
-                  type="button"
-                  className={appStyles.buttonSecondary}
-                  disabled={busy || !connected || available === 0 || !running}
-                  onClick={() => handleStop(routine)}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || !connected || !running}
+                  onClick={() => onRun(() => stopSteppers(oids))}
                 >
                   Stop
-                </button>
+                </Button>
               </div>
-            </li>
+            </SavedItem>
           );
         })}
       </ul>
-    </div>
+    </BenchCard>
   );
-};
-
-export default StepperRoutinesSection;
+}

@@ -10,12 +10,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-import BoardEditorPage from '../BoardEditorPage/BoardEditorPage';
 import { useBoardPageLogic } from './BoardPage.logic';
 import BoardDiagram from './components/BoardDiagram/BoardDiagram';
 import ConfigPart from './components/ConfigPart';
 import ConnectionPart from './components/ConnectionPart';
 import ConnectionStrip from './components/ConnectionStrip';
+import PictureEditor from './components/PictureEditor/PictureEditor';
 import SlotPanel from './components/SlotPanel/SlotPanel';
 
 const PARTS = ['connection', 'wiring', 'config', 'picture'];
@@ -23,9 +23,6 @@ const PARTS = ['connection', 'wiring', 'config', 'picture'];
 /**
  * Machine › Board: Connection, Wiring, Config file and Board picture
  * (/machine/board/<part>), on one config workspace so switching tabs keeps edits.
- *
- * The board diagram, its slot panel and the picture editor are the earlier components,
- * shown in light panels until they're restyled.
  */
 const BoardPage = () => {
   const { part = 'connection' } = useParams();
@@ -70,11 +67,7 @@ const BoardPage = () => {
         </div>
       )}
 
-      {part === 'picture' && (
-        <div className="legacy-page">
-          <BoardEditorPage />
-        </div>
-      )}
+      {part === 'picture' && <PictureEditor />}
 
       <Dialog
         open={Boolean(logic.pendingPort)}
@@ -119,7 +112,7 @@ function WiringPart({ logic, onOpenConfig }) {
           {config.error}
         </p>
       )}
-      <div className="legacy-page grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <BoardDiagram
           diagram={config.diagram}
           profileId="ramps14"

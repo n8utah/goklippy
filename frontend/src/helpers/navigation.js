@@ -143,6 +143,10 @@ export const NAV_GROUPS = [
         label: 'Motor bench',
         path: '/diagnose/bench',
         about: 'Run any stepper or servo by hand, in groups or routines',
+        parts: [
+          { id: 'steppers', label: 'Steppers' },
+          { id: 'servos', label: 'Servos' },
+        ],
       },
     ],
   },
