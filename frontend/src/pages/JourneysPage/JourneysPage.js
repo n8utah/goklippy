@@ -1,9 +1,8 @@
-import { reasonInfo, useJourneysPageLogic } from './JourneysPage.logic';
-import JourneyDetail from './components/JourneyDetail';
-import { sorterJourneyFileURL } from '../../helpers/api';
+import { sorterJourneyFileURL } from '@/helpers/api';
+import { cn } from '@/lib/utils';
 
-import styles from './JourneysPage.module.css';
-import appStyles from '../../styles/app.module.css';
+import JourneyDetail from './components/JourneyDetail';
+import { reasonInfo, useJourneysPageLogic } from './JourneysPage.logic';
 
 const topReasons = (reasons) =>
   Object.entries(reasons ?? {})
@@ -12,21 +11,25 @@ const topReasons = (reasons) =>
     .map(([r, n]) => `${reasonInfo(r).label.toLowerCase()} ${n}`)
     .join(', ');
 
+/**
+ * Diagnose › Piece journeys: every piece the cameras tracked, newest first, with each frame
+ * of it, the ones kept as good pictures and why the rest weren't. For tuning the picture
+ * rules (System › Settings › Pictures). Updates live while sorting.
+ */
 const JourneysPage = () => {
   const logic = useJourneysPageLogic();
   return (
-    <section className={appStyles.card}>
-      <h2 className={styles.title}>Piece journeys</h2>
-      <p className={appStyles.muted}>
-        Every piece the cameras tracked, newest first: each frame of it, which made good pictures
-        for identifying it, and why the rest didn&apos;t. For tuning the picture rules under System
-        › Settings › Pictures. Updates live while sorting.
+    <div className="ds flex flex-col gap-4">
+      <p className="max-w-[80ch] text-sm text-muted-foreground">
+        Every piece the cameras tracked, newest first: its frames, the ones kept as good pictures
+        for identifying it, and why the rest weren’t. Tune the rules under System › Settings ›
+        Pictures. Updates live while sorting.
       </p>
-      {logic.error && <p className={styles.alert}>{logic.error}</p>}
-      <div className={styles.layout}>
-        <ul className={styles.list}>
+      {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
+      <div className="grid items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <ul className="flex flex-col gap-1.5 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
           {logic.list.length === 0 && (
-            <li className={styles.hint}>
+            <li className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
               No pieces tracked yet. They appear here as the cameras see them.
             </li>
           )}
@@ -34,28 +37,36 @@ const JourneysPage = () => {
             <li key={j.id}>
               <button
                 type="button"
-                className={j.id === logic.selectedId ? styles.rowOn : styles.row}
                 onClick={() => logic.select(j.id)}
+                aria-current={j.id === logic.selectedId ? 'true' : undefined}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-lg border bg-card p-2 text-left transition-colors hover:border-border-strong',
+                  j.id === logic.selectedId ? 'border-primary' : 'border-border',
+                )}
               >
                 {j.thumb ? (
                   <img
-                    className={styles.rowThumb}
                     src={sorterJourneyFileURL(j.id, j.thumb)}
                     alt=""
+                    className="size-14 shrink-0 rounded-md bg-media object-cover"
                   />
                 ) : (
-                  <span className={styles.rowThumbEmpty}>none kept</span>
+                  <span className="flex size-14 shrink-0 items-center justify-center rounded-md bg-muted text-center text-[10px] text-muted-foreground">
+                    none kept
+                  </span>
                 )}
-                <span className={styles.rowText}>
-                  <strong>
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-medium">
                     {(j.channels ?? []).map((c) => c.toUpperCase()).join(' → ')} ·{' '}
                     {new Date(j.started).toLocaleTimeString()}
-                  </strong>
-                  <span className={styles.hint}>
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
                     {j.kept} kept of {j.seen} · {j.done ? j.end_reason : 'riding'}
                   </span>
                   {topReasons(j.reasons) && (
-                    <span className={styles.hint}>{topReasons(j.reasons)}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {topReasons(j.reasons)}
+                    </span>
                   )}
                 </span>
               </button>
@@ -64,7 +75,7 @@ const JourneysPage = () => {
         </ul>
         <JourneyDetail logic={logic} />
       </div>
-    </section>
+    </div>
   );
 };
 

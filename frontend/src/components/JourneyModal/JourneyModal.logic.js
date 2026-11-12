@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
-import { getSorterPiece } from '@/helpers/api';
+import { getSorterPiece, reviewSorterPiece } from '@/helpers/api';
 
 /** Opens a piece's journey: useJourneyModal().open(pieceId). */
 export const JourneyModalContext = createContext({ open: () => {} });
@@ -39,7 +39,10 @@ export function usePieceRecord(pieceId) {
     };
   }, [pieceId]);
 
-  return { piece: piece?.id === pieceId ? piece : null, error };
+  /** Saves a person's review; the piece comes back with it. */
+  const review = async (r) => setPiece(await reviewSorterPiece(pieceId, r));
+
+  return { piece: piece?.id === pieceId ? piece : null, error, review };
 }
 
 /** The piece's stages so far, in order, each { id, title, at, text, done }. */

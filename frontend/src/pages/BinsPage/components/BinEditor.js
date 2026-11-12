@@ -1,76 +1,94 @@
 import { useMemo, useState } from 'react';
 
-import styles from '../BinsPage.module.css';
-import appStyles from '../../../styles/app.module.css';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 /**
- * Chooses a bin's categories. A category already in another bin moves here when
- * saved. The parent remounts this (key) for each bin, so the draft starts fresh.
+ * Chooses a bin's categories. A category already in another bin moves here when saved.
+ * The parent remounts it (key) for each bin, so the draft starts fresh.
  */
-const BinEditor = ({ bin, layer, categories, binOf, onSave, onPoint, onEmpty, onClose }) => {
+export default function BinEditor({ bin, layer, categories, binOf, onSave, onPoint, onEmpty }) {
   const [chosen, setChosen] = useState(() => bin.categories.map((c) => c.id));
   const [filter, setFilter] = useState('');
 
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    return q ? categories.filter((c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) : categories;
+    return q
+      ? categories.filter((c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
+      : categories;
   }, [categories, filter]);
 
-  const toggle = (id) => setChosen((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  const toggle = (id) =>
+    setChosen((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
 
   return (
-    <div className={styles.editor}>
-      <div className={styles.editorHeader}>
-        <h3 className={styles.panelTitle}>
-          Layer {layer}, bin {bin.bin}{' '}
-          <span className={styles.muted}>
-            (section {bin.section}, bin {bin.in_section} of it, {bin.angle.toFixed(1)}°)
-          </span>
-        </h3>
-        <button type="button" className={appStyles.buttonSecondary} onClick={onClose}>
-          Close
-        </button>
-      </div>
-      {!bin.reachable && <p className={styles.alert}>The chute can&apos;t reach this bin, so it gets no pieces.</p>}
-      <p className={styles.muted}>
-        {bin.count} piece{bin.count === 1 ? '' : 's'} since it was last emptied{bin.full ? ' — full, so it takes no more' : ''}.
-      </p>
+    <div className="flex h-full flex-col gap-4">
+      <SheetHeader className="p-0">
+        <SheetTitle className="font-display text-xl">
+          Layer {layer}, bin {bin.bin}
+        </SheetTitle>
+        <SheetDescription>
+          Section {bin.section}, bin {bin.in_section} of it, at {bin.angle.toFixed(1)}°. {bin.count}{' '}
+          piece{bin.count === 1 ? '' : 's'} since it was last emptied
+          {bin.full ? '; full, so it takes no more' : ''}.
+        </SheetDescription>
+      </SheetHeader>
+      {!bin.reachable && (
+        <p className="rounded-md bg-warning-bg px-3 py-2 text-sm text-warning">
+          The chute can’t reach this bin, so it gets no pieces.
+        </p>
+      )}
 
-      <input className={styles.search} placeholder="Find a category" value={filter} onChange={(e) => setFilter(e.target.value)} />
-      <ul className={styles.categoryList}>
-        {shown.map((c) => {
-          const elsewhere = binOf[c.id]?.filter((b) => !(b.layer === layer && b.bin === bin.bin));
-          return (
-            <li key={c.id}>
-              <label className={styles.categoryItem}>
-                <input type="checkbox" checked={chosen.includes(c.id)} onChange={() => toggle(c.id)} />
-                <span>{c.name}</span>
-                {elsewhere?.length > 0 && (
-                  <span className={styles.muted}>now in {elsewhere.map((b) => `L${b.layer} bin ${b.bin}`).join(', ')}</span>
-                )}
-              </label>
-            </li>
-          );
-        })}
-        {shown.length === 0 && <li className={styles.muted}>No categories match.</li>}
-      </ul>
-
-      <div className={styles.buttonRow}>
-        <button type="button" className={appStyles.button} onClick={() => onSave(chosen)}>
-          Save
-        </button>
-        <button type="button" className={appStyles.buttonSecondary} onClick={() => onSave([])}>
-          Unassign
-        </button>
-        <button type="button" className={appStyles.buttonSecondary} disabled={!bin.reachable} onClick={onPoint}>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" disabled={!bin.reachable} onClick={onPoint}>
           Point the chute here
-        </button>
-        <button type="button" className={appStyles.buttonSecondary} disabled={bin.count === 0} onClick={onEmpty}>
+        </Button>
+        <Button variant="outline" size="sm" disabled={bin.count === 0} onClick={onEmpty}>
           I emptied it
-        </button>
+        </Button>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        <label htmlFor="bin-filter" className="text-sm font-medium">
+          Categories it takes ({chosen.length})
+        </label>
+        <Input
+          id="bin-filter"
+          placeholder="Find a category"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <ul className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
+          {shown.map((c) => {
+            const elsewhere = binOf[c.id]?.filter((b) => !(b.layer === layer && b.bin === bin.bin));
+            return (
+              <li key={c.id} className="border-b border-border last:border-0">
+                <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-accent">
+                  <Checkbox checked={chosen.includes(c.id)} onCheckedChange={() => toggle(c.id)} />
+                  <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                  {elsewhere?.length > 0 && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      now in {elsewhere.map((b) => `L${b.layer} bin ${b.bin}`).join(', ')}
+                    </span>
+                  )}
+                </label>
+              </li>
+            );
+          })}
+          {shown.length === 0 && (
+            <li className="px-3 py-2 text-sm text-muted-foreground">No categories match.</li>
+          )}
+        </ul>
+      </div>
+
+      <div className="flex gap-2 border-t border-border pt-4">
+        <Button onClick={() => onSave(chosen)}>Save</Button>
+        <Button variant="outline" onClick={() => onSave([])}>
+          Unassign
+        </Button>
       </div>
     </div>
   );
-};
-
-export default BinEditor;
+}

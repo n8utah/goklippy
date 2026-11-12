@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import { getSorterCameraPreviewStatus, sorterCameraPreviewURL } from '../../../helpers/api';
-
-import styles from '../CamerasPage.module.css';
+import { getSorterCameraPreviewStatus, sorterCameraPreviewURL } from '@/helpers/api';
 
 const STATUS_POLL_MS = 2000;
 
 /** One camera's live picture, by device id, with how its capture is doing. */
-const DevicePreview = ({ deviceId }) => {
+export default function DevicePreview({ deviceId }) {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0); // remounts the stream after a failure
@@ -21,9 +19,7 @@ const DevicePreview = ({ deviceId }) => {
           setStatus(data.camera);
           setError('');
         },
-        (err) => {
-          if (!cancelled) setError(err.message);
-        },
+        (err) => !cancelled && setError(err.message),
       );
     poll();
     const timer = setInterval(poll, STATUS_POLL_MS);
@@ -33,27 +29,24 @@ const DevicePreview = ({ deviceId }) => {
     };
   }, [deviceId]);
 
-  const cam = status;
   return (
-    <div className={styles.preview}>
+    <div className="flex flex-col gap-1">
       <img
         key={attempt}
-        className={styles.previewImg}
+        className="aspect-[4/3] w-full rounded-lg bg-media object-contain"
         src={sorterCameraPreviewURL(deviceId)}
         alt="Live picture"
         onError={() => setTimeout(() => setAttempt((n) => n + 1), STATUS_POLL_MS)}
       />
-      <p className={styles.hint}>
+      <p className="text-xs text-muted-foreground">
         {error
           ? error
-          : cam?.running
-            ? `Live · ${cam.fps ? cam.fps.toFixed(1) : '…'} fps`
-            : cam?.error
-              ? `Not running: ${cam.error}`
+          : status?.running
+            ? `Live · ${status.fps ? status.fps.toFixed(1) : '…'} fps`
+            : status?.error
+              ? `Not running: ${status.error}`
               : 'Starting the camera…'}
       </p>
     </div>
   );
-};
-
-export default DevicePreview;
+}

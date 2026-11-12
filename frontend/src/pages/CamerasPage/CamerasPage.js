@@ -1,3 +1,18 @@
+import { Check, Circle, CircleHelp } from 'lucide-react';
+import { Navigate, useNavigate, useParams } from 'react-router';
+
+import CameraView from '@/components/CameraView/CameraView';
+import NumberField from '@/components/NumberField/NumberField';
+import SettingField from '@/components/SettingField/SettingField';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
 import {
   CAMERA_CHANNELS,
   CAMERA_SIZES,
@@ -7,161 +22,141 @@ import {
   useCamerasPageLogic,
 } from './CamerasPage.logic';
 import CameraSetup from './components/CameraSetup';
-import CameraView from '../../components/CameraView/CameraView';
 
-import styles from './CamerasPage.module.css';
-import appStyles from '../../styles/app.module.css';
+const PARTS = ['setup', ...CAMERA_CHANNELS];
+const NONE = '__none__';
+const MISSING = '__missing__';
 
-function Num({ label, value, onChange, step = 1, min }) {
+function Panel({ title, children }) {
   return (
-    <label className={styles.field}>
-      <span className={styles.fieldLabel}>{label}</span>
-      <input
-        type="number"
-        step={step}
-        min={min}
-        value={value}
-        onChange={(e) => {
-          if (e.target.value !== '') onChange(Number(e.target.value));
-        }}
-      />
-    </label>
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+      <h2 className="font-display text-lg font-semibold">{title}</h2>
+      {children}
+    </section>
   );
 }
 
 function ZoneEditor({ zones, onField }) {
+  const field = (label, path, value, min) => (
+    <NumberField
+      key={path.join('.')}
+      id={`zone-${path.join('-')}`}
+      label={label}
+      value={value}
+      min={min}
+      inputClassName="w-24"
+      onChange={(v) => onField(path, v)}
+    />
+  );
   return (
-    <div className={styles.zoneGrid}>
-      <fieldset className={styles.group}>
-        <legend>Ring (pixels)</legend>
-        <Num
-          label="Center x"
-          value={zones.ring.center.x}
-          onChange={(v) => onField(['ring', 'center', 'x'], v)}
-        />
-        <Num
-          label="Center y"
-          value={zones.ring.center.y}
-          onChange={(v) => onField(['ring', 'center', 'y'], v)}
-        />
-        <Num
-          label="Inner radius"
-          value={zones.ring.inner_radius}
-          min={0}
-          onChange={(v) => onField(['ring', 'inner_radius'], v)}
-        />
-        <Num
-          label="Outer radius"
-          value={zones.ring.outer_radius}
-          min={1}
-          onChange={(v) => onField(['ring', 'outer_radius'], v)}
-        />
-        <Num
-          label="Exit radius"
-          value={zones.ring.exit_radius}
-          min={1}
-          onChange={(v) => onField(['ring', 'exit_radius'], v)}
-        />
+    <div className="flex flex-col gap-4">
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium text-muted-foreground">Ring, in pixels</legend>
+        <div className="flex flex-wrap gap-3">
+          {field('Center x', ['ring', 'center', 'x'], zones.ring.center.x)}
+          {field('Center y', ['ring', 'center', 'y'], zones.ring.center.y)}
+          {field('Inner radius', ['ring', 'inner_radius'], zones.ring.inner_radius, 0)}
+          {field('Outer radius', ['ring', 'outer_radius'], zones.ring.outer_radius, 1)}
+          {field('Exit radius', ['ring', 'exit_radius'], zones.ring.exit_radius, 1)}
+        </div>
       </fieldset>
-      <fieldset className={styles.group}>
-        <legend>Zones (degrees, 0° right, clockwise)</legend>
-        <Num
-          label="Drop from"
-          value={zones.drop.start}
-          onChange={(v) => onField(['drop', 'start'], v)}
-        />
-        <Num label="Drop to" value={zones.drop.end} onChange={(v) => onField(['drop', 'end'], v)} />
-        <Num
-          label="Exit from"
-          value={zones.exit.start}
-          onChange={(v) => onField(['exit', 'start'], v)}
-        />
-        <Num label="Exit to" value={zones.exit.end} onChange={(v) => onField(['exit', 'end'], v)} />
-        <Num
-          label="Precise width"
-          value={zones.precise_width}
-          min={0}
-          onChange={(v) => onField(['precise_width'], v)}
-        />
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium text-muted-foreground">
+          Zones, in degrees (0° right, clockwise)
+        </legend>
+        <div className="flex flex-wrap gap-3">
+          {field('Drop from', ['drop', 'start'], zones.drop.start)}
+          {field('Drop to', ['drop', 'end'], zones.drop.end)}
+          {field('Exit from', ['exit', 'start'], zones.exit.start)}
+          {field('Exit to', ['exit', 'end'], zones.exit.end)}
+          {field('Precise width', ['precise_width'], zones.precise_width, 0)}
+        </div>
       </fieldset>
     </div>
   );
 }
 
+/**
+ * Machine › Cameras: Setup (which camera watches which channel) and a tab per channel
+ * (/machine/cameras/<c2|c3|c4>) to set up its picture: ring and zones, and the empty
+ * channel that pieces are found against.
+ */
 const CamerasPage = () => {
-  const logic = useCamerasPageLogic();
+  const { part = 'setup' } = useParams();
+  const navigate = useNavigate();
+  const logic = useCamerasPageLogic(part, (v) => navigate(`/machine/cameras/${v}`));
   const { cams, channel, zones, chStatus, devices } = logic;
+
+  if (!PARTS.includes(part)) return <Navigate to="/machine/cameras" replace />;
+
   const device = cams.devices?.[channel] ?? '';
   const known =
     devices.list.some((d) => d.id === device) || device === TEST_DEVICE || device === '';
+  const hasPicture = Boolean(device) || logic.simulated;
 
   return (
-    <section className={appStyles.card}>
-      <h2 className={styles.title}>Cameras</h2>
-      <p className={appStyles.muted}>
-        One camera over each of C2, C3 and C4. Choose which camera watches which channel under
-        Setup, then on each channel&apos;s tab draw its ring and zones over its picture and capture
-        the channel empty: pieces are found as what differs from that picture.
-        {logic.simulated &&
-          ' The machine is simulated, so the channel pictures are drawn and cameras can’t be previewed.'}
-      </p>
+    <div className="ds flex flex-col gap-4">
+      {logic.simulated && (
+        <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          The machine is simulated, so channel pictures are drawn and cameras can’t be previewed.
+        </p>
+      )}
+      {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
+      {logic.notice && (
+        <p className="rounded-xl border border-running/40 bg-running-bg px-4 py-3 text-sm text-running-text">
+          {logic.notice}
+        </p>
+      )}
 
-      <div className={styles.tabs}>
-        <button
-          type="button"
-          className={logic.view === 'setup' ? styles.tabActive : styles.tab}
-          onClick={() => logic.setView('setup')}
-        >
-          Setup
-        </button>
-        {CAMERA_CHANNELS.map((ch) => (
-          <button
-            key={ch}
-            type="button"
-            className={logic.view === ch ? styles.tabActive : styles.tab}
-            onClick={() => logic.setView(ch)}
-          >
-            {CHANNEL_LABELS[ch]}
-          </button>
-        ))}
-      </div>
-
-      {logic.error && <p className={styles.alert}>{logic.error}</p>}
-      {logic.notice && <p className={styles.notice}>{logic.notice}</p>}
-
-      {logic.view === 'setup' ? (
+      {part === 'setup' ? (
         <CameraSetup logic={logic} />
       ) : (
         <>
-          <ol className={styles.steps}>
-            {logic.setupSteps.map((s) => (
-              <li key={s.label} className={s.done ? styles.stepDone : styles.step}>
-                <span className={styles.stepMark}>
-                  {s.done ? '✓' : s.done === null ? '?' : '○'}
-                </span>
-                {s.label}
-                {s.note && <span className={styles.hint}> ({s.note})</span>}
-              </li>
-            ))}
-          </ol>
-          <div className={styles.layout}>
-            <div className={styles.viewCol}>
-              {device || logic.simulated ? (
-                <CameraView
-                  key={`${channel}-${device}`}
-                  channel={channel}
-                  zonesOverride={zones}
-                  onPick={zones ? logic.pickCenter : undefined}
-                />
+          <section className="rounded-xl border border-border bg-card px-5 py-4">
+            <h2 className="mb-2 font-display text-lg font-semibold">
+              Setting up {CHANNEL_LABELS[channel]}
+            </h2>
+            <ol className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+              {logic.setupSteps.map((s) => (
+                <li key={s.label} className="flex items-start gap-2 text-sm">
+                  {s.done ? (
+                    <Check className="mt-0.5 size-4 shrink-0 text-running" aria-label="Done" />
+                  ) : s.done === null ? (
+                    <CircleHelp className="mt-0.5 size-4 shrink-0 text-idle" aria-label="Unknown" />
+                  ) : (
+                    <Circle className="mt-0.5 size-4 shrink-0 text-idle" aria-label="To do" />
+                  )}
+                  <span>
+                    {s.label}
+                    {s.note && <span className="text-muted-foreground"> ({s.note})</span>}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+            <div className="flex flex-col gap-2 xl:sticky xl:top-20">
+              {hasPicture ? (
+                <div className="overflow-hidden rounded-xl bg-media">
+                  <CameraView
+                    key={`${channel}-${device}`}
+                    channel={channel}
+                    zonesOverride={zones}
+                    onPick={zones ? logic.pickCenter : undefined}
+                  />
+                </div>
               ) : (
-                <div className={styles.placeholder}>Pick a camera for this channel.</div>
+                <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-muted text-sm text-muted-foreground">
+                  Pick a camera for this channel.
+                </div>
               )}
-              <p className={styles.hint}>
+              <p className="text-xs text-muted-foreground">
                 {zones ? 'Click the picture to put the ring’s center there. ' : ''}
                 Blue: drop zone · magenta: precise · orange: exit · green boxes: pieces found.
               </p>
               {chStatus && (
-                <p className={styles.status}>
+                <p className="text-sm">
                   {chStatus.camera?.running
                     ? `Running · ${chStatus.frame_w}×${chStatus.frame_h} · ${chStatus.camera.fps.toFixed(1)} fps`
                     : chStatus.camera?.error
@@ -178,180 +173,131 @@ const CamerasPage = () => {
               )}
             </div>
 
-            <div className={styles.side}>
-              <div className={styles.panel}>
-                <h3 className={styles.panelTitle}>Camera</h3>
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Device</span>
-                  <select
-                    value={known ? device : '__custom'}
-                    onChange={(e) =>
-                      logic.setDevice(e.target.value === '__custom' ? device : e.target.value)
-                    }
-                  >
-                    <option value="">None</option>
+            <div className="flex flex-col gap-4">
+              <Panel title="Camera">
+                <Select
+                  value={!known ? MISSING : device || NONE}
+                  onValueChange={(v) => v !== MISSING && logic.setDevice(v === NONE ? '' : v)}
+                >
+                  <SelectTrigger className="w-full" aria-label="Camera for this channel">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>None</SelectItem>
                     {devices.list.map((d) => (
-                      <option key={d.id} value={d.id}>
+                      <SelectItem key={d.id} value={d.id}>
                         {deviceLabel(d)}
-                      </option>
+                      </SelectItem>
                     ))}
-                    <option value={TEST_DEVICE}>ffmpeg test picture</option>
+                    <SelectItem value={TEST_DEVICE}>ffmpeg test picture</SelectItem>
                     {!known && (
-                      <option value="__custom">
+                      <SelectItem value={MISSING}>
                         {cams.deviceNames?.[channel] || device} (not found)
-                      </option>
+                      </SelectItem>
                     )}
-                  </select>
-                </label>
-                <div className={styles.buttonRow}>
-                  <button
-                    type="button"
-                    className={appStyles.buttonSecondary}
-                    disabled={devices.loading}
-                    onClick={logic.findDevices}
-                  >
-                    {devices.loading ? 'Looking…' : 'Find cameras'}
-                  </button>
-                  <button
-                    type="button"
-                    className={appStyles.button}
-                    disabled={!device && !logic.simulated}
-                    onClick={logic.captureBackground}
-                  >
-                    Capture empty channel
-                  </button>
+                  </SelectContent>
+                </Select>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" disabled={devices.loading} onClick={logic.findDevices}>
+                    {devices.loading ? 'Looking…' : 'Look for cameras'}
+                  </Button>
+                  <Button disabled={!hasPicture} onClick={logic.captureBackground}>
+                    Capture the empty channel
+                  </Button>
                 </div>
-                {devices.error && <p className={styles.hint}>{devices.error}</p>}
-              </div>
+                {devices.error && <p className="text-sm text-muted-foreground">{devices.error}</p>}
+              </Panel>
 
-              <div className={styles.panel}>
-                <h3 className={styles.panelTitle}>Empty all the way round</h3>
-                <p className={styles.hint}>
-                  For a rotor with a pattern on it (the cone&apos;s facets): turns the channel
-                  across one section ({logic.roundPeriod.toFixed(0)}°, after which the rotor looks
-                  the same again), capturing it empty every few degrees, so its pattern turning
-                  isn&apos;t taken for pieces. Clear the channel first. It replaces the single
-                  picture above, and that one replaces it.
+              <Panel title="Empty all the way round">
+                <p className="text-sm text-muted-foreground">
+                  For a rotor with a pattern (the cone’s facets): turns the channel across one
+                  section ({logic.roundPeriod.toFixed(0)}°, after which it looks the same again),
+                  capturing it empty every few degrees, so the pattern turning isn’t taken for
+                  pieces. Clear the channel first. It replaces the single picture, and the single
+                  picture replaces it.
                 </p>
-                <div className={styles.buttonRow}>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>Every (°)</span>
-                    <input
-                      type="number"
-                      min="0.5"
-                      max="30"
-                      step="0.5"
-                      value={logic.roundStep}
-                      disabled={Boolean(logic.roundJob)}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        if (v >= 0.5 && v <= 30) logic.setRoundStep(v);
-                      }}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className={appStyles.button}
+                <div className="flex flex-wrap items-end gap-3">
+                  <NumberField
+                    id="round-step"
+                    label="Every"
+                    value={logic.roundStep}
+                    min={0.5}
+                    max={30}
+                    step={0.5}
+                    unit="°"
+                    disabled={Boolean(logic.roundJob)}
+                    onChange={logic.setRoundStep}
+                  />
+                  <Button
                     disabled={!device || logic.simulated || Boolean(logic.roundJob)}
                     onClick={logic.captureRound}
                   >
-                    Capture empty across a section
-                  </button>
+                    Capture across a section
+                  </Button>
                 </div>
-                <p className={styles.hint}>
+                <p className="text-sm text-muted-foreground">
                   {logic.roundJob
                     ? `${logic.roundJob.detail} (${logic.roundJob.step} of ${logic.roundJob.total})`
                     : `${Math.max(1, Math.round(logic.roundPeriod / logic.roundStep))} pictures, about ${Math.ceil((logic.roundPeriod / logic.roundStep) * 0.8)} s.`}
                 </p>
-              </div>
+              </Panel>
 
-              <div className={styles.panel}>
-                <h3 className={styles.panelTitle}>Zones</h3>
-                <div className={styles.buttonRow}>
-                  <button
-                    type="button"
-                    className={appStyles.button}
-                    disabled={logic.measuring || (!device && !logic.simulated)}
-                    onClick={logic.measureRing}
-                  >
-                    {logic.measuring ? 'Measuring…' : 'Measure ring from the picture'}
-                  </button>
+              <Panel title="Ring and zones">
+                <div className="flex flex-wrap gap-2">
+                  <Button disabled={logic.measuring || !hasPicture} onClick={logic.measureRing}>
+                    {logic.measuring ? 'Measuring…' : 'Measure the ring from the picture'}
+                  </Button>
                   {!zones && (
-                    <button
-                      type="button"
-                      className={appStyles.buttonSecondary}
-                      onClick={logic.startZones}
-                    >
+                    <Button variant="outline" onClick={logic.startZones}>
                       Draw by hand
-                    </button>
+                    </Button>
                   )}
                 </div>
-                <p className={styles.hint}>
-                  Finds the bowl&apos;s rim and the hole in its middle, and sets the ring between
-                  them. It keeps the drop and exit angles; set those by hand.
+                <p className="text-sm text-muted-foreground">
+                  Finds the bowl’s rim and the hole in its middle and sets the ring between them. It
+                  keeps the drop and exit angles; set those by hand.
                 </p>
                 {zones && <ZoneEditor zones={zones} onField={logic.setZoneField} />}
-              </div>
+              </Panel>
 
-              <div className={styles.panel}>
-                <h3 className={styles.panelTitle}>All cameras</h3>
-                <div className={styles.inline}>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>Size</span>
-                    <select
-                      value={`${cams.width}x${cams.height}`}
-                      onChange={(e) => {
-                        const [width, height] = e.target.value.split('x').map(Number);
-                        logic.setCameras({ width, height });
-                      }}
-                    >
+              <Panel title="Every camera">
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium">Picture size</span>
+                  <Select
+                    value={`${cams.width}x${cams.height}`}
+                    onValueChange={(v) => {
+                      const [width, height] = v.split('x').map(Number);
+                      logic.setCameras({ width, height });
+                    }}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
                       {CAMERA_SIZES.map(([w, h]) => (
-                        <option key={`${w}x${h}`} value={`${w}x${h}`}>
+                        <SelectItem key={`${w}x${h}`} value={`${w}x${h}`}>
                           {w}×{h}
-                        </option>
+                        </SelectItem>
                       ))}
                       {!CAMERA_SIZES.some(([w, h]) => w === cams.width && h === cams.height) && (
-                        <option value={`${cams.width}x${cams.height}`}>
+                        <SelectItem value={`${cams.width}x${cams.height}`}>
                           {cams.width}×{cams.height}
-                        </option>
+                        </SelectItem>
                       )}
-                    </select>
-                  </label>
-                  <Num
-                    label="FPS"
-                    value={cams.fps}
-                    min={1}
-                    onChange={(v) => logic.setCameras({ fps: v })}
-                  />
-                </div>
-                <div className={styles.inline}>
-                  <Num
-                    label="Sensitivity (0 = 90)"
-                    value={cams.threshold}
-                    min={0}
-                    onChange={(v) => logic.setCameras({ threshold: v })}
-                  />
-                  <Num
-                    label="Smallest piece px (0 = scaled)"
-                    value={cams.minArea}
-                    min={0}
-                    onChange={(v) => logic.setCameras({ minArea: v })}
-                  />
-                </div>
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>ffmpeg (empty: the one on PATH)</span>
-                  <input
-                    value={cams.ffmpeg}
-                    onChange={(e) => logic.setCameras({ ffmpeg: e.target.value })}
-                    placeholder="C:\ffmpeg\bin\ffmpeg.exe"
-                  />
+                    </SelectContent>
+                  </Select>
                 </label>
-              </div>
+                <div className="divide-y divide-border border-t border-border">
+                  <SettingField settingKey="cameras.fps" />
+                  <SettingField settingKey="cameras.threshold" />
+                  <SettingField settingKey="cameras.minArea" />
+                </div>
+              </Panel>
             </div>
           </div>
         </>
       )}
-    </section>
+    </div>
   );
 };
 

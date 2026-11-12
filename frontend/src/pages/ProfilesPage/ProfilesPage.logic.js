@@ -8,9 +8,21 @@ import {
 } from '../../helpers/api';
 
 export const ACTIVATION_MODES = [
-  { mode: 'keep', label: 'Keep its bins', hint: 'The bins it had last time it was active (none for a new profile).' },
-  { mode: 'reset', label: 'Reset the bins', hint: 'Every bin starts unassigned; categories get bins as pieces arrive.' },
-  { mode: 'preassign', label: 'Pre-assign from the rules', hint: 'The first rule gets layer 1 bin 1, the next rule the next bin, and so on.' },
+  {
+    mode: 'keep',
+    label: 'Keep its bins',
+    hint: 'The bins it had last time it was active (none for a new profile).',
+  },
+  {
+    mode: 'reset',
+    label: 'Reset the bins',
+    hint: 'Every bin starts unassigned; categories get bins as pieces arrive.',
+  },
+  {
+    mode: 'preassign',
+    label: 'Pre-assign from the rules',
+    hint: 'The first rule gets layer 1 bin 1, the next rule the next bin, and so on.',
+  },
 ];
 
 export function useProfilesPageLogic() {
@@ -63,9 +75,13 @@ export function useProfilesPageLogic() {
     });
 
   const activate = (profile, mode) =>
-    run(() => activateSortingProfile(profile.id, mode), `“${profile.name}” is now the active profile.`);
+    run(
+      () => activateSortingProfile(profile.id, mode),
+      `“${profile.name}” is now the active profile.`,
+    );
 
-  const remove = (profile) => run(() => deleteSortingProfile(profile.id), `Deleted “${profile.name}”.`);
+  const remove = (profile) =>
+    run(() => deleteSortingProfile(profile.id), `Deleted “${profile.name}”.`);
 
   return { profiles, loading, busy, error, notice, upload, activate, remove };
 }

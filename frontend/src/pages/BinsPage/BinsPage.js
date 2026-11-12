@@ -1,58 +1,195 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Link, Navigate, useParams } from 'react-router';
+
+import NumberField from '@/components/NumberField/NumberField';
+import SettingField from '@/components/SettingField/SettingField';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 
 import { ROUTE_REASONS, useBinsPageLogic } from './BinsPage.logic';
 import BinEditor from './components/BinEditor';
 import IdentifyPanel from './components/IdentifyPanel';
 
-import styles from './BinsPage.module.css';
-import appStyles from '../../styles/app.module.css';
-
-function binLabel(bin) {
-  return `layer ${bin.layer}, bin ${bin.bin} (section ${bin.section})`;
-}
+const PARTS = ['layout', 'lookup'];
+const binLabel = (bin) => `layer ${bin.layer}, bin ${bin.bin} (section ${bin.section})`;
 
 function RouteTester({ route, setRoute, onTry, canTry }) {
   const { result } = route;
-  const set = (key) => (e) => setRoute((prev) => ({ ...prev, [key]: e.target.value, result: null }));
+  const set = (key) => (e) =>
+    setRoute((prev) => ({ ...prev, [key]: e.target.value, result: null }));
+  const field = (key, label, props) => (
+    <label htmlFor={`route-${key}`} className="flex flex-col gap-1.5 text-sm">
+      <span className="font-medium">{label}</span>
+      <Input
+        id={`route-${key}`}
+        value={route[key]}
+        onChange={set(key)}
+        className="w-36"
+        {...props}
+      />
+    </label>
+  );
   return (
-    <div className={styles.panel}>
-      <h3 className={styles.panelTitle}>Where would a piece go?</h3>
+    <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+      <div>
+        <h2 className="font-display text-xl font-semibold">Where would a piece go?</h2>
+        <p className="text-sm text-muted-foreground">
+          The bin the active profile would choose for a part and color. Nothing is saved.
+        </p>
+      </div>
       <form
-        className={styles.fields}
+        className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
           e.preventDefault();
           onTry();
         }}
       >
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Part</span>
-          <input value={route.part} onChange={set('part')} placeholder="3001" />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Color id</span>
-          <input value={route.color} onChange={set('color')} placeholder="5" />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Longest side (mm)</span>
-          <input type="number" min="0" value={route.size} onChange={set('size')} placeholder="optional" />
-        </label>
-        <button type="submit" className={appStyles.button} disabled={!canTry || !route.part.trim()}>
+        {field('part', 'Part', { placeholder: '3001' })}
+        {field('color', 'Color id', { placeholder: '5' })}
+        {field('size', 'Longest side (mm)', { type: 'number', min: 0, placeholder: 'optional' })}
+        <Button type="submit" disabled={!canTry || !route.part.trim()}>
           Check
-        </button>
+        </Button>
       </form>
       {result && (
-        <p className={styles.routeResult}>
-          <strong>{result.category_name}</strong> → {result.choice.bin ? binLabel(result.choice.bin) : 'the bucket'}:{' '}
-          {ROUTE_REASONS[result.choice.reason] ?? result.choice.reason}. Nothing was saved.
+        <p className="rounded-lg bg-accent px-4 py-3 text-sm">
+          <strong>{result.category_name}</strong> →{' '}
+          {result.choice.bin ? binLabel(result.choice.bin) : 'the bucket'}:{' '}
+          {ROUTE_REASONS[result.choice.reason] ?? result.choice.reason}.
         </p>
       )}
-    </div>
+    </section>
   );
 }
 
+function Layer({ layer, logic }) {
+  const { selected } = logic;
+  return (
+    <section
+      className={cn(
+        'flex flex-col gap-4 rounded-xl border border-border bg-card p-5',
+        layer.disabled && 'opacity-70',
+      )}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="font-display text-xl font-semibold">Layer {layer.layer}</h2>
+          <p className="text-sm text-muted-foreground">
+            {layer.bins} bins{layer.max_piece_mm ? `, pieces up to ${layer.max_piece_mm} mm` : ''}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-4">
+          <NumberField
+            id={`layer-${layer.layer}-full`}
+            label="Full at (0: never)"
+            value={layer.max_pieces}
+            min={0}
+            unit="pieces"
+            inputClassName="w-20"
+            onChange={(v) => logic.setLayer(layer.layer, { maxPieces: Math.round(v) })}
+          />
+          <label className="flex h-10 items-center gap-2 text-sm font-medium">
+            <Switch
+              checked={!layer.disabled}
+              onCheckedChange={(on) => logic.setLayer(layer.layer, { disabled: !on })}
+            />
+            In use
+          </label>
+        </div>
+      </div>
+      {layer.sections.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {layer.bins} bins don’t split into the chute’s sections; fix the bin count under{' '}
+          <Link
+            to="/machine/chute/layers"
+            className="font-medium text-primary-text hover:underline"
+          >
+            Machine › Chute › Layers
+          </Link>
+          .
+        </p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {layer.sections.map((section) => (
+            <div
+              key={section.section}
+              className={cn(
+                'flex flex-col gap-2 rounded-lg border border-border p-3',
+                section.disabled && 'bg-muted/50',
+              )}
+            >
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={!section.disabled}
+                  onCheckedChange={() => logic.toggleSection(layer.layer, section.section)}
+                />
+                Section {section.section}
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {section.bins.map((bin) => {
+                  const isSelected = selected?.layer === layer.layer && selected?.bin === bin.bin;
+                  const cats = bin.categories.map((c) => c.name).join(', ');
+                  return (
+                    <button
+                      key={bin.bin}
+                      type="button"
+                      disabled={!logic.view.profile}
+                      onClick={() => logic.select({ layer: layer.layer, bin: bin.bin })}
+                      title={cats || undefined}
+                      className={cn(
+                        'flex min-h-16 flex-col items-start gap-0.5 rounded-md border px-2 py-1.5 text-left text-xs transition-colors hover:border-border-strong disabled:cursor-default',
+                        isSelected ? 'border-primary bg-accent' : 'border-border',
+                        !bin.reachable && 'opacity-50',
+                        bin.full && 'border-warning bg-warning-bg',
+                      )}
+                    >
+                      <span className="flex w-full items-center justify-between gap-1">
+                        <span className="font-mono font-medium">{bin.bin}</span>
+                        {bin.count > 0 && (
+                          <span
+                            className={cn(
+                              'font-mono',
+                              bin.full ? 'text-warning' : 'text-muted-foreground',
+                            )}
+                          >
+                            {bin.full ? `full ${bin.count}` : bin.count}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={cn(
+                          'line-clamp-2',
+                          !bin.categories.length && 'text-muted-foreground',
+                        )}
+                      >
+                        {cats || (bin.reachable ? 'Unassigned' : 'Out of reach')}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Rules › Bins: Layout (each layer's bins, what they take and how full they are) and
+ * Where would it go (/rules/bins/lookup).
+ */
 const BinsPage = () => {
+  const { part = 'layout' } = useParams();
   const logic = useBinsPageLogic();
-  const { view, settings, selected, selectedBin } = logic;
+  const { view, selected, selectedBin } = logic;
+  const [layerTab, setLayerTab] = useState(1);
 
   // Which bins each category is in, for "now in …" in the editor.
   const binOf = useMemo(() => {
@@ -60,151 +197,128 @@ const BinsPage = () => {
     for (const layer of view?.layers ?? []) {
       for (const section of layer.sections) {
         for (const bin of section.bins) {
-          for (const c of bin.categories) (out[c.id] ??= []).push({ layer: layer.layer, bin: bin.bin });
+          for (const c of bin.categories)
+            (out[c.id] ??= []).push({ layer: layer.layer, bin: bin.bin });
         }
       }
     }
     return out;
   }, [view]);
 
+  if (!PARTS.includes(part)) return <Navigate to="/rules/bins" replace />;
   if (!view) {
     return (
-      <section className={appStyles.card}>
-        <h2 className={styles.title}>Bins</h2>
-        {logic.error ? <p className={styles.alert}>{logic.error}</p> : <p className={appStyles.muted}>Loading…</p>}
-      </section>
+      <div className="ds text-sm text-muted-foreground">
+        {logic.error ? <span className="text-destructive">{logic.error}</span> : 'Loading…'}
+      </div>
     );
   }
+  const layer = view.layers.find((l) => l.layer === layerTab) ?? view.layers[0];
 
   return (
-    <section className={appStyles.card}>
-      <div className={styles.headerRow}>
-        <div>
-          <h2 className={styles.title}>Bins</h2>
-          <p className={appStyles.muted}>
-            {view.profile ? (
-              <>
-                Sorting with <strong>{view.profile.name}</strong>. A category with no bin gets the first free one when its
-                first piece arrives.
-              </>
-            ) : (
-              'No profile is active. Activate one on the Profiles page to assign bins.'
-            )}
-          </p>
-        </div>
-        <div className={styles.buttonRow}>
-          <label className={styles.checkField}>
-            <input
-              type="checkbox"
-              checked={settings.distributor.sharedBins}
-              onChange={(e) => logic.setDistributor({ sharedBins: e.target.checked })}
-            />
-            Share bins once every bin is taken
-          </label>
-          <button type="button" className={appStyles.buttonSecondary} disabled={!view.profile} onClick={logic.resetBins}>
-            Unassign every bin
-          </button>
-        </div>
-      </div>
-
-      {logic.error && <p className={styles.alert}>{logic.error}</p>}
-
-      {selectedBin && (
-        <BinEditor
-          key={`${selected.layer}-${selected.bin}`}
-          bin={selectedBin}
-          layer={selected.layer}
-          categories={view.categories}
-          binOf={binOf}
-          onSave={logic.saveBin}
-          onPoint={logic.pointChute}
-          onEmpty={logic.emptyBin}
-          onClose={() => logic.select(null)}
-        />
-      )}
-
-      {view.layers.map((layer) => (
-        <div key={layer.layer} className={layer.disabled ? styles.layerOff : styles.layer}>
-          <div className={styles.layerHeader}>
-            <h3 className={styles.panelTitle}>
-              Layer {layer.layer}{' '}
-              <span className={styles.muted}>
-                {layer.bins} bins{layer.max_piece_mm ? `, pieces up to ${layer.max_piece_mm} mm` : ''}
-              </span>
-            </h3>
-            <div className={styles.buttonRow}>
-              <label className={styles.checkField}>
-                Full at
-                <input
-                  type="number"
-                  min="0"
-                  className={styles.smallInput}
-                  value={layer.max_pieces}
-                  onChange={(e) => e.target.value !== '' && logic.setLayer(layer.layer, { maxPieces: Math.max(0, Math.round(Number(e.target.value))) })}
-                />
-                pieces (0: never)
-              </label>
-              <label className={styles.checkField}>
-                <input type="checkbox" checked={!layer.disabled} onChange={(e) => logic.setLayer(layer.layer, { disabled: !e.target.checked })} />
-                In use
-              </label>
-            </div>
-          </div>
-          {layer.sections.length === 0 ? (
-            <p className={styles.muted}>{layer.bins} bins don&apos;t split into the chute&apos;s sections; fix the bin count on the LEGO Sorter page.</p>
+    <div className="ds flex flex-col gap-4">
+      <section className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm">
+          {view.profile ? (
+            <>
+              Sorting with <strong>{view.profile.name}</strong>. A category with no bin gets the
+              first free one when its first piece arrives.
+            </>
           ) : (
-            <div className={styles.sections}>
-              {layer.sections.map((section) => (
-                <div key={section.section} className={section.disabled ? styles.sectionOff : styles.section}>
-                  <label className={styles.sectionHeader}>
-                    <input type="checkbox" checked={!section.disabled} onChange={() => logic.toggleSection(layer.layer, section.section)} />
-                    Section {section.section}
-                  </label>
-                  {section.bins.map((bin) => {
-                    const isSelected = selected?.layer === layer.layer && selected?.bin === bin.bin;
-                    return (
-                      <button
-                        key={bin.bin}
-                        type="button"
-                        className={`${styles.bin} ${isSelected ? styles.binSelected : ''} ${bin.reachable ? '' : styles.binUnreachable}`}
-                        disabled={!view.profile}
-                        onClick={() => logic.select({ layer: layer.layer, bin: bin.bin })}
-                      >
-                        <span className={styles.binNumber}>
-                          {bin.bin}
-                          {bin.count > 0 && <span className={bin.full ? styles.binFull : styles.binCount}>{bin.full ? `full · ${bin.count}` : bin.count}</span>}
-                        </span>
-                        <span className={bin.categories.length ? styles.binCats : styles.binEmpty}>
-                          {bin.categories.length ? bin.categories.map((c) => c.name).join(', ') : bin.reachable ? 'Unassigned' : 'Out of reach'}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+            <>
+              No profile is active, so bins can’t be assigned.{' '}
+              <Link to="/rules/profiles" className="font-medium text-primary-text hover:underline">
+                Choose a profile
+              </Link>
+            </>
           )}
-        </div>
-      ))}
+        </p>
+        {part === 'layout' && (
+          <Button
+            variant="outline"
+            disabled={!view.profile}
+            onClick={logic.resetBins}
+            className="shrink-0"
+          >
+            Unassign every bin
+          </Button>
+        )}
+      </section>
+      {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
 
-      {logic.kits.length > 0 && (
-        <div className={styles.panel}>
-          <h3 className={styles.panelTitle}>Kits</h3>
-          {logic.kits.map((k) => (
-            <div key={k.category} className={styles.kit}>
-              <span>{k.name}</span>
-              <progress max={k.need} value={k.found} />
-              <span className={styles.muted}>
-                {k.found} of {k.need}
-              </span>
-            </div>
-          ))}
+      {part === 'layout' ? (
+        <>
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Layer">
+            {view.layers.map((l) => (
+              <button
+                key={l.layer}
+                type="button"
+                role="tab"
+                aria-selected={l.layer === layer?.layer}
+                onClick={() => setLayerTab(l.layer)}
+                className={cn(
+                  'h-9 rounded-full border px-4 text-sm font-medium',
+                  l.layer === layer?.layer
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border text-muted-foreground hover:bg-accent',
+                )}
+              >
+                Layer {l.layer}
+                {l.disabled ? ' (off)' : ''}
+              </button>
+            ))}
+          </div>
+          {layer && <Layer layer={layer} logic={logic} />}
+
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <section className="rounded-xl border border-border bg-card px-5 py-2">
+              <SettingField settingKey="distributor.sharedBins" />
+            </section>
+            {logic.kits.length > 0 && (
+              <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+                <h2 className="font-display text-lg font-semibold">Kits</h2>
+                {logic.kits.map((k) => (
+                  <div key={k.category} className="flex items-center gap-3 text-sm">
+                    <span className="w-40 truncate">{k.name}</span>
+                    <Progress value={(k.found / Math.max(1, k.need)) * 100} className="flex-1" />
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {k.found}/{k.need}
+                    </span>
+                  </div>
+                ))}
+              </section>
+            )}
+          </div>
+
+          <Sheet open={Boolean(selectedBin)} onOpenChange={(o) => !o && logic.select(null)}>
+            <SheetContent side="right" className="w-full p-5 sm:max-w-md">
+              {selectedBin && (
+                <BinEditor
+                  key={`${selected.layer}-${selected.bin}`}
+                  bin={selectedBin}
+                  layer={selected.layer}
+                  categories={view.categories}
+                  binOf={binOf}
+                  onSave={logic.saveBin}
+                  onPoint={logic.pointChute}
+                  onEmpty={logic.emptyBin}
+                />
+              )}
+            </SheetContent>
+          </Sheet>
+        </>
+      ) : (
+        <div className="grid items-start gap-4 xl:grid-cols-2">
+          <RouteTester
+            route={logic.route}
+            setRoute={logic.setRoute}
+            onTry={logic.tryRoute}
+            canTry={Boolean(view.profile)}
+          />
+          <IdentifyPanel />
         </div>
       )}
-
-      <RouteTester route={logic.route} setRoute={logic.setRoute} onTry={logic.tryRoute} canTry={Boolean(view.profile)} />
-      <IdentifyPanel />
-    </section>
+    </div>
   );
 };
 

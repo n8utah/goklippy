@@ -1,11 +1,4 @@
-import {
-  BrowserRouter,
-  Link,
-  Navigate,
-  Route,
-  Routes,
-  useSearchParams,
-} from 'react-router';
+import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router';
 
 import AppFrame from './components/AppFrame/AppFrame';
 import { MCUSessionProvider } from './context/MCUSessionContext';
@@ -25,19 +18,6 @@ import RecordsPage from './pages/RecordsPage/RecordsPage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
 import SortPage from './pages/SortPage/SortPage';
 import UiKitPage from './pages/UiKitPage/UiKitPage';
-
-/** A page from before the new UI: always light until build step 4 rebuilds it. */
-const Legacy = ({ children }) => <div className="legacy-page">{children}</div>;
-
-const RecordsRoute = () => {
-  const [params] = useSearchParams();
-  const piece = params.get('piece');
-  return (
-    <Legacy>
-      <RecordsPage key={piece || 'records'} initialPieceId={piece} />
-    </Legacy>
-  );
-};
 
 const NotFound = () => (
   <div className="ds rounded-xl border border-border bg-card p-6">
@@ -65,27 +45,13 @@ const App = () => (
               <Route path="run">
                 <Route index element={<Navigate to="sort" replace />} />
                 <Route path="sort" element={<SortPage />} />
-                <Route path="records" element={<RecordsRoute />} />
+                <Route path="records/:part?" element={<RecordsPage />} />
               </Route>
 
               <Route path="rules">
                 <Route index element={<Navigate to="profiles" replace />} />
-                <Route
-                  path="profiles"
-                  element={
-                    <Legacy>
-                      <ProfilesPage />
-                    </Legacy>
-                  }
-                />
-                <Route
-                  path="bins"
-                  element={
-                    <Legacy>
-                      <BinsPage />
-                    </Legacy>
-                  }
-                />
+                <Route path="profiles" element={<ProfilesPage />} />
+                <Route path="bins/:part?" element={<BinsPage />} />
               </Route>
 
               <Route path="machine">
@@ -94,26 +60,12 @@ const App = () => (
                 <Route path="board/:part?" element={<BoardPage />} />
                 <Route path="channels/:part?" element={<ChannelsPage />} />
                 <Route path="chute/:part?" element={<ChutePage />} />
-                <Route
-                  path="cameras"
-                  element={
-                    <Legacy>
-                      <CamerasPage />
-                    </Legacy>
-                  }
-                />
+                <Route path="cameras/:part?" element={<CamerasPage />} />
               </Route>
 
               <Route path="diagnose">
                 <Route index element={<Navigate to="journeys" replace />} />
-                <Route
-                  path="journeys"
-                  element={
-                    <Legacy>
-                      <JourneysPage />
-                    </Legacy>
-                  }
-                />
+                <Route path="journeys" element={<JourneysPage />} />
                 <Route path="bench" element={<BenchPage />} />
               </Route>
 
@@ -121,14 +73,7 @@ const App = () => (
                 <Route index element={<Navigate to="settings" replace />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="settings/:section" element={<SettingsPage />} />
-                <Route
-                  path="account"
-                  element={
-                    <Legacy>
-                      <AccountPage />
-                    </Legacy>
-                  }
-                />
+                <Route path="account" element={<AccountPage />} />
                 <Route path="ui-kit" element={<UiKitPage />} />
               </Route>
 

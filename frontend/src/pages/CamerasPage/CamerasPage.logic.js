@@ -67,10 +67,12 @@ export function deviceLabel(device) {
   return device.hint ? `${device.name} (${device.hint})` : device.name;
 }
 
-export function useCamerasPageLogic() {
+/**
+ * Machine › Cameras. `view` is the tab from the URL: 'setup' picks which camera is where;
+ * a channel ('c2'…'c4') draws that channel's zones. `setView` goes to another tab.
+ */
+export function useCamerasPageLogic(view, setView) {
   const [settings, setSettings, syncError] = useMachineSettings();
-  // 'setup' picks which camera is where; a channel tab draws that channel's zones.
-  const [view, setView] = useState('setup');
   const channel = view === 'setup' ? 'c2' : view;
   const [devices, setDevices] = useState({ ...NO_DEVICES, loading: true });
   const [previewing, setPreviewing] = useState({}); // device id -> shown

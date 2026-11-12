@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { emptySorterBin, getSorterBins, getSorterKits, resetSorterBins, routeSorterPiece, sendToSorterBin, setSorterBin } from '../../helpers/api';
+import {
+  emptySorterBin,
+  getSorterBins,
+  getSorterKits,
+  resetSorterBins,
+  routeSorterPiece,
+  sendToSorterBin,
+  setSorterBin,
+} from '../../helpers/api';
 import { useMachineSettings } from '../../helpers/sorterSettings';
 
 export const ROUTE_REASONS = {
@@ -55,7 +63,9 @@ export function useBinsPageLogic() {
 
   const selectedBin =
     selected &&
-    view?.layers[selected.layer - 1]?.sections.flatMap((s) => s.bins).find((b) => b.bin === selected.bin);
+    view?.layers[selected.layer - 1]?.sections
+      .flatMap((s) => s.bins)
+      .find((b) => b.bin === selected.bin);
 
   const saveBin = (categories) =>
     guard(async () => {
@@ -81,20 +91,28 @@ export function useBinsPageLogic() {
 
   const setLayer = (layerNumber, patch) =>
     setDistributor({
-      layers: settings.distributor.layers.map((l, i) => (i === layerNumber - 1 ? { ...l, ...patch } : l)),
+      layers: settings.distributor.layers.map((l, i) =>
+        i === layerNumber - 1 ? { ...l, ...patch } : l,
+      ),
     });
 
   const toggleSection = (layerNumber, section) => {
     const layer = settings.distributor.layers[layerNumber - 1];
     const off = layer.disabledSections || [];
     setLayer(layerNumber, {
-      disabledSections: off.includes(section) ? off.filter((s) => s !== section) : [...off, section].sort((a, b) => a - b),
+      disabledSections: off.includes(section)
+        ? off.filter((s) => s !== section)
+        : [...off, section].sort((a, b) => a - b),
     });
   };
 
   const tryRoute = () =>
     guard(async () => {
-      const result = await routeSorterPiece(route.part.trim(), route.color.trim(), Number(route.size) || 0);
+      const result = await routeSorterPiece(
+        route.part.trim(),
+        route.color.trim(),
+        Number(route.size) || 0,
+      );
       setRoute((prev) => ({ ...prev, result }));
     });
 

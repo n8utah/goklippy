@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-test('account page loads framework starter', async ({ page }) => {
+test('account page shows sign in', async ({ page }) => {
   await page.goto('/system/account');
 
-  await expect(page.getByRole('heading', { name: 'goklippy Framework Starter' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByLabel('Email')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
 });

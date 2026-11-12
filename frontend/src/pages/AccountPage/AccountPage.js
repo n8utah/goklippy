@@ -1,106 +1,111 @@
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+
 import { useAccountPageLogic } from './AccountPage.logic';
 
-import styles from './AccountPage.module.css';
-
+/**
+ * System › Account: sign in, refresh and sign out (the JWT flow), and for development the
+ * tokens themselves.
+ */
 const AccountPage = () => {
-  const {
-    email,
-    setEmail,
-    password,
-    setPassword,
-    tokenPair,
-    profile,
-    error,
-    loading,
-    handleLogin,
-    handleRefresh,
-    handleLogout,
-    handleLoadProfile,
-  } = useAccountPageLogic();
+  const logic = useAccountPageLogic();
+  const { tokenPair, profile } = logic;
 
   return (
-    <main className={styles.page}>
-      <section className={styles.card}>
-        <h1 className={styles.title}>goklippy Framework Starter</h1>
-        <p className={styles.subtitle}>
-          Backend + frontend build check with JWT auth flow endpoints.
-        </p>
-
-        <label className={styles.label} htmlFor="email-input">
-          Email
-        </label>
-        <input
-          id="email-input"
-          className={styles.input}
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="user@example.com"
-        />
-
-        <label className={styles.label} htmlFor="password-input">
-          Password
-        </label>
-        <input
-          id="password-input"
-          className={styles.input}
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="password"
-        />
-
-        <div className={styles.actions}>
-          <button className={styles.button} type="button" onClick={handleLogin} disabled={loading}>
-            Login
-          </button>
-          <button
-            className={styles.button}
-            type="button"
-            onClick={handleRefresh}
-            disabled={loading}
-          >
-            Refresh
-          </button>
-          <button
-            className={styles.button}
-            type="button"
-            onClick={handleLoadProfile}
-            disabled={loading}
-          >
-            Load Profile
-          </button>
-          <button
-            className={styles.buttonSecondary}
-            type="button"
-            onClick={handleLogout}
-            disabled={loading}
-          >
-            Logout
-          </button>
-        </div>
-
-        {error && <p className={styles.errorText}>{error}</p>}
-
-        {tokenPair && (
-          <div className={styles.tokenPreview}>
-            <p className={styles.tokenHeading}>Access Token</p>
-            <code className={styles.tokenValue}>{tokenPair.access_token}</code>
-            <p className={styles.tokenHeading}>Refresh Token</p>
-            <code className={styles.tokenValue}>{tokenPair.refresh_token}</code>
+    <div className="ds grid items-start gap-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+      <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+        <h2 className="font-display text-xl font-semibold">Sign in</h2>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            logic.handleLogin();
+          }}
+        >
+          <label htmlFor="email-input" className="flex flex-col gap-1.5 text-sm font-medium">
+            Email
+            <Input
+              id="email-input"
+              type="email"
+              autoComplete="username"
+              value={logic.email}
+              onChange={(e) => logic.setEmail(e.target.value)}
+              placeholder="user@example.com"
+            />
+          </label>
+          <label htmlFor="password-input" className="flex flex-col gap-1.5 text-sm font-medium">
+            Password
+            <Input
+              id="password-input"
+              type="password"
+              autoComplete="current-password"
+              value={logic.password}
+              onChange={(e) => logic.setPassword(e.target.value)}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button type="submit" disabled={logic.loading}>
+              Login
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={logic.loading}
+              onClick={logic.handleRefresh}
+            >
+              Refresh
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={logic.loading}
+              onClick={logic.handleLoadProfile}
+            >
+              Load profile
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={logic.loading}
+              onClick={logic.handleLogout}
+            >
+              Logout
+            </Button>
           </div>
+        </form>
+        {logic.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {logic.error}
+          </p>
         )}
-
         {profile && (
-          <div className={styles.profileCard}>
-            <p className={styles.tokenHeading}>Authenticated User</p>
-            <p className={styles.profileItem}>User ID: {profile.user_id}</p>
-            <p className={styles.profileItem}>Email: {profile.email}</p>
-            <p className={styles.profileItem}>Role: {profile.role}</p>
+          <div className="rounded-lg border border-running/40 bg-running-bg px-4 py-3 text-sm text-running-text">
+            <p className="font-medium">Authenticated User</p>
+            <p>User ID: {profile.user_id}</p>
+            <p>Email: {profile.email}</p>
+            <p>Role: {profile.role}</p>
           </div>
         )}
       </section>
-    </main>
+
+      {tokenPair && (
+        <section className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-5">
+          <h2 className="font-display text-lg font-semibold">Tokens</h2>
+          <p className="text-sm text-muted-foreground">For development: what the backend issued.</p>
+          {[
+            ['Access token', tokenPair.access_token],
+            ['Refresh token', tokenPair.refresh_token],
+          ].map(([label, value]) => (
+            <div key={label} className="flex flex-col gap-1">
+              <p className="text-sm font-medium">{label}</p>
+              <code className="block rounded-md bg-muted p-3 font-mono text-xs break-all">
+                {value}
+              </code>
+            </div>
+          ))}
+        </section>
+      )}
+    </div>
   );
 };
 

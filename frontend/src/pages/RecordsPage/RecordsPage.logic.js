@@ -1,33 +1,43 @@
 import { useEffect, useState } from 'react';
 
-import { getSorterPiece, getSorterStats, listSorterIncidents, listSorterPieces, listSorterRuns, reviewSorterPiece } from '../../helpers/api';
+import {
+  getSorterStats,
+  listSorterIncidents,
+  listSorterPieces,
+  listSorterRuns,
+} from '../../helpers/api';
 
 export const PAGE_SIZE = 50;
 
-export function useRecordsPageLogic(initialPieceId) {
-  const [tab, setTab] = useState('pieces');
-  const [filters, setFilters] = useState({ run: '', status: '', q: '' });
+/**
+ * Run › Records: pieces (filtered and paged), runs, incidents and lifetime totals. A
+ * piece opens in the journey modal. `initialRun` filters pieces to one run (?run=).
+ */
+export function useRecordsPageLogic(initialRun) {
+  const [filters, setFilters] = useState({ run: initialRun || '', status: '', q: '' });
   const [offset, setOffset] = useState(0);
-  const [pieces, setPieces] = useState({ list: [], total: 0 });
+  const [pieces, setPieces] = useState({ list: [], total: 0, loading: true });
   const [runs, setRuns] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [stats, setStats] = useState(null);
-  const [pieceId, setPieceId] = useState(initialPieceId || null);
-  const [piece, setPiece] = useState(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
 
+  // A link to another run's pieces while already here (from a journey) moves the filter.
+  const [linkedRun, setLinkedRun] = useState(initialRun);
+  if (initialRun !== linkedRun) {
+    setLinkedRun(initialRun);
+    if (initialRun) {
+      setFilters({ run: initialRun, status: '', q: '' });
+      setOffset(0);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
-    const done = (fn) => (data) => {
-      if (!cancelled) fn(data);
-    };
-    const fail = (err) => {
-      if (!cancelled) setError(err.message);
-    };
     listSorterPieces({ ...filters, limit: PAGE_SIZE, offset }).then(
-      done(({ pieces: list, total }) => setPieces({ list, total })),
-      fail,
+      ({ pieces: list, total }) => !cancelled && setPieces({ list, total, loading: false }),
+      (err) => !cancelled && setError(err.message),
     );
     return () => {
       cancelled = true;
@@ -39,73 +49,36 @@ export function useRecordsPageLogic(initialPieceId) {
     Promise.all([listSorterRuns(), listSorterIncidents(), getSorterStats()]).then(
       ([r, i, s]) => {
         if (cancelled) return;
-        setRuns(r.runs);
-        setIncidents(i.incidents);
+        setRuns(r.runs ?? []);
+        setIncidents(i.incidents ?? []);
         setStats(s);
       },
-      (err) => {
-        if (!cancelled) setError(err.message);
-      },
+      (err) => !cancelled && setError(err.message),
     );
     return () => {
       cancelled = true;
     };
   }, [reload]);
 
-  useEffect(() => {
-    if (!pieceId) return undefined;
-    let cancelled = false;
-    getSorterPiece(pieceId).then(
-      (p) => {
-        if (!cancelled) setPiece(p);
-      },
-      (err) => {
-        if (!cancelled) setError(err.message);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [pieceId]);
-
   const setFilter = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
     setOffset(0);
   };
 
-  const showRun = (runId) => {
-    setFilters({ run: String(runId), status: '', q: '' });
-    setOffset(0);
-    setTab('pieces');
-  };
-
-  /** Saves a review; the piece comes back with it. Errors go to the panel. */
-  const reviewPiece = async (review) => {
-    setPiece(await reviewSorterPiece(pieceId, review));
-  };
-
-  const openPiece = (id) => {
-    setPiece(null);
-    setPieceId(id);
-  };
-
   return {
-    tab,
-    setTab,
     filters,
     setFilter,
+    /** Shows one run's pieces. */
+    showRun: (runId) => {
+      setFilters({ run: String(runId), status: '', q: '' });
+      setOffset(0);
+    },
     offset,
     setOffset,
     pieces,
     runs,
     incidents,
     stats,
-    piece: pieceId ? piece : null,
-    pieceId,
-    openPiece,
-    reviewPiece,
-    closePiece: () => setPieceId(null),
-    showRun,
     refresh: () => setReload((n) => n + 1),
     error,
   };

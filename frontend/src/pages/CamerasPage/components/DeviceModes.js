@@ -1,12 +1,10 @@
 import { useState } from 'react';
 
-import { listSorterCameraModes } from '../../../helpers/api';
-
-import styles from '../CamerasPage.module.css';
-import appStyles from '../../../styles/app.module.css';
+import { Button } from '@/components/ui/button';
+import { listSorterCameraModes } from '@/helpers/api';
 
 /** The sizes a camera offers, checked on request, against the size every camera uses. */
-const DeviceModes = ({ deviceId, width, height, disabled }) => {
+export default function DeviceModes({ deviceId, width, height, disabled }) {
   const [state, setState] = useState({ loading: false, sizes: null, error: '' });
 
   const check = async () => {
@@ -29,26 +27,19 @@ const DeviceModes = ({ deviceId, width, height, disabled }) => {
 
   const fits = state.sizes?.some((s) => s.width === width && s.height === height);
   return (
-    <div className={styles.modes}>
-      <button
-        type="button"
-        className={appStyles.buttonSecondary}
-        disabled={disabled || state.loading}
-        onClick={check}
-      >
-        {state.loading ? 'Asking the camera…' : 'Check sizes'}
-      </button>
-      {state.error && <span className={styles.hint}>{state.error}</span>}
-      {state.sizes && state.sizes.length > 0 && (
-        <span className={fits ? styles.hint : styles.warnText}>
+    <div className="flex flex-col items-start gap-1">
+      <Button variant="ghost" size="sm" disabled={disabled || state.loading} onClick={check}>
+        {state.loading ? 'Asking the camera…' : 'Check its sizes'}
+      </Button>
+      {state.error && <p className="text-xs text-muted-foreground">{state.error}</p>}
+      {state.sizes?.length > 0 && (
+        <p className={fits ? 'text-xs text-muted-foreground' : 'text-xs text-warning'}>
           {fits
             ? `Takes ${width}×${height}. `
-            : `Doesn’t offer ${width}×${height}, the size set for every camera, so it won’t open at it. Change the size under All cameras on any channel tab. `}
+            : `Doesn’t offer ${width}×${height}, the size every camera uses, so it won’t open. Change the size on any channel tab. `}
           Offers: {state.sizes.map((s) => `${s.key} (${s.fps} fps)`).join(', ')}
-        </span>
+        </p>
       )}
     </div>
   );
-};
-
-export default DeviceModes;
+}

@@ -16,6 +16,7 @@ import { PROBLEM_LABELS, pieceBin, pieceName, pieceStatus, scorePct } from '@/he
 import { cn } from '@/lib/utils';
 
 import { pieceStages, usePieceRecord } from './JourneyModal.logic';
+import ReviewPanel from './ReviewPanel';
 
 const time = (t) =>
   t
@@ -37,7 +38,7 @@ export default function JourneyModal({ pieceId, onClose }) {
 }
 
 function Journey({ pieceId, onClose }) {
-  const { piece, error } = usePieceRecord(pieceId);
+  const { piece, error, review } = usePieceRecord(pieceId);
 
   if (!piece) {
     return (
@@ -81,16 +82,19 @@ function Journey({ pieceId, onClose }) {
                 {pieceBin(piece)}
               </span>
               <span className="text-xs">
-                {piece.run_id ? `Run ${piece.run_id} · ` : ''}
                 {time(piece.seen_at)} · <span className="font-mono">{piece.id.slice(0, 8)}</span>
-                {' · '}
-                <Link
-                  to={`/run/records?piece=${piece.id}`}
-                  onClick={onClose}
-                  className="font-medium text-primary-text hover:underline"
-                >
-                  Open its record
-                </Link>
+                {piece.run_id ? (
+                  <>
+                    {' · '}
+                    <Link
+                      to={`/run/records/pieces?run=${piece.run_id}`}
+                      onClick={onClose}
+                      className="font-medium text-primary-text hover:underline"
+                    >
+                      More from run {piece.run_id}
+                    </Link>
+                  </>
+                ) : null}
               </span>
             </div>
           </DialogDescription>
@@ -224,6 +228,12 @@ function Journey({ pieceId, onClose }) {
           </div>
         )}
       </section>
+
+      {prediction && (
+        <div className="border-t border-border pt-5">
+          <ReviewPanel key={piece.id} piece={piece} onSave={review} />
+        </div>
+      )}
     </div>
   );
 }
