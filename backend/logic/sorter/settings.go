@@ -230,6 +230,13 @@ type FeederSettings struct {
 	// free is left out of that camera (ignored_spots.go) and sorting carries on,
 	// instead of stopping until someone takes it off.
 	WorkAroundStuck bool `json:"workAroundStuck"`
+	// PushPastStuck: before working around a stuck piece, turn the channel before by
+	// PushBumpDeg so a few pieces drop in behind it, then run this channel and those
+	// after it for PushSeconds at the Clear speed so they shove it along
+	// (machine_stuck.go).
+	PushPastStuck bool    `json:"pushPastStuck"`
+	PushSeconds   int     `json:"pushSeconds"`
+	PushBumpDeg   float64 `json:"pushBumpDeg"`
 	// Clear (Run › Sort) runs C2–C4 together for ClearSeconds at ClearRpm, one speed
 	// for all three and faster than sorting, to empty them. Each ramps up (and back
 	// down) at ClearAccel, rpm per second.
@@ -385,6 +392,9 @@ func DefaultMachineSettings() MachineSettings {
 			StaleMs:         1000,
 			BackupMs:        1000,
 			WorkAroundStuck: true,
+			PushPastStuck:   true,
+			PushSeconds:     5,
+			PushBumpDeg:     45,
 			ClearSeconds:    30,
 			ClearRpm:        12,
 			ClearAccel:      20,

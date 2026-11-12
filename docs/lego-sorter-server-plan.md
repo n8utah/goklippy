@@ -419,6 +419,13 @@ Original scope:
   "anything in that area": a piece landing beside it or on it is still seen. Once it hasn't
   been seen for 10 s it's watched again; Run › Sort also has "Taken off? Watch again".
   Found on the machine: a LEGO wheel caught on C3's rim where the blue guide meets it.
+  Steps for a stuck piece (`machine_stuck.go`): shake (skipped if one stuck again within 2
+  minutes near where one was freed: the shake only nudged it); then push it past
+  (`feeder.pushPastStuck`: turn the channel before by `pushBumpDeg` so pieces drop in behind
+  it, run it and the channels after it for `pushSeconds` at the Clear speed, every layer
+  closed; checked afterwards, since it can't help a piece jammed against a divider); then
+  work around it. A worked-around piece is followed as shaking or pushing nudges it, up to
+  1.5 piece sizes from where it stuck, and never matched to a blob 1.6× its size or more.
 
 ### Phase 9: Pictures of each piece along the way
 

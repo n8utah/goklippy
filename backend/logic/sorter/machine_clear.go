@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -40,7 +41,7 @@ func (m *Machine) ClearChannels(ctx context.Context) error {
 					return err
 				}
 			}
-			return m.runClear(ctx, settings, secs, total, report)
+			return m.runClear(ctx, settings, clearChannels, secs, total, report)
 		}, func(err error) {
 			if m.sort != nil {
 				m.sort.platter.Sweep(time.Now().UTC())
@@ -61,12 +62,26 @@ func clearDegrees(rpm, accel, secs float64) float64 {
 	return max(0, v*cruise) * 360
 }
 
-// runClear turns the channels for secs seconds, reporting each second.
-func (m *Machine) runClear(ctx context.Context, settings MachineSettings, secs, total int, report reportFunc) error {
-	finished := make(chan error, len(clearChannels))
+// channelList names channels for people: "C3 and C4", "C2, C3 and C4".
+func channelList(chs []Channel) string {
+	names := make([]string, len(chs))
+	for i, ch := range chs {
+		names[i] = strings.ToUpper(string(ch))
+	}
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+// runClear turns the channels together at the clear speed for secs seconds,
+// reporting each second as steps total-secs+1 … total.
+func (m *Machine) runClear(ctx context.Context, settings MachineSettings, chs []Channel, secs, total int, report reportFunc) error {
+	finished := make(chan error, len(chs))
 	rpm, accel := settings.Feeder.ClearRpm, settings.Feeder.ClearAccel
 	deg := clearDegrees(rpm, accel, float64(secs))
-	for _, ch := range clearChannels {
+	which := channelList(chs)
+	for _, ch := range chs {
 		done, err := m.hw.RampChannel(ch, deg, rpm, accel)
 		if err != nil {
 			if stopErr := m.hw.StopAll(); stopErr != nil {
@@ -80,8 +95,8 @@ func (m *Machine) runClear(ctx context.Context, settings MachineSettings, secs, 
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	elapsed := 0
-	report(total-secs, total, fmt.Sprintf("Running C2, C3 and C4: %d of %d s", elapsed, secs))
-	for left := len(clearChannels); left > 0; {
+	report(total-secs, total, fmt.Sprintf("Running %s: %d of %d s", which, elapsed, secs))
+	for left := len(chs); left > 0; {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -92,7 +107,7 @@ func (m *Machine) runClear(ctx context.Context, settings MachineSettings, secs, 
 			left--
 		case <-tick.C:
 			elapsed = min(elapsed+1, secs)
-			report(total-secs+elapsed, total, fmt.Sprintf("Running C2, C3 and C4: %d of %d s", elapsed, secs))
+			report(total-secs+elapsed, total, fmt.Sprintf("Running %s: %d of %d s", which, elapsed, secs))
 		}
 	}
 	return nil

@@ -192,35 +192,6 @@ func (m *Machine) recovery() recoveryRunner {
 	return recoveryRunner{hw: m.hw, vision: m.sort.deps.Vision, settings: m.settings}
 }
 
-// recoverLanding runs the landing-held procedure on a channel whose piece won't ride;
-// if no probe sees it free, the operator is asked.
-func (m *Machine) recoverLanding(ch Channel) {
-	st := m.sort
-	runner := m.recovery()
-	var freed bool
-	err := m.startJob(fmt.Sprintf("Recovery: %s on %s", LandingHeld.Title, ch), func(ctx context.Context, report reportFunc) error {
-		var err error
-		freed, err = runner.run(ctx, LandingHeld, ch, report)
-		return err
-	}, func(err error) {
-		if err == nil && freed {
-			st.feeder.Unstick(ch)
-			return
-		}
-		if m.workAroundStuck(ch) {
-			return
-		}
-		m.raiseIncident(Incident{
-			Kind:    IncidentLandingStuck,
-			Title:   fmt.Sprintf("A piece is stuck where pieces land on %s", ch),
-			Message: "It doesn't move with the channel, and shaking didn't free it. Take it off, then press Done.",
-		})
-	})
-	if err != nil {
-		slog.Warn("couldn't start a recovery", "error", err)
-	}
-}
-
 // workAroundStuck leaves a stuck piece out of the channel's camera, notes it, and lets
 // the sort carry on (Feeder.WorkAroundStuck). It reports false when it can't: the
 // setting is off, the vision can't ignore a spot, or the piece isn't in view.
@@ -241,7 +212,7 @@ func (m *Machine) workAroundStuck(ch Channel) bool {
 	inc := Incident{
 		Kind:     IncidentLandingWorkedAround,
 		Title:    fmt.Sprintf("Working around a piece stuck on %s", ch),
-		Message:  "It doesn't move with the channel and shaking didn't free it, so its camera leaves that spot out and sorting carries on. Take it off when you're next at the machine; it's watched again once it's gone.",
+		Message:  "It doesn't move with the channel and shaking and pushing didn't free it, so its camera leaves it out and sorting carries on. Take it off when you're next at the machine; it's watched again once it's gone.",
 		OpenedAt: now,
 	}
 	if st.deps.Records != nil {

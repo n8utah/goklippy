@@ -1,6 +1,7 @@
 package sorter
 
 import (
+	"math"
 	"time"
 
 	"goklippy/backend/logic/vision"
@@ -14,14 +15,20 @@ import (
 // taken off) the spot is watched again.
 //
 // Only the stuck piece is left out, never "anything in that area": per spot, at most
-// one detection is ignored each frame, and only one that matches it, lying where it
-// lies (its box overlapping the spot's by ignoreMinOverlap) and of its size (its blobs'
-// area within ignoreAreaRatio). A piece landing next to it is a second detection and
-// is seen; one landing on it merges into a bigger blob and is seen.
+// one detection is ignored each frame, the one nearest where the piece was last seen,
+// and only if it's the piece's size (its blobs' area within ignoreAreaRatio) and close
+// (its center within ignoreFollow of the piece's size from where it was last seen).
+// A piece landing next to it is a second detection and is seen; one landing on it
+// merges into a bigger blob and is seen. Shaking and pushing nudge a stuck piece, so
+// the spot follows it, but never further than ignoreDrift from where it first stuck:
+// a piece riding the channel soon leaves that and is seen.
 
 const (
-	ignoreMinOverlap = 0.5 // intersection over union of the boxes
-	ignoreAreaRatio  = 1.6 // the blobs' area may be this much larger or smaller
+	// ignoreAreaRatio: the blobs' area may be this much larger or smaller. Under 2, so
+	// two pieces lying together never pass for one.
+	ignoreAreaRatio = 1.6
+	ignoreFollow    = 0.6 // how far it may move between frames, in piece sizes
+	ignoreDrift     = 1.5 // how far it may wander from where it stuck, in piece sizes
 	// ignoreForgetAfter: a spot whose piece hasn't been seen this long is watched again.
 	ignoreForgetAfter = 10 * time.Second
 )
@@ -36,7 +43,8 @@ type SpotIgnorer interface {
 }
 
 type ignoredSpot struct {
-	box      vision.Box
+	anchor   vision.Box // where it first stuck
+	box      vision.Box // where it was last seen
 	area     int
 	lastSeen time.Time
 }
@@ -49,7 +57,7 @@ func (s spotIgnores) add(ch Channel, box vision.Box, area int, now time.Time) {
 	if area <= 0 {
 		area = box.Area()
 	}
-	s[ch] = append(s[ch], &ignoredSpot{box: box, area: area, lastSeen: now})
+	s[ch] = append(s[ch], &ignoredSpot{anchor: box, box: box, area: area, lastSeen: now})
 }
 
 // filter takes a frame's detections and leaves out each spot's stuck piece, grouping
@@ -63,18 +71,22 @@ func (s spotIgnores) filter(ch Channel, boxes []vision.Box, gap int, at time.Tim
 	groups := vision.MergeBoxes(boxes, gap)
 	used := make([]bool, len(groups))
 	for _, sp := range spots {
-		best, bestOverlap := -1, ignoreMinOverlap
+		size := boxSize(sp.box)
+		best, bestDist := -1, ignoreFollow*size
 		for i, g := range groups {
 			if used[i] || !similarArea(partsArea(g), sp.area) {
 				continue
 			}
-			if v := overlap(g.Box, sp.box); v >= bestOverlap {
-				best, bestOverlap = i, v
+			if centerDist(g.Box, sp.anchor) > ignoreDrift*boxSize(sp.anchor) {
+				continue
+			}
+			if d := centerDist(g.Box, sp.box); d <= bestDist {
+				best, bestDist = i, d
 			}
 		}
 		if best >= 0 {
 			used[best] = true
-			sp.lastSeen = at
+			sp.box, sp.area, sp.lastSeen = groups[best].Box, partsArea(groups[best]), at
 		}
 	}
 	for i, g := range groups {
@@ -126,12 +138,23 @@ func similarArea(a, b int) bool {
 	return r <= ignoreAreaRatio && r >= 1/ignoreAreaRatio
 }
 
-// overlap is the boxes' intersection over their union.
-func overlap(a, b vision.Box) float64 {
-	in := vision.Box{X1: max(a.X1, b.X1), Y1: max(a.Y1, b.Y1), X2: min(a.X2, b.X2), Y2: min(a.Y2, b.Y2)}.Area()
-	union := a.Area() + b.Area() - in
-	if union <= 0 {
-		return 0
+// boxSize is a box's larger side, at least one pixel.
+func boxSize(b vision.Box) float64 {
+	return float64(max(1, b.X2-b.X1, b.Y2-b.Y1))
+}
+
+func centerDist(a, b vision.Box) float64 {
+	ca, cb := a.Center(), b.Center()
+	return math.Hypot(ca.X-cb.X, ca.Y-cb.Y)
+}
+
+// stillThere reports a piece in obs where the stuck one was (box), of its size (area):
+// after trying to push it on, it hasn't gone anywhere.
+func stillThere(obs vision.Observation, box vision.Box, area int) bool {
+	for _, p := range obs.Pieces {
+		if similarArea(pieceArea(obs, p.Box), area) && centerDist(p.Box, box) <= 0.5*boxSize(box) {
+			return true
+		}
 	}
-	return float64(in) / float64(union)
+	return false
 }

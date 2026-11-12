@@ -130,6 +130,9 @@ type Machine struct {
 	lastJob  *JobStatus
 	sort     *sortStations
 	incident *IncidentHold
+	// freed: where each channel's last stuck piece was shaken or pushed free, and when,
+	// so one that sticks again there skips straight past shaking (machine_stuck.go).
+	freed    map[Channel]freedSpot
 	changed  bool
 	lastSent time.Time
 }
