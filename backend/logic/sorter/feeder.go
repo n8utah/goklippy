@@ -76,7 +76,9 @@ type feederChannel struct {
 	dropPending bool
 	dropLead    float64
 	stillPulses int
-	stuck       bool
+	// exitStill: exit pulses in a row that left the leading piece where it was.
+	exitStill int
+	stuck     bool
 	// Back-pressure: since when the leading piece has waited at the exit with
 	// nowhere to go (zero when it isn't), and whether that's lasted BackupMs.
 	waitingSince time.Time
@@ -118,7 +120,7 @@ func (f *Feeder) Stuck() []Channel {
 // Unstick lets a channel pulse again, after a recovery or the operator freed it.
 func (f *Feeder) Unstick(ch Channel) {
 	if c, ok := f.channels[ch]; ok {
-		c.stuck, c.stillPulses, c.dropPending = false, 0, false
+		c.stuck, c.stillPulses, c.dropPending, c.exitStill = false, 0, false, 0
 	}
 }
 
@@ -337,11 +339,30 @@ func (f *Feeder) noteFall(c *feederChannel, obs vision.Observation, now time.Tim
 	fell := left < c.atExit || !ok || lead.ForwardToExit > c.leadForward+fallBackDeg
 	if fell {
 		c.falls++
+		c.exitStill = 0
 		c.holdUntil = now.Add(time.Duration(fs.HoldAfterFallMs) * time.Millisecond)
 		// Pieces only leave the exit by falling, so two fewer there is two fallen.
 		c.severalFell = c.atExit-left >= 2
+		return
+	}
+	// Still there: did the pulse bring it any nearer? A piece on the rim beside the
+	// rotor, or caught on the exit's edge, is nudged forever otherwise.
+	if c.leadForward-lead.ForwardToExit >= exitAdvanceDeg {
+		c.exitStill = 0
+		return
+	}
+	c.exitStill++
+	if c.exitStill >= exitStuckAfter {
+		c.stuck, c.exitStill = true, 0
 	}
 }
+
+// exitStuckAfter exit pulses in a row that don't bring the leading piece any nearer
+// the exit flag the channel stuck, as stuckAfter drop pulses do.
+const exitStuckAfter = 10
+
+// exitAdvanceDeg is how far an exit pulse must bring it on to count (pulses are small).
+const exitAdvanceDeg = 0.5
 
 // TakeSeveralFell reports, once, that ch's last exit pulse sent more than one piece
 // off together: the channel after it got a double.
