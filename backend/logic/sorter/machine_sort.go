@@ -244,8 +244,8 @@ func (m *Machine) workAroundStuck(ch Channel) bool {
 	}
 	obs := st.deps.Vision.Observation(ch)
 	lead, ok := obs.Leading()
-	if !ok {
-		return false
+	if !ok || obs.Clump(lead.Box) {
+		return false // a pile isn't worked around: it would swallow every piece landing on it
 	}
 	ign.IgnoreSpot(ch, lead.Box, pieceArea(obs, lead.Box))
 	st.feeder.Unstick(ch)

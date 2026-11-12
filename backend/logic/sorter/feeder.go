@@ -202,7 +202,8 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 	c3BackedUp := f.noteWaiting(ChannelC3, in.C3, in.PlatterReady, in.Now, fs)
 	// C3 can take pieces: seen lately, its drop zone clear, not backed up. (Mid-move
 	// or holding after a fall it's busy, not held up.)
-	c3Accepting := in.C3.Valid && in.Now.Sub(in.C3.At) <= stale(fs) && !in.C3.InDrop && !c3BackedUp
+	c3Accepting := in.C3.Valid && in.Now.Sub(in.C3.At) <= stale(fs) && !in.C3.InDrop && !c3BackedUp &&
+		!full(fs, ChannelC3, in.C3)
 	c2BackedUp := f.noteWaiting(ChannelC2, in.C2, c3Accepting, in.Now, fs)
 
 	// C3 into the platter, then C2 into C3.
@@ -276,7 +277,7 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		c1.state = TimeMoving
 	case !in.C2.Valid || in.Now.Sub(in.C2.At) > stale(fs):
 		c1.state = TimeEmpty // no picture of C2 to go on
-	case in.C2.InDrop || c2BackedUp:
+	case in.C2.InDrop || c2BackedUp || full(fs, ChannelC2, in.C2):
 		c1.state = TimeWaiting
 	case fs.StarveMs > 0 && in.Now.Sub(f.c2SeenAt) >= time.Duration(fs.StarveMs)*time.Millisecond:
 		// C2 has had nothing for a while: bigger, faster nudges until it does.
@@ -287,6 +288,17 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		c1.state = TimeMoving
 	}
 	return moves
+}
+
+// full reports ch holding Feeder.MaxPieces pieces, or pieces covering Feeder.MaxCover
+// of its ring (pieces lying together count as one blob, so a count alone misses a
+// pile): it takes no more for now.
+func full(fs FeederSettings, ch Channel, obs vision.Observation) bool {
+	if !obs.Valid {
+		return false
+	}
+	limit := fs.MaxPieces[string(ch)]
+	return (limit > 0 && len(obs.Pieces) >= limit) || (fs.MaxCover > 0 && obs.Covered() >= fs.MaxCover)
 }
 
 // exitPulse is how far an exit pulse turns. Short of the exit zone (forward > 0) it

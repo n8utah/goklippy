@@ -233,6 +233,13 @@ type FeederSettings struct {
 	CarryRpm      map[string]float64 `json:"carryRpm"`
 	CarryAccel    float64            `json:"carryAccel"`
 	CarryPulseDeg float64            `json:"carryPulseDeg"`
+	// MaxPieces: a channel holding this many pieces takes no more (0: no limit), so
+	// pieces arrive spread out rather than in clumps; back-pressure then pauses the
+	// channels before it. Keyed "c2" (C1 waits) and "c3" (C2 waits).
+	MaxPieces map[string]int `json:"maxPieces"`
+	// MaxCover: a channel whose pieces cover this share of its ring takes no more
+	// either, however many blobs they make (0: no limit).
+	MaxCover float64 `json:"maxCover"`
 	// Starving: C2 has seen no piece for StarveMs, so C1's nudges go StarveBulkDeg at
 	// C1's carry speed until it does.
 	StarveMs      int     `json:"starveMs"`
@@ -411,6 +418,8 @@ func DefaultMachineSettings() MachineSettings {
 			CarryRpm:        map[string]float64{"c1": 5, "c2": 12, "c3": 12},
 			CarryAccel:      30,
 			CarryPulseDeg:   90,
+			MaxPieces:       map[string]int{"c2": 6, "c3": 3},
+			MaxCover:        0.2,
 			StarveMs:        3000,
 			StarveBulkDeg:   30,
 			BackupMs:        1000,

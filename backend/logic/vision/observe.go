@@ -1,6 +1,7 @@
 package vision
 
 import (
+	"math"
 	"sort"
 	"time"
 )
@@ -32,7 +33,32 @@ type Observation struct {
 	Merged []MergedBox `json:"merged,omitempty"`
 	// Ignored lists spots left out on purpose: a stuck piece the sort works around.
 	Ignored []Box `json:"ignored,omitempty"`
+	// RingRadius is the channel's outer radius in this frame's pixels, to judge how
+	// big a piece is, or how much of the channel is covered.
+	RingRadius float64 `json:"ring_radius,omitempty"`
 }
+
+// Covered is the share of the channel's ring the pieces' boxes cover (0 when the ring
+// isn't known).
+func (o Observation) Covered() float64 {
+	if o.RingRadius <= 0 {
+		return 0
+	}
+	area := 0
+	for _, p := range o.Pieces {
+		area += p.Box.Area()
+	}
+	return float64(area) / (math.Pi * o.RingRadius * o.RingRadius)
+}
+
+// Clump reports a box too big to be one piece: pieces lying together in a pile.
+func (o Observation) Clump(b Box) bool {
+	return o.RingRadius > 0 && float64(max(b.X2-b.X1, b.Y2-b.Y1)) > clumpShare*o.RingRadius
+}
+
+// clumpShare: a box whose longer side is more than this share of the ring's radius is
+// a pile, not a piece (a big plate is about half).
+const clumpShare = 0.75
 
 // Leading is the piece nearest the exit, if any.
 func (o Observation) Leading() (PieceObs, bool) {
@@ -56,7 +82,7 @@ type MergedBox struct {
 // Observe turns a frame's detections into an observation of the channel. Boxes off
 // the channel are dropped; boxes within mergeGap pixels of each other become one.
 func Observe(z ChannelZones, boxes []Box, mergeGap int, at time.Time) Observation {
-	obs := Observation{At: at, Valid: true, Pieces: []PieceObs{}}
+	obs := Observation{At: at, Valid: true, Pieces: []PieceObs{}, RingRadius: z.Ring.OuterRadius}
 	for _, m := range MergeBoxes(boxes, mergeGap) {
 		center := m.Box.Center()
 		if !z.OnChannel(center) {

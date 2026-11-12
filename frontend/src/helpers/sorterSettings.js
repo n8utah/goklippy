@@ -66,6 +66,8 @@ export const DEFAULT_SORTER_SETTINGS = {
     carryRpm: { c1: 5, c2: 12, c3: 12 },
     carryAccel: 30,
     carryPulseDeg: 90,
+    maxPieces: { c2: 6, c3: 3 },
+    maxCover: 0.2,
     starveMs: 3000,
     starveBulkDeg: 30,
     backupMs: 1000,

@@ -64,6 +64,37 @@ func TestFeederBackPressureFromADropZone(t *testing.T) {
 	assert.NotContains(t, moves, ChannelC2)
 }
 
+// A channel holding its limit takes no more: C2 holds its piece while C3 has 3, and
+// C1 waits while C2 has 6.
+func TestFeederFillLimit(t *testing.T) {
+	s := feederSettings()
+	now := time.Now()
+	ridingC3 := []vision.PieceObs{piece(vision.ZoneNone, 100), piece(vision.ZoneNone, 140), piece(vision.ZoneNone, 180)}
+
+	f := NewFeeder()
+	moves := movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, piece(vision.ZoneExit, -1)), C3: obs(now, ridingC3...)}, s))
+	assert.NotContains(t, moves, ChannelC2, "C3 is full")
+	f = NewFeeder()
+	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, piece(vision.ZoneExit, -1)), C3: obs(now, ridingC3[:2]...)}, s))
+	assert.Equal(t, "exit", moves[ChannelC2].Kind, "room on C3")
+
+	var six []vision.PieceObs
+	for i := range 6 {
+		six = append(six, piece(vision.ZoneNone, float64(60+20*i)))
+	}
+	f = NewFeeder()
+	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, six...), C3: obs(now)}, s))
+	assert.NotContains(t, moves, ChannelC1, "C2 is full")
+	assert.Equal(t, TimeWaiting, f.State(ChannelC1))
+
+	// One blob, but covering a quarter of C3's ring: a pile, so C3 is full too.
+	pile := obs(now, vision.PieceObs{Box: vision.Box{X1: 0, Y1: 0, X2: 160, Y2: 160}, Zone: vision.ZoneNone, ForwardToExit: 120})
+	pile.RingRadius = 180
+	f = NewFeeder()
+	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, piece(vision.ZoneExit, -1)), C3: pile}, s))
+	assert.NotContains(t, moves, ChannelC2, "C3 is covered")
+}
+
 // The short hold after a fall is pacing, not a hold-up.
 func TestFeederHoldAfterFallIsNotBackPressure(t *testing.T) {
 	s := feederSettings()

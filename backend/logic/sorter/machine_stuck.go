@@ -76,13 +76,20 @@ func (m *Machine) recoverLanding(ch Channel) {
 	obs := st.deps.Vision.Observation(ch)
 	lead, seen := obs.Leading()
 	box, area := lead.Box, pieceArea(obs, lead.Box)
-	push := seen && settings.Feeder.PushPastStuck && settings.Feeder.PushSeconds > 0 && settings.Feeder.ClearRpm > 0
-	shake := !push || (settings.Feeder.ShakeBeforePush && !m.stuckAgain(ch, box, time.Now()))
+	// Too big to be one piece: a pile of them, jammed. It's cleared off the end (no
+	// bump: more pieces are the last thing it needs), and never worked around.
+	pile := seen && obs.Clump(box)
+	push := seen && settings.Feeder.ClearRpm > 0 &&
+		(pile || (settings.Feeder.PushPastStuck && settings.Feeder.PushSeconds > 0))
+	shake := !pile && (!push || (settings.Feeder.ShakeBeforePush && !m.stuckAgain(ch, box, time.Now())))
 	runner := m.recovery()
 
 	var freed, pushed bool
 	name := fmt.Sprintf("Recovery: %s on %s", LandingHeld.Title, ch)
-	if !shake {
+	switch {
+	case pile:
+		name = fmt.Sprintf("Recovery: clear a pile of pieces off %s", ch)
+	case !shake:
 		name = fmt.Sprintf("Recovery: push a stuck piece past on %s", ch)
 	}
 	err := m.startJob(name, func(ctx context.Context, report reportFunc) error {
@@ -96,10 +103,14 @@ func (m *Machine) recoverLanding(ch Channel) {
 			return nil
 		}
 		pushed = true
-		if err := m.pushPast(ctx, ch, settings, report); err != nil {
+		if err := m.pushPast(ctx, ch, settings, pile, report); err != nil {
 			return err
 		}
-		freed = !stillThere(st.deps.Vision.Observation(ch), box, area)
+		after := st.deps.Vision.Observation(ch)
+		freed = !stillThere(after, box, area)
+		if pile {
+			freed = freed && !anyClump(after)
+		}
 		return nil
 	}, func(err error) {
 		now := time.Now()
@@ -110,6 +121,14 @@ func (m *Machine) recoverLanding(ch Channel) {
 			m.noteFreed(ch, box, now)
 			st.feeder.Unstick(ch)
 			slog.Info("stuck piece freed", "channel", ch, "pushed", pushed)
+			return
+		}
+		if pile {
+			m.raiseIncident(Incident{
+				Kind:    IncidentLandingStuck,
+				Title:   fmt.Sprintf("%s is jammed with pieces", ch),
+				Message: "Pieces are packed together on it and running it didn't clear them. Take some off (big plates jam it most), then press Done.",
+			})
 			return
 		}
 		if m.workAroundStuck(ch) {
@@ -129,11 +148,15 @@ func (m *Machine) recoverLanding(ch Channel) {
 }
 
 // pushPast drops a few pieces in behind the stuck one and runs ch and the channels
-// after it together, so they push it along. Runs as part of a job.
-func (m *Machine) pushPast(ctx context.Context, ch Channel, settings MachineSettings, report reportFunc) error {
+// after it together, so they push it along. A pile gets no bump and the Clear time.
+// Runs as part of a job.
+func (m *Machine) pushPast(ctx context.Context, ch Channel, settings MachineSettings, pile bool, report reportFunc) error {
 	fs := settings.Feeder
 	chs := pushChannels(ch)
-	secs := fs.PushSeconds
+	secs, bump := fs.PushSeconds, fs.PushBumpDeg
+	if pile {
+		secs, bump = max(fs.PushSeconds, fs.ClearSeconds), 0
+	}
 	total := secs + 2
 	if !settings.Distributor.LeftOut {
 		report(1, total, "Closing every layer, so whatever is pushed off C4 drops into the bucket")
@@ -144,10 +167,10 @@ func (m *Machine) pushPast(ctx context.Context, ch Channel, settings MachineSett
 			return err
 		}
 	}
-	if fs.PushBumpDeg > 0 {
+	if bump > 0 {
 		up := before(ch)
 		report(2, total, fmt.Sprintf("Turning %s so a few pieces drop in behind the stuck one", up))
-		done, err := m.hw.RampChannel(up, fs.PushBumpDeg, fs.ClearRpm, fs.ClearAccel)
+		done, err := m.hw.RampChannel(up, bump, fs.ClearRpm, fs.ClearAccel)
 		if err != nil {
 			return err
 		}
@@ -163,6 +186,16 @@ func (m *Machine) pushPast(ctx context.Context, ch Channel, settings MachineSett
 	}
 	// Look again once the channels have stopped and the camera has a still frame.
 	return waitFor(ctx, time.Duration(settings.Platter.SettleMs)*time.Millisecond+recoverySettle)
+}
+
+// anyClump reports a pile still on the channel.
+func anyClump(obs vision.Observation) bool {
+	for _, p := range obs.Pieces {
+		if obs.Clump(p.Box) {
+			return true
+		}
+	}
+	return false
 }
 
 // pushLandMs: wait for the bumped pieces to land before pushing.
