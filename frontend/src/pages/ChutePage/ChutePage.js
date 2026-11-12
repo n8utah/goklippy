@@ -1,187 +1,222 @@
+import { Navigate, useParams } from 'react-router';
+
+import NumberField from '@/components/NumberField/NumberField';
+import ObjectSelect from '@/components/ObjectSelect/ObjectSelect';
+import SettingField from '@/components/SettingField/SettingField';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import { sentence } from '@/helpers/text';
+import { useMachineMotors } from '@/helpers/useMachineMotors';
+import { cn } from '@/lib/utils';
+
 import { useChutePageLogic } from './ChutePage.logic';
 import CalibrationPanel from './components/CalibrationPanel';
+import LayersTab from './components/LayersTab';
 import TowerMap from './components/TowerMap';
 
-import styles from './ChutePage.module.css';
-import appStyles from '../../styles/app.module.css';
+const PARTS = ['calibrate', 'layers', 'test'];
 
-const STATE_LABELS = {
-  standby: 'Standby',
-  homing: 'Homing',
-  ready: 'Ready',
-  running: 'Sorting',
-  paused: 'Paused',
-  error: 'Error',
-};
-
-function NumberSetting({ label, value, min, step, unit, onChange }) {
+function Stat({ label, value, note }) {
   return (
-    <label className={styles.field}>
-      <span className={styles.fieldLabel}>
-        {label}
-        {unit && <span className={styles.unit}> ({unit})</span>}
-      </span>
-      <input
-        type="number"
-        min={min}
-        step={step}
-        value={value}
-        onChange={(e) => {
-          const next = Number(e.target.value);
-          if (e.target.value !== '' && next >= min) onChange(next);
-        }}
-      />
-    </label>
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="font-mono text-xl font-medium">{value}</p>
+      {note && <p className="truncate text-xs text-muted-foreground">{note}</p>}
+    </div>
   );
 }
 
-function JobLine({ job, lastJob, onCancel }) {
-  if (job) {
-    return (
-      <div className={styles.job}>
-        <span>
-          <strong>{job.name}</strong>
-          {job.total > 0 && ` — step ${job.step} of ${job.total}`}
-          {job.detail && `: ${job.detail}`}
-        </span>
-        <button type="button" className={appStyles.buttonSecondary} onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-    );
-  }
-  if (lastJob?.error) {
-    return (
-      <p className={styles.alert}>
-        {lastJob.name} failed: {lastJob.error}
-      </p>
-    );
-  }
-  return null;
-}
-
+/**
+ * Machine › Chute: Calibrate (home, aim, chute settings), Layers (doors, bins per layer,
+ * motor and gearing) and Test bins, at /machine/chute/<part>.
+ */
 const ChutePage = () => {
+  const { part = 'calibrate' } = useParams();
   const logic = useChutePageLogic();
-  const { state, status, distributor, busy, sorting, layer, layers, geometry } = logic;
+  const motors = useMachineMotors();
+  const { state, status, distributor, busy, sorting, layers, geometry } = logic;
   const homed = Boolean(status?.homed);
   const canMove = Boolean(state?.hardware?.connected) && !busy && !sorting;
 
+  if (!PARTS.includes(part)) return <Navigate to="/machine/chute" replace />;
+
   return (
-    <section className={appStyles.card}>
-      <div className={styles.headerRow}>
-        <div>
-          <h2 className={styles.title}>Chute</h2>
-          <p className={appStyles.muted}>
-            {logic.liveConnected ? (
-              <>
-                Sorter <strong>{STATE_LABELS[state?.state] ?? '…'}</strong>
-                {state?.hardware?.connected ? ` on ${state.hardware.port}` : ` — ${state?.hardware?.message ?? 'no board'}`}
-              </>
-            ) : (
-              'Connecting to the backend…'
-            )}
-          </p>
-        </div>
-        <div className={styles.buttonRow}>
-          <button type="button" className={appStyles.button} disabled={busy || state?.state === 'running'} onClick={logic.home}>
-            {homed ? 'Home again' : 'Home'}
-          </button>
-          <button type="button" className={appStyles.buttonSecondary} disabled={!canMove} onClick={logic.zero} title="Use where the chute points now as 0°, without the home switch">
+    <div className="ds flex flex-col gap-4">
+      {/* The chute now, and homing it. */}
+      <section className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm">
+          {!logic.liveConnected
+            ? 'Connecting to the backend…'
+            : state?.hardware?.connected
+              ? `Board on ${state.hardware.port}.`
+              : sentence(state?.hardware?.message) || 'No board connected.'}{' '}
+          {sorting && 'Moving the chute by hand waits until the sort stops.'}
+        </p>
+        <div className="flex shrink-0 gap-2">
+          <Button
+            variant="outline"
+            disabled={!canMove}
+            onClick={logic.zero}
+            title="Use where the chute points now as 0°, without the home switch"
+          >
             Set 0° here
-          </button>
+          </Button>
+          <Button
+            disabled={busy || state?.state === 'running' || !state?.hardware?.connected}
+            onClick={logic.home}
+          >
+            {homed ? 'Home again' : 'Home'}
+          </Button>
         </div>
+      </section>
+
+      {state?.job && (
+        <section className="flex flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm">
+              <span className="font-medium capitalize">{state.job.name}</span>
+              {state.job.detail && (
+                <span className="text-muted-foreground"> · {state.job.detail}</span>
+              )}
+            </p>
+            <Button variant="outline" size="sm" onClick={logic.cancel}>
+              Cancel
+            </Button>
+          </div>
+          {state.job.total > 0 && <Progress value={(state.job.step / state.job.total) * 100} />}
+        </section>
+      )}
+      {!state?.job && state?.last_job?.error && (
+        <p className="text-sm text-destructive">
+          {state.last_job.name} failed: {state.last_job.error}
+        </p>
+      )}
+      {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+      {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Stat
+          label="Chute"
+          value={homed && status.angle != null ? `${status.angle.toFixed(1)}°` : 'Not homed'}
+          note="clockwise from home"
+        />
+        <Stat
+          label="Home switch"
+          value={status?.endstop ? (status.endstop === 'triggered' ? 'Pressed' : 'Open') : '—'}
+          note={sentence(status?.message) || distributor.endstop}
+        />
+        <Stat
+          label="Each section"
+          value={`${distributor.sectionWidth.toFixed(2)}°`}
+          note={`first starts ${distributor.firstSectionOffset.toFixed(2)}° from home`}
+        />
       </div>
 
-      {state?.error && <p className={styles.alert}>{state.error}</p>}
-      <JobLine job={state?.job} lastJob={state?.last_job} onCancel={logic.cancel} />
-      {logic.error && <p className={styles.alert}>{logic.error}</p>}
+      {part === 'calibrate' && (
+        <div className="grid items-start gap-4 xl:grid-cols-2">
+          <CalibrationPanel logic={logic} canMove={canMove && homed} />
+          <section className="flex flex-col gap-2 rounded-xl border border-border bg-card px-5 py-4">
+            <h2 className="font-display text-xl font-semibold">Chute settings</h2>
+            <div className="flex flex-wrap gap-4 py-2">
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium">Home switch</span>
+                <ObjectSelect
+                  value={distributor.endstop}
+                  objects={logic.endstopObjects}
+                  allowNone
+                  onChange={(endstop) => logic.setDistributor({ endstop })}
+                />
+              </label>
+              <NumberField
+                id="chute-max"
+                label="Travel limit"
+                value={distributor.maxAngle}
+                min={1}
+                max={360}
+                unit="°"
+                onChange={(maxAngle) => logic.setDistributor({ maxAngle })}
+              />
+              <NumberField
+                id="chute-sections"
+                label="Sections per layer"
+                value={distributor.sections}
+                min={1}
+                max={12}
+                onChange={(v) => logic.setDistributor({ sections: Math.round(v) })}
+              />
+            </div>
+            <label className="flex items-center gap-2 pb-2 text-sm">
+              <Checkbox
+                checked={distributor.forward}
+                onCheckedChange={(v) => logic.setDistributor({ forward: Boolean(v) })}
+              />
+              The motor’s forward turns the chute clockwise, seen from above
+            </label>
+            <div className="divide-y divide-border border-t border-border">
+              <SettingField settingKey="distributor.homeRpm" />
+              <SettingField settingKey="distributor.doorSettleMs" />
+            </div>
+            <p className="pt-2 text-sm text-muted-foreground">
+              The home switch is an <code className="font-mono">endstop_pin</code> on the chute’s
+              stepper section, under Machine › Board › Wiring.
+            </p>
+          </section>
+        </div>
+      )}
 
-      <div className={styles.stats}>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>Chute</span>
-          <span className={styles.statValue}>{homed && status.angle != null ? `${status.angle.toFixed(1)}°` : 'Not homed'}</span>
-          <span className={styles.statNote}>clockwise from home</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>Home switch</span>
-          <span className={styles.statValue}>{status?.endstop ? (status.endstop === 'triggered' ? 'Triggered' : 'Open') : '—'}</span>
-          <span className={styles.statNote}>{status?.message || distributor.endstop}</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>Geometry</span>
-          <span className={styles.statValue}>{distributor.sectionWidth.toFixed(2)}°</span>
-          <span className={styles.statNote}>
-            per section, first at {distributor.firstSectionOffset.toFixed(2)}°
-          </span>
-        </div>
-      </div>
+      {part === 'layers' && <LayersTab motors={motors} />}
 
-      <div className={styles.layout}>
-        <div className={styles.panel}>
-          <div className={styles.layerTabs}>
+      {part === 'test' && (
+        <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Layer">
             {layers.map((_, i) => (
               <button
                 key={i}
                 type="button"
-                className={i === logic.layerIndex ? styles.tabActive : styles.tab}
+                role="tab"
+                aria-selected={i === logic.layerIndex}
                 onClick={() => logic.setLayerIndex(i)}
+                className={cn(
+                  'h-9 rounded-full border px-4 text-sm font-medium',
+                  i === logic.layerIndex
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border text-muted-foreground hover:bg-accent',
+                )}
               >
                 Layer {i + 1}
               </button>
             ))}
           </div>
           <TowerMap
-            bins={layer}
+            bins={logic.layer}
             geometry={geometry}
             angle={homed ? status.angle : null}
             disabled={!canMove || !homed}
             onBin={logic.sendToBin}
           />
-          <p className={styles.hint}>
-            {homed ? 'Click a bin to select its layer and aim the chute at it.' : 'Home the chute to aim at bins.'}
+          <p className="text-center text-sm text-muted-foreground">
+            {homed
+              ? 'Pick a bin to open its layer and aim the chute at it.'
+              : 'Home the chute to aim at bins.'}
           </p>
-          <div className={styles.buttonRow}>
-            <button type="button" className={appStyles.button} disabled={!canMove || !homed} onClick={logic.testLayer}>
+          <div className="flex flex-wrap items-end justify-center gap-3 border-t border-border pt-4">
+            <NumberField
+              id="test-dwell"
+              label="Pause at each"
+              value={logic.testDwellMs}
+              min={0}
+              step={250}
+              unit="ms"
+              onChange={logic.setTestDwellMs}
+            />
+            <Button disabled={!canMove || !homed} onClick={logic.testLayer}>
               Test every bin on layer {logic.layerIndex + 1}
-            </button>
-            <NumberSetting label="Pause at each" value={logic.testDwellMs} min={0} step={250} unit="ms" onChange={logic.setTestDwellMs} />
+            </Button>
           </div>
-        </div>
-
-        <CalibrationPanel logic={logic} canMove={canMove && homed} />
-      </div>
-
-      <div className={styles.panel}>
-        <h3 className={styles.panelTitle}>Chute settings</h3>
-        <div className={styles.fields}>
-          <label className={styles.field}>
-            <span className={styles.fieldLabel}>Home switch</span>
-            <select value={distributor.endstop} onChange={(e) => logic.setDistributor({ endstop: e.target.value })}>
-              {!logic.endstopObjects.some((obj) => obj.section === distributor.endstop) && (
-                <option value={distributor.endstop}>{distributor.endstop || 'None'}</option>
-              )}
-              {logic.endstopObjects.map((obj) => (
-                <option key={obj.oid} value={obj.section}>
-                  {obj.section}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.checkField}>
-            <input type="checkbox" checked={distributor.forward} onChange={(e) => logic.setDistributor({ forward: e.target.checked })} />
-            Motor forward turns the chute clockwise
-          </label>
-          <NumberSetting label="Homing speed" value={distributor.homeRpm} min={0.1} step={0.5} unit="rpm" onChange={(v) => logic.setDistributor({ homeRpm: v })} />
-          <NumberSetting label="Travel limit" value={distributor.maxAngle} min={1} step={1} unit="°" onChange={(v) => logic.setDistributor({ maxAngle: Math.min(360, v) })} />
-          <NumberSetting label="Sections per layer" value={distributor.sections} min={1} step={1} onChange={(v) => logic.setDistributor({ sections: Math.round(v) })} />
-          <NumberSetting label="Servo settle" value={distributor.doorSettleMs} min={0} step={50} unit="ms" onChange={(v) => logic.setDistributor({ doorSettleMs: v })} />
-        </div>
-        <p className={styles.hint}>
-          The home switch is an <code>endstop_pin</code> on the chute&apos;s stepper section (Machine › Board › Wiring). Speed,
-          acceleration, gearing and the layer servos are on the LEGO Sorter page.
-        </p>
-      </div>
-    </section>
+        </section>
+      )}
+    </div>
   );
 };
 

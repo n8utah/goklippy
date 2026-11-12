@@ -78,13 +78,25 @@ export const NAV_GROUPS = [
         id: 'channels',
         label: 'Channels',
         path: '/machine/channels',
-        about: 'C1–C4 motors, gearing and speeds, and the chute',
+        about: 'C1–C4 by hand: speeds, motors, gearing, routines',
+        parts: [
+          { id: 'c1', label: 'C1' },
+          { id: 'c2', label: 'C2' },
+          { id: 'c3', label: 'C3' },
+          { id: 'c4', label: 'C4' },
+          { id: 'routines', label: 'Routines' },
+        ],
       },
       {
         id: 'chute',
         label: 'Chute',
         path: '/machine/chute',
-        about: 'Home and calibrate the chute, test bins',
+        about: 'Home and calibrate the chute, its layers, and test bins',
+        parts: [
+          { id: 'calibrate', label: 'Calibrate' },
+          { id: 'layers', label: 'Layers' },
+          { id: 'test', label: 'Test bins' },
+        ],
       },
       {
         id: 'cameras',

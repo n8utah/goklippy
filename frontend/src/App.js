@@ -4,7 +4,6 @@ import {
   Navigate,
   Route,
   Routes,
-  useNavigate,
   useSearchParams,
 } from 'react-router';
 
@@ -17,17 +16,15 @@ import BenchPage from './pages/BenchPage/BenchPage';
 import BinsPage from './pages/BinsPage/BinsPage';
 import BoardPage from './pages/BoardPage/BoardPage';
 import CamerasPage from './pages/CamerasPage/CamerasPage';
+import ChannelsPage from './pages/ChannelsPage/ChannelsPage';
 import ChutePage from './pages/ChutePage/ChutePage';
 import HomePage from './pages/HomePage/HomePage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
 import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
 import RecordsPage from './pages/RecordsPage/RecordsPage';
-import SorterPage from './pages/SorterPage/SorterPage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
 import SortPage from './pages/SortPage/SortPage';
 import UiKitPage from './pages/UiKitPage/UiKitPage';
-
-const CONNECTION_PATH = '/machine/board/connection';
 
 /** A page from before the new UI: always light until build step 4 rebuilds it. */
 const Legacy = ({ children }) => <div className="legacy-page">{children}</div>;
@@ -38,15 +35,6 @@ const RecordsRoute = () => {
   return (
     <Legacy>
       <RecordsPage key={piece || 'records'} initialPieceId={piece} />
-    </Legacy>
-  );
-};
-
-const ChannelsRoute = () => {
-  const navigate = useNavigate();
-  return (
-    <Legacy>
-      <SorterPage onGoBoard={() => navigate(CONNECTION_PATH)} />
     </Legacy>
   );
 };
@@ -104,15 +92,8 @@ const App = () => (
                 <Route index element={<Navigate to="board" replace />} />
                 {/* One route, so the page keeps its state from tab to tab. */}
                 <Route path="board/:part?" element={<BoardPage />} />
-                <Route path="channels" element={<ChannelsRoute />} />
-                <Route
-                  path="chute"
-                  element={
-                    <Legacy>
-                      <ChutePage />
-                    </Legacy>
-                  }
-                />
+                <Route path="channels/:part?" element={<ChannelsPage />} />
+                <Route path="chute/:part?" element={<ChutePage />} />
                 <Route
                   path="cameras"
                   element={

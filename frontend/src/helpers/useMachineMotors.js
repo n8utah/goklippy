@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { INDEXING_LABEL, useMCUSession } from '../../context/MCUSessionContext';
-import { MAX_STEPPER_SPEED } from '../../helpers/stepperGroups';
-import { readLocal, useMachineSettings, useServerDocument } from '../../helpers/sorterSettings';
-import { loadStepperRoutines } from '../../helpers/stepperRoutines';
+import { INDEXING_LABEL, useMCUSession } from '../context/MCUSessionContext';
+import { readLocal, useMachineSettings, useServerDocument } from './sorterSettings';
+import { MAX_STEPPER_SPEED } from './stepperGroups';
+import { loadStepperRoutines } from './stepperRoutines';
 
 const ROUTINES_KEY = 'goklippy_sorter_routines';
 const FULL_STEPS_PER_REV = 200;
@@ -78,9 +78,15 @@ export function routineSegmentsFor(routine, { config, stepsPerRev }, label) {
       throw new Error(`${where}: ${move.degrees}° is too small a turn for ${label}.`);
     }
     if (move.rpm > maxRpm) {
-      throw new Error(`${where}: ${move.rpm} rpm is faster than ${label} can go (max ${maxRpm.toFixed(1)} rpm).`);
+      throw new Error(
+        `${where}: ${move.rpm} rpm is faster than ${label} can go (max ${maxRpm.toFixed(1)} rpm).`,
+      );
     }
-    return { forward: move.forward === config.forward, steps, speedHz: rpmToStepsPerSec(move.rpm, stepsPerRev) };
+    return {
+      forward: move.forward === config.forward,
+      steps,
+      speedHz: rpmToStepsPerSec(move.rpm, stepsPerRev),
+    };
   });
 }
 
@@ -95,7 +101,12 @@ export function indexAlignment(angle, indexDegrees) {
   };
 }
 
-export function useSorterPageLogic() {
+/**
+ * The machine's motors by hand: C1–C4 (speed, direction, gearing, routines, C4 indexing)
+ * and the chute's stepper and layer servos, from the machine settings and the board's live
+ * motion. Machine › Channels and Machine › Chute's Layers tab use it.
+ */
+export function useMachineMotors() {
   const {
     connected,
     wsConnected,
@@ -162,12 +173,24 @@ export function useSorterPageLogic() {
         angle: ((position - (zeroes[oid] ?? 0)) / stepsPerRev) * 360,
         running: oid != null && isStepperRunning(oid),
         indexing: oid != null && stepperRoutineOids[oid] === INDEXING_LABEL,
-        routineRunning: oid != null && Boolean(stepperRoutineOids[oid]) && stepperRoutineOids[oid] !== INDEXING_LABEL,
+        routineRunning:
+          oid != null &&
+          Boolean(stepperRoutineOids[oid]) &&
+          stepperRoutineOids[oid] !== INDEXING_LABEL,
         error: oid == null ? '' : stepperRoutineErrors[oid] || '',
       };
     }
     return out;
-  }, [settings, targets, stepperObjects, motionByOid, zeroes, isStepperRunning, stepperRoutineOids, stepperRoutineErrors]);
+  }, [
+    settings,
+    targets,
+    stepperObjects,
+    motionByOid,
+    zeroes,
+    isStepperRunning,
+    stepperRoutineOids,
+    stepperRoutineErrors,
+  ]);
 
   const guard = useCallback(async (fn) => {
     setActionError('');
@@ -281,12 +304,17 @@ export function useSorterPageLogic() {
 
   const setLayer = (index, patch) =>
     setDistributor({
-      layers: settings.distributor.layers.map((layer, i) => (i === index ? { ...layer, ...patch } : layer)),
+      layers: settings.distributor.layers.map((layer, i) =>
+        i === index ? { ...layer, ...patch } : layer,
+      ),
     });
 
   const addLayer = () =>
     setDistributor({
-      layers: [...settings.distributor.layers, { servo: '', bins: 18, openAngle: 90, closedAngle: 0 }],
+      layers: [
+        ...settings.distributor.layers,
+        { servo: '', bins: 18, openAngle: 90, closedAngle: 0 },
+      ],
     });
 
   const removeLayer = (index) =>

@@ -4,12 +4,10 @@ import { toast } from 'sonner';
 import { getSorterBins, listSorterIncidents, sorterCommand } from '../../helpers/api';
 import { useMachineSettings } from '../../helpers/sorterSettings';
 import { useSorterState } from '../../helpers/sorterState';
+import { sentence } from '../../helpers/text';
 
 const POLL_MS = 10000;
 
-/** A backend message as a sentence: capital first letter, full stop. */
-const sentence = (s) =>
-  s ? `${s[0].toUpperCase()}${s.slice(1)}${/[.!?]$/.test(s) ? '' : '.'}` : '';
 const RECENT_PROBLEMS = 4;
 
 /**

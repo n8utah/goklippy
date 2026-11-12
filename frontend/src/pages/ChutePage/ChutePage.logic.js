@@ -80,12 +80,16 @@ export function useChutePageLogic() {
   const calibrationLayers = useMemo(
     () =>
       distributor.layers
-        .map((l, i) => ({ index: i, perSection: Math.floor(l.bins / Math.max(1, distributor.sections)) }))
+        .map((l, i) => ({
+          index: i,
+          perSection: Math.floor(l.bins / Math.max(1, distributor.sections)),
+        }))
         .filter((l) => l.perSection >= 2),
     [distributor],
   );
   const [calibrationLayer, setCalibrationLayer] = useState(0);
-  const calLayer = calibrationLayers.find((l) => l.index === calibrationLayer) ?? calibrationLayers[0];
+  const calLayer =
+    calibrationLayers.find((l) => l.index === calibrationLayer) ?? calibrationLayers[0];
 
   const home = () => guard(() => sorterCommand('home'));
   const zero = () => guard(() => zeroSorterChute().then(refreshChute));
@@ -114,12 +118,17 @@ export function useChutePageLogic() {
   const workItOut = () =>
     guard(async () => {
       if (!calLayer) throw new Error('No layer has at least two bins per section to calibrate on.');
-      setCalibration(await calibrateSorterChute(captures.first, captures.last, calLayer.perSection));
+      setCalibration(
+        await calibrateSorterChute(captures.first, captures.last, calLayer.perSection),
+      );
     });
 
   const applyCalibration = () => {
     if (!calibration) return;
-    setDistributor({ sectionWidth: calibration.section_width, firstSectionOffset: calibration.first_section_offset });
+    setDistributor({
+      sectionWidth: calibration.section_width,
+      firstSectionOffset: calibration.first_section_offset,
+    });
     setCaptures({ first: null, last: null });
     setCalibration(null);
   };
