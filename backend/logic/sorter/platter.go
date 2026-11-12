@@ -159,6 +159,36 @@ func (p *Platter) roomForAnother(settings MachineSettings) bool {
 	return true
 }
 
+// TimeState is what C4 is doing now, for the time spent (time_spent.go): turning;
+// busy photographing, waiting on Brickognize or for the chute; waiting to turn with
+// pieces aboard; or empty.
+func (p *Platter) TimeState(now time.Time) string {
+	if p.indexDone != nil || p.aimDone != nil {
+		if p.indexDone != nil {
+			return TimeMoving
+		}
+		return TimeBusy // the chute is turning for the next piece
+	}
+	aboard := false
+	for _, s := range p.slots {
+		if s == nil {
+			continue
+		}
+		aboard = true
+		if s.state < slotResolved {
+			return TimeBusy // landing, photographed or being identified
+		}
+	}
+	switch {
+	case !aboard:
+		return TimeEmpty
+	case now.Before(p.settleUntil) || now.Before(p.doorsSettled):
+		return TimeBusy
+	default:
+		return TimeWaiting
+	}
+}
+
 // Aboard lists the pieces on the platter, nearest the exit first.
 func (p *Platter) Aboard() []Piece {
 	var out []Piece

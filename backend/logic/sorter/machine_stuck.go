@@ -12,8 +12,10 @@ import (
 // A piece stuck where pieces land on C2 or C3 (it doesn't ride with the channel) is
 // dealt with in steps, each tried only if the one before didn't free it:
 //
-//  1. Shake (Sorter V2's landing-held procedure). Skipped when a piece stuck again
-//     near where one was freed within stuckAgainWithin: the shake only nudged it.
+//  1. Shake (Sorter V2's landing-held procedure), only with Feeder.ShakeBeforePush or
+//     pushing off: on the machine a stuck piece is most often caught on a fixed part,
+//     where shaking only nudges it and pushing frees it. Also skipped when a piece
+//     stuck again near where one was freed within stuckAgainWithin.
 //  2. Push it past (Feeder.PushPastStuck): turn the channel before a little so a few
 //     pieces drop in behind it, then run this channel and those after it together, so
 //     they shove it along. With the chute in every layer is closed first; whatever runs
@@ -74,17 +76,17 @@ func (m *Machine) recoverLanding(ch Channel) {
 	obs := st.deps.Vision.Observation(ch)
 	lead, seen := obs.Leading()
 	box, area := lead.Box, pieceArea(obs, lead.Box)
-	again := seen && m.stuckAgain(ch, box, time.Now())
 	push := seen && settings.Feeder.PushPastStuck && settings.Feeder.PushSeconds > 0 && settings.Feeder.ClearRpm > 0
+	shake := !push || (settings.Feeder.ShakeBeforePush && !m.stuckAgain(ch, box, time.Now()))
 	runner := m.recovery()
 
 	var freed, pushed bool
 	name := fmt.Sprintf("Recovery: %s on %s", LandingHeld.Title, ch)
-	if again {
+	if !shake {
 		name = fmt.Sprintf("Recovery: push a stuck piece past on %s", ch)
 	}
 	err := m.startJob(name, func(ctx context.Context, report reportFunc) error {
-		if !again {
+		if shake {
 			var err error
 			if freed, err = runner.run(ctx, LandingHeld, ch, report); err != nil || freed {
 				return err

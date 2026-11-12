@@ -28,6 +28,7 @@ type sortStations struct {
 	feeder  *Feeder
 	platter *Platter
 	runID   int64
+	spent   *timeSpent // this run's time per channel per state
 }
 
 // ChannelSummary is one camera channel's state for the dashboard.
@@ -92,6 +93,8 @@ func (m *Machine) startRun(now time.Time) error {
 	st.runID = runID
 	st.feeder.Reset()
 	st.platter.Reset(now)
+	st.spent = newTimeSpent()
+	st.spent.last = now
 	slog.Info("sort run started", "run", runID, "profile", name)
 	return nil
 }
@@ -114,17 +117,34 @@ func (m *Machine) endRun(now time.Time) {
 
 // stepSorting runs the stations for one tick: the platter, then the feeder feeding it.
 func (m *Machine) stepSorting(now time.Time) {
-	if m.sort == nil || m.incident != nil || m.job != nil {
-		return // held: an incident, or a recovery moving the channels
+	if m.sort == nil {
+		return
 	}
 	st := m.sort
+	var dt time.Duration
+	if st.spent != nil {
+		dt = st.spent.tick(now)
+	}
+	held := func() bool {
+		if m.incident == nil && m.job == nil {
+			return false
+		}
+		if st.spent != nil {
+			st.spent.addAll(TimeStuck, dt) // a recovery, or stopped for an incident
+		}
+		return true
+	}
+	if held() {
+		return
+	}
 	settings := m.settings()
 	st.platter.Step(now)
-	if m.incident != nil || m.job != nil {
+	if held() {
 		return // the platter just raised one or started a recovery
 	}
 	if stuck := st.feeder.Stuck(); len(stuck) > 0 {
 		m.recoverLanding(stuck[0])
+		held()
 		return
 	}
 	moves := st.feeder.Step(FeederInput{
@@ -137,9 +157,15 @@ func (m *Machine) stepSorting(now time.Time) {
 		st.platter.ExpectSeveral(now) // the next landing on C4 is a double
 	}
 	for _, mv := range moves {
-		if _, err := m.hw.MoveChannel(mv.Channel, mv.Degrees, mv.Rpm); err != nil {
+		if _, err := m.hw.RampChannel(mv.Channel, mv.Degrees, mv.Rpm, mv.Accel); err != nil {
 			slog.Warn("feeder move refused", "channel", mv.Channel, "error", err)
 		}
+	}
+	if st.spent != nil {
+		for _, ch := range []Channel{ChannelC1, ChannelC2, ChannelC3} {
+			st.spent.add(ch, st.feeder.State(ch), dt)
+		}
+		st.spent.add(ChannelC4, st.platter.TimeState(now), dt)
 	}
 }
 
@@ -340,6 +366,9 @@ func (m *Machine) sortSnapshot(snap *Snapshot) {
 	}
 	st := m.sort
 	snap.RunID = st.runID
+	if st.spent != nil {
+		snap.TimeMs = st.spent.snapshot()
+	}
 	snap.Aboard = append(snap.Aboard, st.platter.Aboard()...)
 	snap.Recent = append(snap.Recent, st.platter.Recent()...)
 	now := time.Now()

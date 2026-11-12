@@ -305,6 +305,14 @@ flags.
   before it stops feeding it (C2's exit pulses, C1's bulk pulses) until it moves again, so a
   hold-up cascades up the line instead of piling pieces onto the waiting channel to be dumped
   together. The short hold after a fall and being mid-move don't count. Shown on Run › Sort.
+- Throughput (built 2026-11-12, after the first real runs sorted 2–3 a minute with C4 mostly
+  idle): carrying moves (drop pulses) run at `feeder.carryRpm` (C2/C3 12 rpm, never slower
+  than the channel's own speed) ramping at `carryAccel`, and go up to `carryPulseDeg` (90°)
+  while the channel ahead is taking pieces; exit pulses keep the channel's careful speed.
+  When C2 has had no piece for `starveMs` (3 s) C1 nudges `starveBulkDeg` (30°) at its carry
+  speed. Stuck pieces are pushed straight away (`shakeBeforePush` off) for 3 s. Each tick
+  every channel is moving, busy, waiting, empty or stuck (`time_spent.go`); the run's shares
+  are in the state (`time_ms`) and on Run › Sort, "Where the time goes".
 - Exit first (built 2026-11-12, `platter.clearExitFirst`, on by default): at most two pieces
   on C4. A second may land only while the other is in the exit slot (falls on the next index)
   still being identified; once that one is identified the platter tells C3 it isn't ready, so

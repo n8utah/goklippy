@@ -330,7 +330,12 @@ func TestSortStallRaisesAnIncident(t *testing.T) {
 func TestSortLandingHeldIsFreedByShaking(t *testing.T) {
 	held := sorter.SimCatalog[0]
 	held.HeldOn, held.HeldShakes = sorter.ChannelC3, 1 // one shake of C3 frees it
-	m, world, _ := startSimSort(t, fastSettings, []sorter.SimPart{held}, nil)
+	shakeFirst := func() sorter.MachineSettings {
+		s := fastSettings()
+		s.Feeder.ShakeBeforePush = true
+		return s
+	}
+	m, world, _ := startSimSort(t, shakeFirst, []sorter.SimPart{held}, nil)
 	require.Eventually(t, func() bool { return len(world.Falls()) == 1 && len(m.Snapshot().Aboard) == 0 }, 60*time.Second, 20*time.Millisecond)
 	assert.NotZero(t, world.Falls()[0].Layer, "sorted into its bin after all")
 	assert.Nil(t, m.Snapshot().Incident)
@@ -362,6 +367,14 @@ func TestSortWorksAroundAStuckPiece(t *testing.T) {
 
 	require.Eventually(t, func() bool { return len(world.Falls()) == 2 }, 60*time.Second, 20*time.Millisecond,
 		"the two pieces after the stuck one are sorted")
+	require.NotNil(t, m.Snapshot().LastJob)
+	assert.Contains(t, m.Snapshot().LastJob.Name, "push a stuck piece past", "pushed straight away, no shaking first")
+
+	// Where the time went: the push shows as stuck time, and the channels moved.
+	spent := m.Snapshot().TimeMs
+	assert.Positive(t, spent[sorter.ChannelC3][sorter.TimeStuck])
+	assert.Positive(t, spent[sorter.ChannelC3][sorter.TimeMoving])
+	assert.Positive(t, spent[sorter.ChannelC4][sorter.TimeMoving])
 	assert.Nil(t, m.Snapshot().Incident, "nothing stopped the sort")
 	assert.Equal(t, sorter.StateRunning, m.Snapshot().State)
 	assert.Equal(t, 1, world.Stuck(sorter.ChannelC3), "the stuck one is still there")

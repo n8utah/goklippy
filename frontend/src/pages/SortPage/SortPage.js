@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { CAMERA_CHANNELS, useSortPageLogic } from './SortPage.logic';
 import CameraTile from './components/CameraTile';
 import ChannelControls from './components/ChannelControls';
+import TimeSpent from './components/TimeSpent';
 
 /** What the machine is doing, in a sentence, for the top of the page. */
 function headline(state, connected, numbers) {
@@ -170,6 +171,11 @@ const SortPage = () => {
           />
         ))}
       </section>
+
+      <TimeSpent
+        timeMs={state?.time_ms}
+        current={state?.state === 'running' || state?.state === 'paused'}
+      />
 
       {/* On C4 now. */}
       <section aria-labelledby="sort-aboard">

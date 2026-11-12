@@ -222,6 +222,18 @@ type FeederSettings struct {
 	BulkPauseMs  int     `json:"bulkPauseMs"`
 	// StaleMs: a camera frame older than this is no information.
 	StaleMs int `json:"staleMs"`
+	// Carrying (drop pulses, and C1's nudges while C2 is starving) runs at CarryRpm
+	// (never slower than the channel's own speed) ramping at CarryAccel rpm/s; exit
+	// pulses keep the channel's own careful speed. While the next channel can take a
+	// piece, a drop pulse may go CarryPulseDeg instead of DropPulseDeg (it still stops
+	// the leading piece at the precise zone).
+	CarryRpm      map[string]float64 `json:"carryRpm"`
+	CarryAccel    float64            `json:"carryAccel"`
+	CarryPulseDeg float64            `json:"carryPulseDeg"`
+	// Starving: C2 has seen no piece for StarveMs, so C1's nudges go StarveBulkDeg at
+	// C1's carry speed until it does.
+	StarveMs      int     `json:"starveMs"`
+	StarveBulkDeg float64 `json:"starveBulkDeg"`
 	// BackupMs: a channel whose leading piece has waited at its exit this long, with
 	// the next channel unable to take it, is backed up, and the channel before it
 	// stops feeding it until it moves again.
@@ -234,9 +246,12 @@ type FeederSettings struct {
 	// PushBumpDeg so a few pieces drop in behind it, then run this channel and those
 	// after it for PushSeconds at the Clear speed so they shove it along
 	// (machine_stuck.go).
-	PushPastStuck bool    `json:"pushPastStuck"`
-	PushSeconds   int     `json:"pushSeconds"`
-	PushBumpDeg   float64 `json:"pushBumpDeg"`
+	PushPastStuck bool `json:"pushPastStuck"`
+	// ShakeBeforePush: shake a stuck piece first, and push only if that fails. Off, it's
+	// pushed straight away (shaking rarely frees one caught on a fixed part).
+	ShakeBeforePush bool    `json:"shakeBeforePush"`
+	PushSeconds     int     `json:"pushSeconds"`
+	PushBumpDeg     float64 `json:"pushBumpDeg"`
 	// Clear (Run › Sort) runs C2–C4 together for ClearSeconds at ClearRpm, one speed
 	// for all three and faster than sorting, to empty them. Each ramps up (and back
 	// down) at ClearAccel, rpm per second.
@@ -390,10 +405,15 @@ func DefaultMachineSettings() MachineSettings {
 			MinMoveDeg:      0.1, MaxMoveDeg: 120,
 			BulkPulseDeg: 10, BulkPauseMs: 1500,
 			StaleMs:         1000,
+			CarryRpm:        map[string]float64{"c1": 5, "c2": 12, "c3": 12},
+			CarryAccel:      30,
+			CarryPulseDeg:   90,
+			StarveMs:        3000,
+			StarveBulkDeg:   30,
 			BackupMs:        1000,
 			WorkAroundStuck: true,
 			PushPastStuck:   true,
-			PushSeconds:     5,
+			PushSeconds:     3,
 			PushBumpDeg:     45,
 			ClearSeconds:    30,
 			ClearRpm:        12,

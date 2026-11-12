@@ -53,8 +53,14 @@ func TestFeederEmptyChannelsOnlyFeedBulk(t *testing.T) {
 	moves := movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now), C3: obs(now), PlatterReady: true}, feederSettings()))
 	require.Len(t, moves, 1)
 	assert.Equal(t, "bulk", moves[ChannelC1].Kind)
-	assert.Equal(t, 10.0, moves[ChannelC1].Degrees)
+	assert.Equal(t, 30.0, moves[ChannelC1].Degrees, "C2 has had nothing yet: starving, so a big nudge")
 	assert.Equal(t, 5.0, moves[ChannelC1].Rpm)
+
+	// With pieces on C2 lately, the usual small nudge.
+	fed := NewFeeder()
+	fed.c2SeenAt = now
+	moves = movesByChannel(fed.Step(FeederInput{Now: now, C2: obs(now), C3: obs(now), PlatterReady: true}, feederSettings()))
+	assert.Equal(t, 10.0, moves[ChannelC1].Degrees)
 
 	// C1 waits out its pause, and waits while C2's drop zone is busy.
 	moves = movesByChannel(f.Step(FeederInput{Now: now.Add(time.Second), C2: obs(now.Add(time.Second)), C3: obs(now)}, feederSettings()))
@@ -69,7 +75,12 @@ func TestFeederDropPulseStopsAtThePreciseZone(t *testing.T) {
 	f := NewFeeder()
 	now := time.Now()
 	moves := movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, piece(vision.ZoneDrop, 100)), C3: obs(now)}, feederSettings()))
-	assert.Equal(t, FeederMove{Channel: ChannelC2, Degrees: 30, Rpm: 7.5, Kind: "drop"}, moves[ChannelC2])
+	assert.Equal(t, FeederMove{Channel: ChannelC2, Degrees: 85, Rpm: 12, Accel: 30, Kind: "drop"}, moves[ChannelC2],
+		"C3 is taking pieces: carried fast, all the way to the precise zone (100° less its 15°)")
+
+	f = NewFeeder() // C3's drop zone busy: the usual short pulse, still at the carry speed
+	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, piece(vision.ZoneDrop, 100)), C3: obs(now, piece(vision.ZoneDrop, 120))}, feederSettings()))
+	assert.Equal(t, FeederMove{Channel: ChannelC2, Degrees: 30, Rpm: 12, Accel: 30, Kind: "drop"}, moves[ChannelC2])
 
 	f = NewFeeder()
 	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, piece(vision.ZoneNone, 21)), C3: obs(now)}, feederSettings()))

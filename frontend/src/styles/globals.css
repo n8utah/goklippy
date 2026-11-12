@@ -50,6 +50,14 @@
   --warning: #b45309;
   --warning-bg: #fffbeb;
   --idle: #78716c;
+
+  /* Categorical chart series, in fixed order (validated for colour-blind separation;
+     three sit under 3:1 on light, so charts using them always label their parts). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
 }
 
 /* Native parts (number spinners, scrollbars, date pickers) follow the theme. */
@@ -88,6 +96,12 @@
   --warning: #fbbf24;
   --warning-bg: #451a03;
   --idle: #a8a29e;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
 }
 
 body {
@@ -176,6 +190,11 @@ body {
   --color-warning: var(--warning);
   --color-warning-bg: var(--warning-bg);
   --color-idle: var(--idle);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
 
   /* 10 inputs and buttons, 14 cards, 18 dialogs (docs/ui-ux-spec.md). */
   --radius-sm: calc(var(--radius) - 4px);

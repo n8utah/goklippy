@@ -32,7 +32,14 @@ type FeederMove struct {
 	Channel Channel
 	Degrees float64
 	Rpm     float64
-	Kind    string // "drop", "exit" or "bulk"
+	Accel   float64 // rpm per second; 0 starts at full speed
+	Kind    string  // "drop", "exit" or "bulk"
+}
+
+// carryRpm is how fast ch carries pieces along: Feeder.CarryRpm, never slower than the
+// channel's own speed.
+func carryRpm(s MachineSettings, ch Channel) float64 {
+	return max(s.FeederRpm[string(ch)], s.Feeder.CarryRpm[string(ch)])
 }
 
 // FeederInput is what the feeder reads each tick.
@@ -46,6 +53,8 @@ type FeederInput struct {
 // Feeder decides C1–C3's pulses. It keeps its own timers; feed it every tick.
 type Feeder struct {
 	channels map[Channel]*feederChannel
+	// c2SeenAt: when C2 last had a piece on it; long ago, C2 is starving.
+	c2SeenAt time.Time
 }
 
 type feederChannel struct {
@@ -60,6 +69,8 @@ type feederChannel struct {
 	falls       int
 	// severalFell: the last exit pulse sent more than one piece off at once.
 	severalFell bool
+	// state: what it was doing at the last Step, for the time spent (time_spent.go).
+	state string
 	// A drop pulse should carry the leading piece forward. One that stays put
 	// pulse after pulse is held (most often still hanging off the channel above).
 	dropPending bool
@@ -89,6 +100,7 @@ func (f *Feeder) Reset() {
 	for _, ch := range f.channels {
 		*ch = feederChannel{}
 	}
+	f.c2SeenAt = time.Time{}
 }
 
 // Stuck lists channels whose leading piece won't ride; they stop pulsing until
@@ -164,15 +176,25 @@ const fallBackDeg = 1.0
 func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 	fs := settings.Feeder
 	var moves []FeederMove
-	add := func(ch Channel, kind string, deg float64, pauseMs int) {
-		rpm := settings.FeederRpm[string(ch)]
+	move := func(ch Channel, kind string, deg float64, pauseMs int, rpm, accel float64) {
 		if rpm <= 0 || deg < fs.MinMoveDeg {
 			return
 		}
 		deg = math.Min(deg, fs.MaxMoveDeg)
 		c := f.channels[ch]
-		c.busyUntil = in.Now.Add(moveDuration(deg, rpm, 0) + time.Duration(pauseMs)*time.Millisecond)
-		moves = append(moves, FeederMove{Channel: ch, Degrees: deg, Rpm: rpm, Kind: kind})
+		c.busyUntil = in.Now.Add(moveDuration(deg, rpm, accel) + time.Duration(pauseMs)*time.Millisecond)
+		moves = append(moves, FeederMove{Channel: ch, Degrees: deg, Rpm: rpm, Accel: accel, Kind: kind})
+	}
+	// add moves at the channel's own speed (exit pulses, careful); carry at its carry
+	// speed with a ramp (taking pieces along).
+	add := func(ch Channel, kind string, deg float64, pauseMs int) {
+		move(ch, kind, deg, pauseMs, settings.FeederRpm[string(ch)], 0)
+	}
+	carry := func(ch Channel, kind string, deg float64, pauseMs int) {
+		move(ch, kind, deg, pauseMs, carryRpm(settings, ch), fs.CarryAccel)
+	}
+	if in.C2.Valid && len(in.C2.Pieces) > 0 {
+		f.c2SeenAt = in.Now
 	}
 
 	// Back-pressure, downstream first: C3 waits on the platter, C2 on C3, C1 on C2.
@@ -189,44 +211,90 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 	for _, step := range []struct {
 		ch         Channel
 		obs        vision.Observation
-		downstream bool
+		downstream bool // its exit may push now
+		accepting  bool // the channel ahead is taking pieces: carry further
 	}{
-		{ChannelC3, in.C3, in.PlatterReady},
-		{ChannelC2, in.C2, c3Ready},
+		{ChannelC3, in.C3, in.PlatterReady, !c3BackedUp},
+		{ChannelC2, in.C2, c3Ready, c3Accepting},
 	} {
 		c := f.channels[step.ch]
-		if c.stuck || !f.fresh(step.obs, step.ch, in.Now, fs) {
+		switch {
+		case c.stuck:
+			c.state = TimeStuck
+			continue
+		case !f.fresh(step.obs, step.ch, in.Now, fs):
+			// Mid-move, or waiting for a picture taken after it: moving. No picture
+			// at all: nothing to go on.
+			c.state = TimeEmpty
+			if step.obs.Valid && (in.Now.Before(c.busyUntil) || step.obs.At.Before(c.busyUntil)) {
+				c.state = TimeMoving
+			}
 			continue
 		}
 		f.noteFall(c, step.obs, in.Now, fs)
 		if f.noteStill(c, step.obs) {
+			c.state = TimeStuck
 			continue
 		}
 		lead, ok := step.obs.Leading()
 		if !ok {
+			c.state = TimeEmpty
 			continue
 		}
 		if lead.Zone == vision.ZonePrecise || lead.Zone == vision.ZoneExit {
-			if step.downstream && !in.Now.Before(c.holdUntil) {
+			switch {
+			case in.Now.Before(c.holdUntil):
+				c.state = TimeBusy // pacing after a fall
+			case step.downstream:
 				c.atExit, c.leadForward, c.exitPending = atExitCount(step.obs), lead.ForwardToExit, true
 				add(step.ch, "exit", fs.ExitPulseDeg, fs.ExitPauseMs)
+				c.state = TimeMoving
+			default:
+				c.state = TimeWaiting
 			}
 			continue
 		}
+		c.state = TimeMoving
 		// Short of the exit: stop the leading piece at the precise zone's start. A
 		// piece already just short of it creeps in by an exit pulse, so it can't be
 		// left needing a move too small to make.
+		// Carried at the carry speed, and further while the channel ahead is taking
+		// pieces, since it won't be waiting at the exit long.
 		clearance := lead.ForwardToExit - preciseWidth(settings, step.ch)
+		reach := fs.DropPulseDeg
+		if step.accepting {
+			reach = max(reach, fs.CarryPulseDeg)
+		}
 		c.dropPending, c.dropLead = true, lead.ForwardToExit
-		add(step.ch, "drop", math.Max(math.Min(fs.DropPulseDeg, clearance), fs.ExitPulseDeg), fs.DropPauseMs)
+		carry(step.ch, "drop", math.Max(math.Min(reach, clearance), fs.ExitPulseDeg), fs.DropPauseMs)
 	}
 
 	// C1, blind: feed while C2's drop zone is clear and C2 isn't backed up.
 	c1 := f.channels[ChannelC1]
-	if !in.Now.Before(c1.busyUntil) && in.C2.Valid && in.Now.Sub(in.C2.At) <= stale(fs) && !in.C2.InDrop && !c2BackedUp {
+	switch {
+	case in.Now.Before(c1.busyUntil):
+		c1.state = TimeMoving
+	case !in.C2.Valid || in.Now.Sub(in.C2.At) > stale(fs):
+		c1.state = TimeEmpty // no picture of C2 to go on
+	case in.C2.InDrop || c2BackedUp:
+		c1.state = TimeWaiting
+	case fs.StarveMs > 0 && in.Now.Sub(f.c2SeenAt) >= time.Duration(fs.StarveMs)*time.Millisecond:
+		// C2 has had nothing for a while: bigger, faster nudges until it does.
+		carry(ChannelC1, "bulk", max(fs.BulkPulseDeg, fs.StarveBulkDeg), fs.BulkPauseMs/2)
+		c1.state = TimeMoving
+	default:
 		add(ChannelC1, "bulk", fs.BulkPulseDeg, fs.BulkPauseMs)
+		c1.state = TimeMoving
 	}
 	return moves
+}
+
+// State is what ch was doing at the last Step (TimeMoving, …), for the time spent.
+func (f *Feeder) State(ch Channel) string {
+	if c, ok := f.channels[ch]; ok {
+		return c.state
+	}
+	return ""
 }
 
 // fresh reports whether a channel may decide: idle, with a recent frame taken after
