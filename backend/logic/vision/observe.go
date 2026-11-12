@@ -30,6 +30,8 @@ type Observation struct {
 	// Merged lists boxes that were joined from several of the detector's boxes:
 	// one piece in parts, or two pieces touching.
 	Merged []MergedBox `json:"merged,omitempty"`
+	// Ignored lists spots left out on purpose: a stuck piece the sort works around.
+	Ignored []Box `json:"ignored,omitempty"`
 }
 
 // Leading is the piece nearest the exit, if any.

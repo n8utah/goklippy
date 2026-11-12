@@ -165,6 +165,7 @@ const SortPage = () => {
             channel={ch}
             summary={state?.channels?.[ch.id]}
             camera={logic.cameras[ch.id]}
+            onForgetIgnored={() => logic.forgetIgnored(ch.id)}
             simulated={state?.hardware?.simulated}
           />
         ))}

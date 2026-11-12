@@ -98,6 +98,20 @@
   stroke-width: 3;
 }
 
+/* A stuck piece the sort is working around. */
+.ignored {
+  fill: none;
+  stroke: #facc15;
+  stroke-width: 3;
+  stroke-dasharray: 8 6;
+}
+
+.ignoredLabel {
+  fill: #facc15;
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .label {
   fill: #22c55e;
   font-size: 18px;

@@ -47,6 +47,9 @@ function heroTitle(state, connected) {
   }
 }
 
+/** How a problem was settled: by hand, or the machine carried on without it. */
+const RESOLUTIONS = { done: 'Dealt with', worked_around: 'Kept sorting' };
+
 const when = (t) =>
   new Date(t).toLocaleString([], {
     month: 'short',
@@ -214,7 +217,7 @@ const HomePage = () => {
                   <span className="block text-muted-foreground">{inc.message}</span>
                 </span>
                 <Badge variant={inc.resolved_at ? 'idle' : 'warning'} className="self-start">
-                  {inc.resolved_at ? inc.resolution || 'Resolved' : 'Open'}
+                  {inc.resolved_at ? RESOLUTIONS[inc.resolution] || 'Resolved' : 'Open'}
                 </Badge>
               </li>
             ))}

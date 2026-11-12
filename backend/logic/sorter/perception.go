@@ -59,6 +59,7 @@ type Perception struct {
 	chans    map[Channel]*perceptionChannel
 	known    map[string]bool // devices the last listing found, which may be previewed
 	recorder *JourneyRecorder
+	ignores  spotIgnores // stuck pieces worked around (ignored_spots.go)
 }
 
 // SetRecorder hands every observed frame to the journey recorder.
@@ -84,10 +85,25 @@ type perceptionChannel struct {
 func NewPerception(settings func() MachineSettings, dataDir string) *Perception {
 	return &Perception{
 		settings: settings, dataDir: dataDir,
-		pool:  newCameraPool(context.Background()),
-		chans: map[Channel]*perceptionChannel{},
-		known: map[string]bool{},
+		pool:    newCameraPool(context.Background()),
+		chans:   map[Channel]*perceptionChannel{},
+		known:   map[string]bool{},
+		ignores: spotIgnores{},
 	}
+}
+
+// IgnoreSpot leaves a stuck piece out of ch's observations.
+func (p *Perception) IgnoreSpot(ch Channel, box vision.Box, area int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.ignores.add(ch, box, area, time.Now())
+}
+
+// ForgetIgnored watches all of ch again.
+func (p *Perception) ForgetIgnored(ch Channel) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.ignores, ch)
 }
 
 const reconcileEvery = time.Second
@@ -307,11 +323,16 @@ func (p *Perception) observe(ch Channel, pc *perceptionChannel, img image.Image,
 	zones = zones.ScaledTo(b.Dx(), b.Dy())
 	p.mu.Lock()
 	boxes, err := pc.detector.Detect(img, zones)
+	var ignored []vision.Box
+	if err == nil {
+		boxes, ignored = p.ignores.filter(ch, boxes, mergeGap, at)
+	}
 	p.mu.Unlock()
 	if err != nil {
 		return vision.Observation{}, err.Error()
 	}
 	obs := vision.Observe(zones, boxes, mergeGap, at)
+	obs.Ignored = ignored
 	colors := make([][3]float64, len(obs.Pieces))
 	for i, piece := range obs.Pieces {
 		colors[i] = vision.MeanColor(img, piece.Box, 2)

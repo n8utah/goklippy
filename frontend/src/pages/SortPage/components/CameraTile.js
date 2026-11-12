@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
  * running shows its picture even when it can't see pieces yet, with the reason (no
  * zones, empty-channel pictures to capture again, …) and where to fix it.
  */
-export default function CameraTile({ channel, summary, camera, simulated }) {
+export default function CameraTile({ channel, summary, camera, simulated, onForgetIgnored }) {
   const live = summary?.valid && summary.age_ms < 2000;
   const running = Boolean(camera?.camera?.running);
   const zones = [
@@ -53,6 +53,20 @@ export default function CameraTile({ channel, summary, camera, simulated }) {
             {summary.falls > 0 && ` · ${summary.falls} pushed off this run`}
             {summary.backed_up && (
               <span className="text-warning"> · backed up, so the channel before waits</span>
+            )}
+            {summary.ignored > 0 && (
+              <span className="text-warning">
+                {' '}
+                · leaving out{' '}
+                {summary.ignored === 1 ? 'a stuck piece' : `${summary.ignored} stuck pieces`}{' '}
+                <button
+                  type="button"
+                  onClick={onForgetIgnored}
+                  className="font-medium text-primary-text hover:underline"
+                >
+                  Taken off? Watch again
+                </button>
+              </span>
             )}
           </>
         ) : why ? (

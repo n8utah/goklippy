@@ -36,6 +36,7 @@ type SimWorld struct {
 	asked    int                     // how many of them Brickognize has named
 	falls    []SimFall
 	frameAt  time.Time
+	ignores  spotIgnores // stuck pieces worked around, as Perception does
 }
 
 // SimPart is a part the world can hold.
@@ -114,6 +115,7 @@ func NewSimWorld(hw *SimHardware, settings func() MachineSettings, supply []SimP
 		hw: hw, settings: settings, supply: supply,
 		rng:     rand.New(rand.NewPCG(1, 2)),
 		onRotor: map[Channel][]*simPiece{},
+		ignores: spotIgnores{},
 	}
 	hw.OnMove(w.moved)
 	hw.OnShake(w.shaken)
@@ -240,13 +242,47 @@ func (w *SimWorld) Observation(ch Channel) vision.Observation {
 	if ch != ChannelC2 && ch != ChannelC3 && ch != ChannelC4 {
 		return vision.Observation{}
 	}
+	now := time.Now()
 	w.mu.Lock()
 	var boxes []vision.Box
 	for _, p := range w.onRotor[ch] {
 		boxes = append(boxes, simBox(p.angle))
 	}
+	boxes, ignored := w.ignores.filter(ch, boxes, simMergeGap, now)
 	w.mu.Unlock()
-	return vision.Observe(SimZones(), boxes, 2, time.Now())
+	obs := vision.Observe(SimZones(), boxes, simMergeGap, now)
+	obs.Ignored = ignored
+	return obs
+}
+
+// simMergeGap is how close the simulated camera's boxes join into one piece.
+const simMergeGap = 2
+
+// IgnoreSpot leaves a stuck piece out of ch's observations.
+func (w *SimWorld) IgnoreSpot(ch Channel, box vision.Box, area int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.ignores.add(ch, box, area, time.Now())
+}
+
+// ForgetIgnored watches all of ch again.
+func (w *SimWorld) ForgetIgnored(ch Channel) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.ignores, ch)
+}
+
+// Stuck counts the pieces on ch that don't ride with it (HeldOn), for tests.
+func (w *SimWorld) Stuck(ch Channel) int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	n := 0
+	for _, p := range w.onRotor[ch] {
+		if p.held > 0 {
+			n++
+		}
+	}
+	return n
 }
 
 // Snapshot is a channel's frame and its pieces' boxes at the same moment.

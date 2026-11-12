@@ -379,6 +379,11 @@ export function clearSorterChannels() {
   return postJSON('/api/v1/sorter/channels/clear', {});
 }
 
+/** A stuck piece being worked around was taken off: watch its spot again. */
+export function forgetSorterIgnored(channel) {
+  return postJSON(`/api/v1/sorter/channels/${channel}/forget-ignored`, {});
+}
+
 export function shakeSorterChannel(channel, profile) {
   return postJSON(`/api/v1/sorter/channels/${channel}/shake`, { profile });
 }

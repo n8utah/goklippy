@@ -176,6 +176,21 @@ func ClearSorterChannels(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// ForgetSorterIgnored POST /sorter/channels/:channel/forget-ignored: the channel's
+// camera watches the spots of stuck pieces it was working around again.
+func ForgetSorterIgnored(c *gin.Context) {
+	ch, err := sorter.ParseChannel(c.Param("channel"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if err := sorterMachine.ForgetIgnored(c.Request.Context(), ch); err != nil {
+		sorterError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // ListSorterShakes GET /sorter/shakes: the shake profiles, gentlest first.
 func ListSorterShakes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"shakes": sorter.ShakeProfiles})

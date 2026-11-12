@@ -226,6 +226,10 @@ type FeederSettings struct {
 	// the next channel unable to take it, is backed up, and the channel before it
 	// stops feeding it until it moves again.
 	BackupMs int `json:"backupMs"`
+	// WorkAroundStuck: a piece stuck where pieces land on C2 or C3 that shaking can't
+	// free is left out of that camera (ignored_spots.go) and sorting carries on,
+	// instead of stopping until someone takes it off.
+	WorkAroundStuck bool `json:"workAroundStuck"`
 	// Clear (Run › Sort) runs C2–C4 together for ClearSeconds at ClearRpm, one speed
 	// for all three and faster than sorting, to empty them. Each ramps up (and back
 	// down) at ClearAccel, rpm per second.
@@ -378,11 +382,12 @@ func DefaultMachineSettings() MachineSettings {
 			HoldAfterFallMs: 800,
 			MinMoveDeg:      0.1, MaxMoveDeg: 120,
 			BulkPulseDeg: 10, BulkPauseMs: 1500,
-			StaleMs:      1000,
-			BackupMs:     1000,
-			ClearSeconds: 30,
-			ClearRpm:     12,
-			ClearAccel:   20,
+			StaleMs:         1000,
+			BackupMs:        1000,
+			WorkAroundStuck: true,
+			ClearSeconds:    30,
+			ClearRpm:        12,
+			ClearAccel:      20,
 		},
 		Platter: PlatterSettings{
 			Sectors: 5, ExitSector: 2,

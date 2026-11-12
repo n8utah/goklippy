@@ -148,6 +148,13 @@ export const SETTING_SECTIONS = [
         keywords: 'back pressure backup backed up slow down pile jam flow',
       },
       {
+        key: 'feeder.workAroundStuck',
+        label: 'Keep sorting past a stuck piece',
+        kind: 'boolean',
+        help: 'A piece stuck where pieces land on C2 or C3 that shaking can’t free (caught on a rim or guide) is left out of that camera, noted under Recent problems, and sorting carries on; every other piece is still seen. Once it’s gone it’s watched again. Off stops the sort until someone takes it off.',
+        keywords: 'stuck jam ignore work around continue keep going incident',
+      },
+      {
         key: 'feeder.clearSeconds',
         label: 'Clear runs for',
         unit: 's',

@@ -409,6 +409,16 @@ Original scope:
 - Recovery as data, from `recovery/procedures.py`: a list of moves (turn, shake profile, probe
   backwards) tried in order, checking perception after each.
 - Lifetime and per-run stats: pieces per minute, time spent in each station phase.
+- Stop or keep going (built 2026-11-12, `logic/sorter/incidents.go`). The sort *stops* for:
+  the board lost, the motors' supply low, the chute losing its home, and C4 stalled after
+  turning it round didn't clear it. It *keeps going* past: a piece stuck where pieces land on
+  C2/C3 that shaking didn't free (with `feeder.workAroundStuck`, on by default: that one piece
+  is left out of the camera, `ignored_spots.go`, and the problem noted as "Kept sorting"), a
+  piece that didn't fall off C4 (shaken off), and a failed identification (to the bucket).
+  Only the stuck piece itself is left out, matched each frame by place and blob area, never
+  "anything in that area": a piece landing beside it or on it is still seen. Once it hasn't
+  been seen for 10 s it's watched again; Run › Sort also has "Taken off? Watch again".
+  Found on the machine: a LEGO wheel caught on C3's rim where the blue guide meets it.
 
 ### Phase 9: Pictures of each piece along the way
 

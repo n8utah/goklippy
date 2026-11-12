@@ -42,6 +42,8 @@ type ChannelSummary struct {
 	// BackedUp: its leading piece is waiting at the exit, so the channel before it has
 	// stopped feeding it (feeder back-pressure).
 	BackedUp bool `json:"backed_up,omitempty"`
+	// Ignored is how many stuck pieces its camera is leaving out (worked around).
+	Ignored int `json:"ignored,omitempty"`
 }
 
 // AttachSorting wires in the sorting stations. Call it before Run.
@@ -205,6 +207,9 @@ func (m *Machine) recoverLanding(ch Channel) {
 			st.feeder.Unstick(ch)
 			return
 		}
+		if m.workAroundStuck(ch) {
+			return
+		}
 		m.raiseIncident(Incident{
 			Kind:    IncidentLandingStuck,
 			Title:   fmt.Sprintf("A piece is stuck where pieces land on %s", ch),
@@ -214,6 +219,56 @@ func (m *Machine) recoverLanding(ch Channel) {
 	if err != nil {
 		slog.Warn("couldn't start a recovery", "error", err)
 	}
+}
+
+// workAroundStuck leaves a stuck piece out of the channel's camera, notes it, and lets
+// the sort carry on (Feeder.WorkAroundStuck). It reports false when it can't: the
+// setting is off, the vision can't ignore a spot, or the piece isn't in view.
+func (m *Machine) workAroundStuck(ch Channel) bool {
+	st := m.sort
+	ign, ok := st.deps.Vision.(SpotIgnorer)
+	if !ok || !m.settings().Feeder.WorkAroundStuck {
+		return false
+	}
+	obs := st.deps.Vision.Observation(ch)
+	lead, ok := obs.Leading()
+	if !ok {
+		return false
+	}
+	ign.IgnoreSpot(ch, lead.Box, pieceArea(obs, lead.Box))
+	st.feeder.Unstick(ch)
+	now := time.Now().UTC()
+	inc := Incident{
+		Kind:     IncidentLandingWorkedAround,
+		Title:    fmt.Sprintf("Working around a piece stuck on %s", ch),
+		Message:  "It doesn't move with the channel and shaking didn't free it, so its camera leaves that spot out and sorting carries on. Take it off when you're next at the machine; it's watched again once it's gone.",
+		OpenedAt: now,
+	}
+	if st.deps.Records != nil {
+		store := st.deps.Records.Store()
+		if id, err := store.OpenIncident(context.Background(), inc); err != nil {
+			slog.Warn("recording the worked-around piece failed", "error", err)
+		} else if err := store.ResolveIncident(context.Background(), id, ResolveWorkedAround, now); err != nil {
+			slog.Warn("recording the worked-around piece failed", "error", err)
+		}
+	}
+	m.changed = true
+	slog.Warn("working around a stuck piece", "channel", ch, "box", lead.Box)
+	return true
+}
+
+// ForgetIgnored watches all of a channel again, after a stuck piece was taken off.
+func (m *Machine) ForgetIgnored(ctx context.Context, ch Channel) error {
+	return m.send(ctx, request{do: func() error {
+		if m.sort == nil {
+			return nil
+		}
+		if ign, ok := m.sort.deps.Vision.(SpotIgnorer); ok {
+			ign.ForgetIgnored(ch)
+		}
+		m.changed = true
+		return nil
+	}})
 }
 
 // clearTurns is how far the platter turns, every layer closed, to clear a stall.
@@ -317,7 +372,7 @@ func (m *Machine) sortSnapshot(snap *Snapshot) {
 	snap.Channels = map[Channel]ChannelSummary{}
 	for _, ch := range []Channel{ChannelC2, ChannelC3, ChannelC4} {
 		obs := st.deps.Vision.Observation(ch)
-		sum := ChannelSummary{Valid: obs.Valid, Pieces: len(obs.Pieces), InDrop: obs.InDrop, InPrecise: obs.InPrecise, InExit: obs.InExit, Falls: st.feeder.Falls(ch), BackedUp: st.feeder.BackedUp(ch)}
+		sum := ChannelSummary{Valid: obs.Valid, Pieces: len(obs.Pieces), InDrop: obs.InDrop, InPrecise: obs.InPrecise, InExit: obs.InExit, Falls: st.feeder.Falls(ch), BackedUp: st.feeder.BackedUp(ch), Ignored: len(obs.Ignored)}
 		if obs.Valid {
 			sum.AgeMs = now.Sub(obs.At).Milliseconds()
 		}

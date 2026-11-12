@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 
 import {
   clearSorterChannels,
+  forgetSorterIgnored,
   getSorterBins,
   getSorterCameras,
   listSorterRuns,
@@ -140,6 +141,8 @@ export function useSortPageLogic() {
     shake: (channel, profile) => run(() => shakeSorterChannel(channel, profile)),
     /** Run C2–C4 for the set time to empty them; with the chute in, into the bucket. */
     clear: () => run(() => clearSorterChannels()),
+    /** The stuck piece was taken off: the channel's camera watches its spot again. */
+    forgetIgnored: (channel) => run(() => forgetSorterIgnored(channel)),
     clearSeconds: settings.feeder?.clearSeconds ?? 30,
     clearRpm: settings.feeder?.clearRpm ?? 12,
     chuteLeftOut: Boolean(settings.distributor?.leftOut),

@@ -341,11 +341,41 @@ func TestSortLandingHeldIsFreedByShaking(t *testing.T) {
 func TestSortLandingStuckRaisesAnIncident(t *testing.T) {
 	held := sorter.SimCatalog[0]
 	held.HeldOn, held.HeldShakes = sorter.ChannelC3, 1_000_000
-	m, _, _ := startSimSort(t, fastSettings, []sorter.SimPart{held}, nil)
+	stopForIt := func() sorter.MachineSettings {
+		s := fastSettings()
+		s.Feeder.WorkAroundStuck = false
+		return s
+	}
+	m, _, _ := startSimSort(t, stopForIt, []sorter.SimPart{held}, nil)
 	require.Eventually(t, func() bool { return m.Snapshot().Incident != nil }, 60*time.Second, 20*time.Millisecond)
 	assert.Equal(t, sorter.IncidentLandingStuck, m.Snapshot().Incident.Kind)
 	require.NoError(t, m.ResolveIncident(context.Background(), sorter.ResolveDone))
 	assert.Nil(t, m.Snapshot().Incident)
+}
+
+// A piece stuck on C3 for good is worked around: its spot is left out of C3's camera,
+// the sort never stops, and the pieces after it are still sorted.
+func TestSortWorksAroundAStuckPiece(t *testing.T) {
+	held := sorter.SimCatalog[0]
+	held.HeldOn, held.HeldShakes = sorter.ChannelC3, 1_000_000
+	m, world, store := startSimSort(t, fastSettings, []sorter.SimPart{held, sorter.SimCatalog[1], sorter.SimCatalog[2]}, nil)
+
+	require.Eventually(t, func() bool { return len(world.Falls()) == 2 }, 60*time.Second, 20*time.Millisecond,
+		"the two pieces after the stuck one are sorted")
+	assert.Nil(t, m.Snapshot().Incident, "nothing stopped the sort")
+	assert.Equal(t, sorter.StateRunning, m.Snapshot().State)
+	assert.Equal(t, 1, world.Stuck(sorter.ChannelC3), "the stuck one is still there")
+	assert.Equal(t, 1, m.Snapshot().Channels[sorter.ChannelC3].Ignored)
+
+	incs, err := store.ListIncidents(context.Background(), 5)
+	require.NoError(t, err)
+	require.Len(t, incs, 1)
+	assert.Equal(t, sorter.IncidentLandingWorkedAround, incs[0].Kind)
+	assert.Equal(t, sorter.ResolveWorkedAround, incs[0].Resolution)
+
+	// Taken off by hand and forgotten: C3 is watched in full again.
+	require.NoError(t, m.ForgetIgnored(context.Background(), sorter.ChannelC3))
+	assert.Equal(t, 0, len(world.Observation(sorter.ChannelC3).Ignored))
 }
 
 func TestSortDidntFallIsShakenOff(t *testing.T) {

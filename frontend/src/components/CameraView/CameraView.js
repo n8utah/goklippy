@@ -243,6 +243,21 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange,
       {showOverlay && (
         <svg viewBox={`0 0 ${w} ${h}`} className={styles.overlay} preserveAspectRatio="none">
           {overlay}
+          {/* Stuck pieces the sort is working around: left out of what it sees. */}
+          {observation?.ignored?.map((b, i) => (
+            <g key={`ignored-${i}`}>
+              <rect
+                x={b.x1}
+                y={b.y1}
+                width={b.x2 - b.x1}
+                height={b.y2 - b.y1}
+                className={styles.ignored}
+              />
+              <text x={b.x1} y={b.y1 - 4} className={styles.ignoredLabel}>
+                left out
+              </text>
+            </g>
+          ))}
           {observation?.pieces?.map((p, i) => (
             <g key={i}>
               <rect

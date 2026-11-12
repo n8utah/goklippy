@@ -63,6 +63,7 @@ export const DEFAULT_SORTER_SETTINGS = {
     bulkPauseMs: 1500,
     staleMs: 1000,
     backupMs: 1000,
+    workAroundStuck: true,
     clearSeconds: 30,
     clearRpm: 12,
     clearAccel: 20,
