@@ -135,9 +135,12 @@ type Machine struct {
 	incident *IncidentHold
 	// freed: where each channel's last stuck piece was shaken or pushed free, and when,
 	// so one that sticks again there skips straight past shaking (machine_stuck.go).
-	freed    map[Channel]freedSpot
-	changed  bool
-	lastSent time.Time
+	freed map[Channel]freedSpot
+	// recovering: the channel the running recovery job is for, so its time counts as
+	// stuck there and as waiting on the others (time_spent.go). Empty otherwise.
+	recovering Channel
+	changed    bool
+	lastSent   time.Time
 }
 
 // NewMachine creates a machine in standby. tick 0 uses the default 50 ms.
@@ -638,6 +641,7 @@ func (m *Machine) finishJob(r jobResult) {
 		return
 	}
 	m.job = nil
+	m.recovering = ""
 	status := r.job.status
 	status.At = time.Now().UTC()
 	if r.err != nil {

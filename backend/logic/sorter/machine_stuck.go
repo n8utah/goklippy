@@ -123,7 +123,9 @@ func (m *Machine) recoverLanding(ch Channel) {
 	})
 	if err != nil {
 		slog.Warn("couldn't start a recovery", "error", err)
+		return
 	}
+	m.recovering = ch
 }
 
 // pushPast drops a few pieces in behind the stuck one and runs ch and the channels

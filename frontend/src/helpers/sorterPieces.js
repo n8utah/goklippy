@@ -28,6 +28,11 @@ export function pieceStatus(status) {
 /** "Brick 2 x 4" or what became of a piece with no part. */
 export function pieceName(piece) {
   if (piece.part_name) return piece.part_name;
+  // Once dropped its status is "distributed"; its problems still say what it was.
+  const problems = (piece.problems ?? []).map((p) => p.kind);
+  if (problems.includes('double_feed')) return 'Several pieces together';
+  if (problems.includes('id_failed') || problems.includes('id_timeout'))
+    return 'Identification failed';
   switch (piece.status) {
     case 'tracking':
     case 'identifying':

@@ -247,7 +247,7 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 				c.state = TimeBusy // pacing after a fall
 			case step.downstream:
 				c.atExit, c.leadForward, c.exitPending = atExitCount(step.obs), lead.ForwardToExit, true
-				add(step.ch, "exit", fs.ExitPulseDeg, fs.ExitPauseMs)
+				add(step.ch, "exit", exitPulse(fs, lead.ForwardToExit), fs.ExitPauseMs)
 				c.state = TimeMoving
 			default:
 				c.state = TimeWaiting
@@ -287,6 +287,16 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		c1.state = TimeMoving
 	}
 	return moves
+}
+
+// exitPulse is how far an exit pulse turns. Short of the exit zone (forward > 0) it
+// covers Feeder.ExitApproach of the way there, so a piece crosses the precise zone in a
+// few nudges rather than many; at the exit it's the careful ExitPulseDeg.
+func exitPulse(fs FeederSettings, forward float64) float64 {
+	if fs.ExitApproach <= 0 || forward <= fs.ExitPulseDeg {
+		return fs.ExitPulseDeg
+	}
+	return max(fs.ExitPulseDeg, forward*min(fs.ExitApproach, 1))
 }
 
 // State is what ch was doing at the last Step (TimeMoving, …), for the time spent.

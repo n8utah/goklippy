@@ -85,6 +85,15 @@ export const SETTING_SECTIONS = [
         max: 10000,
       },
       {
+        key: 'feeder.exitApproach',
+        label: 'Exit approach',
+        step: 0.05,
+        min: 0,
+        max: 1,
+        help: 'Short of the exit, each exit pulse covers this share of the way there (never less than the exit pulse), so a piece crosses the precise zone in a few nudges. At the exit it’s the careful exit pulse. 0 nudges the exit pulse all the way.',
+        keywords: 'exit approach precise nudge faster throughput',
+      },
+      {
         key: 'feeder.holdAfterFallMs',
         label: 'Hold after a fall',
         unit: 'ms',

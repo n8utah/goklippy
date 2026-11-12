@@ -211,6 +211,9 @@ type FeederSettings struct {
 	DropPauseMs  int     `json:"dropPauseMs"`  // look again after a drop-zone nudge
 	ExitPulseDeg float64 `json:"exitPulseDeg"` // nudge for a piece at the exit
 	ExitPauseMs  int     `json:"exitPauseMs"`
+	// ExitApproach: short of the exit zone, an exit pulse covers this share of the way
+	// there (at least ExitPulseDeg); 0 nudges ExitPulseDeg all the way.
+	ExitApproach float64 `json:"exitApproach"`
 	// HoldAfterFallMs is how long an exit pushes nothing after a piece falls off it,
 	// so the next channel sees it land before another can follow.
 	HoldAfterFallMs int     `json:"holdAfterFallMs"`
@@ -400,7 +403,7 @@ func DefaultMachineSettings() MachineSettings {
 		// Sorter V2's defaults ("Conservative" exit pulses).
 		Feeder: FeederSettings{
 			DropPulseDeg: 30, DropPauseMs: 100,
-			ExitPulseDeg: 2, ExitPauseMs: 100,
+			ExitPulseDeg: 2, ExitPauseMs: 100, ExitApproach: 0.5,
 			HoldAfterFallMs: 800,
 			MinMoveDeg:      0.1, MaxMoveDeg: 120,
 			BulkPulseDeg: 10, BulkPauseMs: 1500,

@@ -100,7 +100,7 @@ func TestFeederExitWaitsForDownstream(t *testing.T) {
 	assert.NotContains(t, moves, ChannelC3, "the platter isn't ready")
 
 	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now), C3: atExit, PlatterReady: true}, feederSettings()))
-	assert.Equal(t, FeederMove{Channel: ChannelC3, Degrees: 2, Rpm: 11.25, Kind: "exit"}, moves[ChannelC3])
+	assert.Equal(t, FeederMove{Channel: ChannelC3, Degrees: 2.5, Rpm: 11.25, Kind: "exit"}, moves[ChannelC3], "5° short: half the way")
 
 	// C2's exit waits while C3's drop zone has a piece.
 	f = NewFeeder()
@@ -110,6 +110,20 @@ func TestFeederExitWaitsForDownstream(t *testing.T) {
 	f = NewFeeder() // the call above set C3 moving, which also blocks C2
 	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: c2, C3: obs(now)}, feederSettings()))
 	assert.Equal(t, "exit", moves[ChannelC2].Kind)
+}
+
+func TestFeederExitPulseClosesTheGapThenNudges(t *testing.T) {
+	fs := feederSettings().Feeder
+	assert.InDelta(t, 10, exitPulse(fs, 20), 1e-9, "20° short of the exit: half the way")
+	assert.InDelta(t, 2, exitPulse(fs, 3), 1e-9, "close: never less than the careful nudge")
+	assert.InDelta(t, 2, exitPulse(fs, -1), 1e-9, "in the exit: the careful nudge")
+	fs.ExitApproach = 0
+	assert.InDelta(t, 2, exitPulse(fs, 20), 1e-9, "off: nudges all the way")
+
+	now := time.Now()
+	f := NewFeeder()
+	moves := movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now), C3: obs(now, piece(vision.ZonePrecise, 12)), PlatterReady: true}, feederSettings()))
+	assert.InDelta(t, 6, moves[ChannelC3].Degrees, 1e-9)
 }
 
 func TestFeederHoldsAfterAFall(t *testing.T) {

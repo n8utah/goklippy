@@ -129,8 +129,20 @@ func (m *Machine) stepSorting(now time.Time) {
 		if m.incident == nil && m.job == nil {
 			return false
 		}
-		if st.spent != nil {
-			st.spent.addAll(TimeStuck, dt) // a recovery, or stopped for an incident
+		if st.spent == nil {
+			return true
+		}
+		if m.incident != nil || m.recovering == "" {
+			st.spent.addAll(TimeStuck, dt) // stopped for an incident
+			return true
+		}
+		// A recovery on one channel: stuck there; the rest wait for it.
+		for _, ch := range timeChannels {
+			state := TimeWaiting
+			if ch == m.recovering {
+				state = TimeStuck
+			}
+			st.spent.add(ch, state, dt)
 		}
 		return true
 	}
@@ -314,7 +326,9 @@ func (m *Machine) onPlatterStall(aboard int) {
 	})
 	if err != nil {
 		slog.Warn("couldn't start clearing the classification channel", "error", err)
+		return
 	}
+	m.recovering = ChannelC4
 }
 
 // onDidntFall shakes a piece off C4's exit.
@@ -326,7 +340,9 @@ func (m *Machine) onDidntFall() {
 	}, nil)
 	if err != nil {
 		slog.Warn("couldn't start shaking C4", "error", err)
+		return
 	}
+	m.recovering = ChannelC4
 }
 
 // ShakeChannel runs a shake by hand, as a job.
