@@ -20,6 +20,7 @@ export default function PageHeader({ group, page, part }) {
             <NavLink
               key={p.id}
               to={p.path}
+              end={p.exact}
               className={({ isActive }) =>
                 cn(
                   '-mb-px flex h-11 shrink-0 items-center border-b-2 border-transparent px-3 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground',

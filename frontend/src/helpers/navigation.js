@@ -6,9 +6,8 @@ import { SETTING_SECTIONS } from './settingsRegistry';
  * Every group and page in the app, in rail order (docs/ui-ux-spec.md, "Pages"). The rail,
  * its flyouts, the page tabs, the phone's bottom bar and search all read from here, so a
  * page is added in one place. `parts` are a page's part tabs, each its own URL.
- *
- * Machine › Overview arrives with its page in build step 5; until then /machine opens
- * Machine › Board.
+ * `exact` pages match their path only, for a page whose path is its group's (Overview at
+ * /machine).
  */
 export const NAV_GROUPS = [
   {
@@ -71,6 +70,13 @@ export const NAV_GROUPS = [
     label: 'Machine',
     icon: Wrench,
     pages: [
+      {
+        id: 'overview',
+        label: 'Overview',
+        path: '/machine',
+        exact: true, // the other Machine pages are under /machine/…
+        about: 'What’s set up and what isn’t, with where to do it',
+      },
       {
         id: 'board',
         label: 'Board',
@@ -172,7 +178,7 @@ export const NAV_GROUPS = [
 export function findLocation(pathname) {
   for (const group of NAV_GROUPS) {
     for (const page of group.pages) {
-      if (pathname === page.path || pathname.startsWith(`${page.path}/`)) {
+      if (pathname === page.path || (!page.exact && pathname.startsWith(`${page.path}/`))) {
         const rest = pathname.slice(page.path.length + 1).split('/')[0];
         const part = page.parts?.find((p) => p.id === rest) || page.parts?.[0];
         return { group, page, part };

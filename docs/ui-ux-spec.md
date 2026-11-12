@@ -252,3 +252,17 @@ Each step keeps the app working and is its own commit.
   - The board diagram, the pin panel (`BoardPage/components/SlotPanel`), the picture editor
     (`pages/BoardEditorPage`) and the bench panels are the earlier components in light panels;
     restyling them is still to do.
+- **Step 4, part 3** (2026-11-11): Machine › Channels (`pages/ChannelsPage`, a tab per
+  channel and Routines, speeds as SettingFields) and Machine › Chute (Calibrate, Layers, Test
+  bins), splitting the LEGO Sorter page; its logic is `helpers/useMachineMotors.js`. Shared
+  `GearCalibration`, `NumberField`, `ObjectSelect`.
+- **Step 4, part 4** (2026-11-11): Cameras (Setup, C2–C4), Bins (Layout with a bin sheet,
+  Where would it go), Records (Pieces, Runs, Incidents; a piece opens the journey modal, which
+  also holds the review), Profiles (delete asks first), Piece journeys and Account rebuilt.
+- **Step 5** (2026-11-11): done. Machine › Overview (`/machine`, `pages/OverviewPage`) is the
+  setup checklist from `helpers/useSetupChecklist.js` (board, motors, chute, cameras, light,
+  motor power (optional), profile; live ticks, each linking to where it's done), and Home shows
+  its progress and next step until it's complete.
+
+Still to do after the build order: restyle the four earlier components above, and link pieces
+to their C2/C3 journeys (backend phase 9 step 2) so the journey modal shows every stage.

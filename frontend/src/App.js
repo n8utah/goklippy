@@ -13,6 +13,7 @@ import ChannelsPage from './pages/ChannelsPage/ChannelsPage';
 import ChutePage from './pages/ChutePage/ChutePage';
 import HomePage from './pages/HomePage/HomePage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
+import OverviewPage from './pages/OverviewPage/OverviewPage';
 import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
 import RecordsPage from './pages/RecordsPage/RecordsPage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
@@ -55,7 +56,7 @@ const App = () => (
               </Route>
 
               <Route path="machine">
-                <Route index element={<Navigate to="board" replace />} />
+                <Route index element={<OverviewPage />} />
                 {/* One route, so the page keeps its state from tab to tab. */}
                 <Route path="board/:part?" element={<BoardPage />} />
                 <Route path="channels/:part?" element={<ChannelsPage />} />

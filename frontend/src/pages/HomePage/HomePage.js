@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 
 import { useHomePageLogic } from './HomePage.logic';
 
@@ -135,6 +136,35 @@ const HomePage = () => {
           </div>
         )}
       </section>
+
+      {/* Setup progress, until it's all done. */}
+      {logic.setup.next && (
+        <Link
+          to="/machine"
+          className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-border-strong sm:flex-row sm:items-center sm:gap-6"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="font-display font-semibold">Setting up the machine</p>
+              <span className="font-mono text-sm text-muted-foreground">
+                {logic.setup.done} of {logic.setup.total}
+              </span>
+            </div>
+            <Progress
+              value={(logic.setup.done / logic.setup.total) * 100}
+              className="mt-2"
+              aria-label={`${logic.setup.done} of ${logic.setup.total} set up`}
+            />
+          </div>
+          <span className="flex shrink-0 items-center gap-1 text-sm">
+            Next: <span className="font-medium">{logic.setup.next.label}</span>
+            <ArrowRight
+              className="size-4 transition-transform group-hover:translate-x-0.5"
+              aria-hidden
+            />
+          </span>
+        </Link>
+      )}
 
       {/* Task cards. */}
       <section aria-label="What to do" className="grid gap-4 md:grid-cols-3">

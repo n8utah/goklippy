@@ -103,6 +103,7 @@ function RailGroup({ group, current }) {
             <li key={page.id} role="none">
               <NavLink
                 to={page.path}
+                end={page.exact}
                 role="menuitem"
                 onClick={() => setOpen(false)}
                 className={({ isActive }) =>

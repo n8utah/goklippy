@@ -63,6 +63,7 @@ export default function BottomBar({ currentGroup }) {
                   <li key={page.id}>
                     <NavLink
                       to={page.path}
+                      end={page.exact}
                       onClick={() => setMoreOpen(false)}
                       className={({ isActive }) =>
                         cn(

@@ -5,6 +5,7 @@ import { getSorterBins, listSorterIncidents, sorterCommand } from '../../helpers
 import { useMachineSettings } from '../../helpers/sorterSettings';
 import { useSorterState } from '../../helpers/sorterState';
 import { sentence } from '../../helpers/text';
+import { useSetupChecklist } from '../../helpers/useSetupChecklist';
 
 const POLL_MS = 10000;
 
@@ -96,9 +97,11 @@ export function useHomePageLogic() {
     }
   }, []);
 
+  const setup = useSetupChecklist();
   const s = state?.state;
   const job = state?.job;
   return {
+    setup,
     state,
     connected,
     profile,
