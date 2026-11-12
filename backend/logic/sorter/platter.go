@@ -124,9 +124,32 @@ func (p *Platter) Reset(now time.Time) {
 	p.stallRaised = false
 }
 
-// Ready is the gate C3 reads: the drop sector is free and still.
+// Ready is the gate C3 reads: the drop sector is free and still, and (with
+// Platter.ClearExitFirst) the platter has room. When C3 waits, the feeder's
+// back-pressure pauses the channels before it.
 func (p *Platter) Ready(now time.Time) bool {
-	return p.indexDone == nil && p.slots[0] == nil && !now.Before(p.settleUntil)
+	return p.indexDone == nil && p.slots[0] == nil && !now.Before(p.settleUntil) &&
+		p.roomForAnother(p.deps.Settings())
+}
+
+// roomForAnother: at most two pieces on the platter, the other one in the exit slot
+// (it falls on the next index) and still being identified. Once it's identified it's
+// about to drop, and a piece landing then would hold the platter still while it's
+// photographed, keeping the finished one from dropping; so nothing lands until it has.
+func (p *Platter) roomForAnother(settings MachineSettings) bool {
+	if !settings.Platter.ClearExitFirst {
+		return true
+	}
+	exit := p.exitIndex(settings) - 1
+	for i, s := range p.slots {
+		if s == nil {
+			continue
+		}
+		if i != exit || s.state >= slotResolved {
+			return false
+		}
+	}
+	return true
 }
 
 // Aboard lists the pieces on the platter, nearest the exit first.
@@ -533,14 +556,18 @@ func (p *Platter) maybeIndex(now time.Time, settings MachineSettings) {
 		return
 	}
 	drop := p.slots[0]
+	exit := p.slots[p.exitIndex(settings)-1]
+	// A finished piece at the exit drops as soon as it's routed and aimed, without
+	// waiting out the idle time: the sooner it's off, the sooner C3 may feed again.
+	exitReady := settings.Platter.ClearExitFirst && exit != nil && exit.routed
 	if drop == nil {
-		if now.Sub(p.freeSince) < time.Duration(settings.Platter.IdleIndexMs)*time.Millisecond {
+		if !exitReady && now.Sub(p.freeSince) < time.Duration(settings.Platter.IdleIndexMs)*time.Millisecond {
 			return
 		}
 	} else if drop.state < slotIdentifying && drop.piece.Status != PieceMultiDrop {
 		return // still landing or being photographed
 	}
-	if !p.distributionReady(now, p.slots[p.exitIndex(settings)-1]) {
+	if !p.distributionReady(now, exit) {
 		return
 	}
 	done, err := p.deps.HW.MoveChannel(ChannelC4, 360/float64(len(p.slots)), settings.IndexRpm)

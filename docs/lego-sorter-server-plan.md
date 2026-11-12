@@ -305,6 +305,12 @@ flags.
   before it stops feeding it (C2's exit pulses, C1's bulk pulses) until it moves again, so a
   hold-up cascades up the line instead of piling pieces onto the waiting channel to be dumped
   together. The short hold after a fall and being mid-move don't count. Shown on Run › Sort.
+- Exit first (built 2026-11-12, `platter.clearExitFirst`, on by default): at most two pieces
+  on C4. A second may land only while the other is in the exit slot (falls on the next index)
+  still being identified; once that one is identified the platter tells C3 it isn't ready, so
+  nothing lands as it's about to drop (a landing piece holds the platter still while it's
+  photographed) and back-pressure pauses C2 and C1 in turn; once routed and aimed it drops at
+  once rather than after `idleIndexMs`.
 - Hold after a fall: fixed hold first; follow measured landing times (p90 + 0.3 s, clamped
   0.5–2.5 s, after 20 landings) later.
 - Exit move refinements from their tuning page (longest exit move, room kept for the next piece,

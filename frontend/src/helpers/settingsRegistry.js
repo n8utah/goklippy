@@ -260,6 +260,13 @@ export const SETTING_SECTIONS = [
         help: 'With pieces aboard and nothing landing, index so they still get delivered.',
       },
       {
+        key: 'platter.clearExitFirst',
+        label: 'Drop a finished piece first',
+        kind: 'boolean',
+        help: 'At most two pieces on C4: a second may land only while the other is at the exit (next to fall) and still being identified. Once that one is identified, C3 drops nothing (the channels before it pause) and it drops at once instead of waiting out “Index anyway after”, so a piece landing never holds a finished one on C4. Off lets pieces land whenever the drop spot is free: busier.',
+        keywords: 'exit drop first priority pause feed one at a time bounce',
+      },
+      {
         key: 'platter.stallMs',
         label: 'Stuck after',
         unit: 'ms',

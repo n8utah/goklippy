@@ -253,6 +253,11 @@ type PlatterSettings struct {
 	// IdleIndexMs: with pieces aboard and none landing for this long, index anyway
 	// so they still get delivered.
 	IdleIndexMs int `json:"idleIndexMs"`
+	// ClearExitFirst: at most two pieces on the platter. A second may land only while
+	// the other is in the exit slot still being identified; once that one is ready to
+	// fall, C3 drops nothing (the channels before it pause) and it drops at once
+	// rather than after IdleIndexMs, so a landing piece never holds a finished one.
+	ClearExitFirst bool `json:"clearExitFirst"`
 }
 
 // ChannelSettings maps one rotating channel to its stepper.
@@ -382,6 +387,7 @@ func DefaultMachineSettings() MachineSettings {
 		Platter: PlatterSettings{
 			Sectors: 5, ExitSector: 2,
 			IdentifyTimeoutMs: 20000, SettleMs: 250, BurstFrames: 6, StallMs: 30000, IdleIndexMs: 1500,
+			ClearExitFirst: true,
 		},
 		Cameras: CameraSettings{
 			Devices: map[string]string{},

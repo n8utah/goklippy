@@ -75,6 +75,7 @@ export const DEFAULT_SORTER_SETTINGS = {
     burstFrames: 6,
     stallMs: 30000,
     idleIndexMs: 1500,
+    clearExitFirst: true,
   },
   // Which camera watches each channel (c2, c3, c4) and where its zones are.
   // devices maps a channel to its camera's id (device path); deviceNames keeps a label
