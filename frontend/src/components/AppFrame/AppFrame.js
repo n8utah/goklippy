@@ -38,7 +38,7 @@ export default function AppFrame() {
             <Rail currentGroup={logic.group} />
             <TopBar logic={logic} />
             {/* box-border: main is outside `ds`, so it doesn't get the reset's border-box. */}
-            <main className="mx-auto box-border w-full max-w-[1440px] px-4 pt-6 pb-28 sm:px-6 sm:pb-10 lg:px-8">
+            <main className="mx-auto box-border w-full max-w-[1440px] px-4 pt-4 pb-28 sm:px-6 sm:pb-10 md:pt-5 lg:px-8">
               <PageHeader group={logic.group} page={logic.page} part={logic.part} />
               <Outlet />
             </main>

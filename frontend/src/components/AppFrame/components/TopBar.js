@@ -4,35 +4,49 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 
+import { PageTabs } from './PageHeader';
 import { StatusDetails, StatusPill } from './StatusPanel';
 
-/** Search, the status pill (opening status and controls) and Stop, on every page. */
+/**
+ * On every page: the group's title and its page tabs (from tablet up; phones get them
+ * under the bar), search, the status pill (opening status and controls) and Stop.
+ */
 export default function TopBar({ logic }) {
-  const { status, progress, isDesktop, statusOpen, setStatusOpen } = logic;
+  const { status, progress, isDesktop, statusOpen, setStatusOpen, group } = logic;
   const close = () => setStatusOpen(false);
 
   return (
     <header className="ds sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur sm:px-6">
+      {group && (
+        <div className="hidden h-full min-w-0 flex-1 items-center gap-4 md:flex">
+          {/* Shown from laptop up; on a tablet the rail says which group, and the tabs need the room. */}
+          <h1 className="sr-only shrink-0 font-display text-lg leading-tight font-semibold lg:not-sr-only">
+            {group.label}
+          </h1>
+          <PageTabs group={group} inBar />
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => logic.setSearchOpen(true)}
-        className="hidden h-10 w-full max-w-sm items-center gap-2 rounded-md border border-input bg-card px-3 text-sm text-muted-foreground hover:border-border-strong sm:flex"
+        className="hidden h-10 w-48 shrink-0 items-center gap-2 rounded-md border border-input bg-card px-3 text-sm text-muted-foreground hover:border-border-strong lg:flex xl:w-64"
       >
-        <Search className="size-4" aria-hidden />
-        <span className="flex-1 text-left">Search settings, pages, actions…</span>
+        <Search className="size-4 shrink-0" aria-hidden />
+        <span className="flex-1 truncate text-left">Search…</span>
         <kbd className="rounded border border-border px-1.5 font-mono text-[11px]">Ctrl K</kbd>
       </button>
       <Button
         variant="ghost"
         size="icon"
-        className="sm:hidden"
+        className="shrink-0 lg:hidden"
         onClick={() => logic.setSearchOpen(true)}
         aria-label="Search"
       >
         <Search />
       </Button>
 
-      <div className="ml-auto flex min-w-0 items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         {isDesktop ? (
           <Popover open={statusOpen} onOpenChange={setStatusOpen}>
             <PopoverTrigger asChild>

@@ -98,7 +98,7 @@ function ChannelSize({ logic }) {
           logic.setChannelSize({ width, height });
         }}
       >
-        <SelectTrigger className="w-64">
+        <SelectTrigger className="w-full max-w-80">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

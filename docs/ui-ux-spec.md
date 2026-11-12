@@ -26,8 +26,11 @@ light and dark, and two phone screens. Where the canvas and this spec differ, th
     what it's for. In Machine, each page also shows its setup tick or warning. Clicking a page goes
     there; Esc or clicking away closes it. Clicking the icon itself (not a flyout item) goes to the
     group's first page.
-- **Top bar** (64 px):
-  - **Search box** on the left (Ctrl+K anywhere).
+- **Top bar** (64 px), the only header row:
+  - **The group's title and its page tabs** on the left (underlined along the bar's bottom
+    edge, scrolling sideways when tight). Below 1024 px the title is left out (the rail shows
+    the group) so the tabs have the room.
+  - **Search box** next to them (Ctrl+K anywhere); an icon below 1024 px.
   - **Status pill**: state and run ("Sorting · run 14", "Ready", "Paused", "Error"), colored by
     state, with a dot. A running task adds a small progress ring.
   - **Stop**: red, one click, always enabled when there's anything to stop.
@@ -45,7 +48,8 @@ opens as a sheet from the top.
 ### Phone (< 640 px)
 
 - **Top bar**: search icon (opens search full screen), the status pill (opens the status panel as
-  a full-height sheet), Stop.
+  a full-height sheet), Stop. The group's title and page tabs sit just under it, at the top of
+  the page area.
 - **Bottom bar**: Home, Run, Rules, Machine, More. More opens a sheet with Diagnose and System and
   their pages. Tapping a group goes to its first page; its pages are the tabs at the top.
 - **Tabs** scroll sideways. Part tabs (C1–C4) become pills.
@@ -76,13 +80,12 @@ bookmarked. The first tab is the default.
 
 ## Page template
 
-- **Header**:
-  - the group title (Space Grotesk 28);
-  - the group's pages as tabs (an underline in the accent color);
-  - a line on what the page is for, where it isn't obvious;
-  - the page's main actions on the right.
-- **Part tabs**: below the header, for pages split into parts (Channels › C1…; Board ›
-  Connection…), as pills or a second row of tabs.
+- **No header row of its own**: the group title and page tabs are in the top bar (on phones,
+  just under it), so the page starts straight away.
+- **Part tabs**: the first thing on the page, for pages split into parts (Channels › C1…;
+  Board › Connection…), as pills.
+- A line on what the page is for, where it isn't obvious, and the page's main actions, in the
+  page's own content.
 - **Content**: cards on a 12-column grid (gap 16). Cards have a title, optional actions in their
   top right, and content.
 - **Inline settings** on a page use the shared `SettingField` (label, help, value with unit,
