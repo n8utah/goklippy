@@ -180,7 +180,11 @@ Opened from Run › Sort's strip, Records and Diagnose › Piece journeys:
   shows its frame details (the current Piece journeys detail: ring diagram, decision, sharpness).
 - **What was sent to Brickognize**: the pictures sent, with their channel, and the answer.
 
-Until linking across channels (phase 9 step 2) exists, a piece shows the stages it has.
+The camera stages come from the journey linked to the piece (`GET /sorter/pieces/:id/journey`):
+one card per channel with its kept pictures and how it arrived (fell cleanly, one of several, or
+nothing seen leaving). A piece with no linked journey says so. The full frame-by-frame detail
+stays on Diagnose › Piece journeys (linked from the modal, `?id=` opens that journey), which in
+turn links back to the piece.
 
 ## Accessibility
 
@@ -239,8 +243,6 @@ Each step keeps the app working and is its own commit.
   now, the Recently sorted strip, turn/shake folded away while sorting). Shared `PieceCard` and
   `JourneyModal` (opened with `useJourneyModal().open(pieceId)`, mounted in the frame). The old
   Auth/Dev page is `pages/AccountPage`; the Dashboard is gone. For now:
-  - Pieces aren't linked to their C2/C3 camera journeys yet (phase 9 step 2), so the modal shows
-    C4 and the chute from the piece's record and points to Diagnose › Piece journeys.
   - Home's setup progress comes with Machine › Overview (step 5).
 - **Step 4, part 2** (2026-11-11): Machine › Board (`pages/BoardPage`, one route
   `/machine/board/:part?` so tabs keep edits) replaces Devices, Board Setup and the Overlay
@@ -269,5 +271,7 @@ Each step keeps the app working and is its own commit.
   tabs at `/diagnose/bench/<part>`) are rebuilt on the design system; `app.module.css` and the
   `.legacy-page` island are gone. Only `CameraView.module.css` (the camera overlay) remains.
 
-Still to do: link pieces to their C2/C3 journeys (backend phase 9 step 2) so the journey modal
-shows every stage.
+- **Journey linking** (2026-11-11): the journey modal shows each piece's C2/C3/C4 camera
+  stages from its linked journey (backend phase 9 step 2); Piece journeys shows each track's
+  handoff, opens a journey from `?id=`, and links to the piece. The handoff window is
+  System › Settings › Pictures › "Falling takes at most".

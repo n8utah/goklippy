@@ -401,14 +401,30 @@ Original scope:
 
 ### Phase 9: Pictures of each piece along the way
 
-**Status (2026-11-11): step 1 and the debug page built, tested in simulation.**
+**Status (2026-11-11): steps 1 and 2 and the debug page built, tested in simulation.**
 `logic/sorter/journeys.go` judges every frame of every tracked piece (from `Perception`, or
 `RunSimCameras` when simulating) and keeps the spread-out sharpest; the **Piece journeys** page
-shows each journey's frames, decisions, ring diagram and landing/last-seen frames; the rules are
-on the **Tuning** page (Piece pictures). One journey per track for now. Still to do: tune it on
-C3 once its camera sees the whole bowl and the light works (the sharpness minimum especially:
-the simulator's crisp squares score in the thousands), step 2 (linking at falls) once two
-channels have cameras, and step 3 (sending the pictures to Brickognize).
+shows each journey's frames, decisions, ring diagram, landing/last-seen frames and handoffs; the
+rules are under System › Settings › Pictures.
+
+Step 2 as built: a new track in a channel's drop zone is a *pending handoff*. Its candidates are
+tracks on the channel above that were last seen in the exit or precise zone, are gone from that
+camera's newest frame with no piece within 8° of where they were, were last seen between
+`landed − window` and `landed + 100 ms` (cameras aren't in step), and haven't been used. Exactly
+one → linked: the journeys merge (the upstream track ends "fell to Cx", its pictures move into
+the landing journey's folder). Several, or several landing at once → "several": all are marked
+used and the new track starts afresh. None once the window has passed → "none". A camera above
+that's silent for 5 s means no handoff at all. The pending check is retried each frame, so a
+camera that's behind still links. When the platter takes a piece off C4 it's matched the same
+way to a C4 track in the drop zone (or a fallen C3 track when C4 has no camera), and the journey
+records the piece id (`GET /sorter/pieces/:id/journey`, shown in the journey modal). The window
+is `pictures.handoffMs` (1500 ms). `TestSortLinksJourneysAcrossChannels` sorts in the full
+simulation and checks every piece has C2 → C3 → C4 linked.
+
+Still to do: splits and joins (marking a journey unsure) aren't detected; tune step 1 on C3 once
+its camera sees the whole bowl and the light works (the sharpness minimum especially: the
+simulator's crisp squares score in the thousands), and the window once two real channels have
+cameras; step 3 (sending the pictures to Brickognize).
 
 Today a piece is identified from C4's burst alone. It has already been in view on C2 and C3,
 turning and showing other sides. The aim: collect good, cropped pictures of each piece on every

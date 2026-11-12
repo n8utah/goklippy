@@ -84,6 +84,7 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	sorterGroup.GET("/pieces/:id", routes.GetSorterPiece)
 	sorterGroup.GET("/pieces/:id/images/:idx", routes.GetSorterPieceImage)
 	sorterGroup.PUT("/pieces/:id/review", routes.ReviewSorterPiece)
+	sorterGroup.GET("/pieces/:id/journey", routes.GetSorterPieceJourney)
 	sorterGroup.GET("/runs", routes.ListSorterRuns)
 	sorterGroup.GET("/incidents", routes.ListSorterIncidents)
 	sorterGroup.GET("/stats", routes.GetSorterStats)

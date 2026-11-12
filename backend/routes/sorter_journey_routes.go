@@ -42,6 +42,17 @@ func GetSorterJourney(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", raw)
 }
 
+// GetSorterPieceJourney GET /sorter/pieces/:id/journey: the journey that became this
+// piece (its pictures from C2 and C3), or 404 when it isn't known.
+func GetSorterPieceJourney(c *gin.Context) {
+	raw, err := journeyRecorder.ForPiece(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no journey is known for this piece"})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", raw)
+}
+
 // GetSorterJourneyFile GET /sorter/journeys/:id/files/:name: one of its pictures.
 func GetSorterJourneyFile(c *gin.Context) {
 	path, err := journeyRecorder.File(c.Param("id"), c.Param("name"))

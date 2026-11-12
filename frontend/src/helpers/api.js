@@ -270,6 +270,11 @@ export function getSorterPiece(id) {
   return getJSON(`/api/v1/sorter/pieces/${id}`);
 }
 
+/** The camera journey that became this piece; rejects (404) when none is known. */
+export function getSorterPieceJourney(id) {
+  return getJSON(`/api/v1/sorter/pieces/${id}/journey`);
+}
+
 /** URL of one stored photo of a piece. */
 export function sorterPieceImageURL(id, index) {
   return `${API_BASE_URL}/api/v1/sorter/pieces/${id}/images/${index}`;

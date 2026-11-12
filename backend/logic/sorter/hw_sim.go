@@ -3,11 +3,14 @@ package sorter
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
+	"time"
 )
 
 // SimHardware stands in for the machine: moves take their real time (scaled by
-// TimeScale) and positions are tracked, but nothing turns.
+// TimeScale) and positions are tracked; a simulated world sees C2–C4 turn over each
+// move's time.
 type SimHardware struct {
 	settings func() MachineSettings
 	// TimeScale multiplies every move's duration; 0 finishes moves at once (tests).
@@ -84,9 +87,34 @@ func (h *SimHardware) MoveChannel(ch Channel, deg, rpm float64) (<-chan error, e
 	h.moves = append(h.moves, SimMove{Channel: ch, Degrees: deg, Rpm: rpm})
 	d := moveDuration(deg, rpm, channelAccel(h.settings(), ch))
 	h.mu.Unlock()
-	h.moved(ch, from, from+deg)
-	return doneAfter(seconds(d.Seconds() * h.TimeScale)), nil
+	total := seconds(d.Seconds() * h.TimeScale)
+	if total <= simMoveStep || (ch != ChannelC2 && ch != ChannelC3 && ch != ChannelC4) {
+		// At once: a test's instant move, or C1, whose move drops a part.
+		h.moved(ch, from, from+deg)
+		return doneAfter(total), nil
+	}
+	// The camera channels turn over the move's time, so a simulated camera sees pieces
+	// ride (and a tracker can follow them) rather than jump.
+	done := make(chan error, 1)
+	go func() {
+		start, at := time.Now(), from
+		for {
+			time.Sleep(simMoveStep)
+			frac := math.Min(1, float64(time.Since(start))/float64(total))
+			next := from + deg*frac
+			h.moved(ch, at, next)
+			at = next
+			if frac >= 1 {
+				done <- nil
+				return
+			}
+		}
+	}()
+	return done, nil
 }
+
+// simMoveStep is how often a turning simulated channel moves its pieces on.
+const simMoveStep = 5 * time.Millisecond
 
 // OnShake calls fn after every shake, so a simulated world can free held pieces.
 func (h *SimHardware) OnShake(fn func(ch Channel)) {

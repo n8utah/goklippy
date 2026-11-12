@@ -18,6 +18,9 @@ type SortDeps struct {
 	Identifier Identifier
 	Sorting    *SortingService
 	Records    *Records
+	// Journeys, when set, learns which journey each landed piece is, to show the
+	// piece's pictures from C2 and C3 with its record.
+	Journeys *JourneyRecorder
 }
 
 type sortStations struct {
@@ -49,6 +52,13 @@ func (m *Machine) AttachSorting(deps SortDeps) {
 		OnStall:     m.onPlatterStall,
 		OnDidntFall: m.onDidntFall,
 	})
+	if deps.Journeys != nil {
+		st.platter.deps.OnLanded = func(pieceID string, at time.Time) {
+			if id := deps.Journeys.NotePiece(pieceID, at); id != "" {
+				slog.Info("piece linked to its journey", "piece", pieceID, "journey", id)
+			}
+		}
+	}
 	m.sort = st
 }
 

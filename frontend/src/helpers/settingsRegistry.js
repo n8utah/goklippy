@@ -326,6 +326,15 @@ export const SETTING_SECTIONS = [
         max: 5000,
         help: 'The newest pieces’ journeys; older ones are deleted.',
       },
+      {
+        key: 'pictures.handoffMs',
+        label: 'Falling takes at most',
+        unit: 'ms',
+        step: 100,
+        min: 200,
+        max: 10000,
+        help: 'A piece that lands is matched to the one that left the channel above within this time, so its pictures from both join up. Too long and pieces get mixed up; too short and they aren’t joined.',
+      },
     ],
   },
   {

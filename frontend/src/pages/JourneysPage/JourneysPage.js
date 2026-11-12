@@ -1,3 +1,5 @@
+import { useSearchParams } from 'react-router';
+
 import { sorterJourneyFileURL } from '@/helpers/api';
 import { cn } from '@/lib/utils';
 
@@ -17,7 +19,8 @@ const topReasons = (reasons) =>
  * rules (System › Settings › Pictures). Updates live while sorting.
  */
 const JourneysPage = () => {
-  const logic = useJourneysPageLogic();
+  const [params] = useSearchParams();
+  const logic = useJourneysPageLogic(params.get('id'));
   return (
     <div className="ds flex flex-col gap-4">
       <p className="max-w-[80ch] text-sm text-muted-foreground">

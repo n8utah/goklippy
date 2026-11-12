@@ -108,6 +108,7 @@ export const DEFAULT_SORTER_SETTINGS = {
     cropMarginPct: 20,
     cropMaxPx: 512,
     keepJourneys: 200,
+    handoffMs: 1500,
   },
 };
 

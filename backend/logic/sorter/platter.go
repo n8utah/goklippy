@@ -44,6 +44,8 @@ type PlatterDeps struct {
 	// OnDidntFall is told when a piece is still at the exit after the index that
 	// should have dropped it.
 	OnDidntFall func()
+	// OnLanded is told when a piece lands and gets its record, with the frame's time.
+	OnLanded func(pieceID string, at time.Time)
 }
 
 type slotState int
@@ -206,6 +208,9 @@ func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSet
 	p.progress(now)
 	p.deps.Records.SavePiece(s.piece)
 	slog.Info("piece landed on the platter", "piece", s.piece.ID, "multi_drop", s.piece.Status == PieceMultiDrop)
+	if p.deps.OnLanded != nil && s.piece.Status != PieceMultiDrop {
+		p.deps.OnLanded(s.piece.ID, obs.At)
+	}
 }
 
 // touchingPieces reports a merged box made of parts that don't look like one piece:

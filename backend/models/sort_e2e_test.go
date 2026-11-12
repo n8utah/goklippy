@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -126,6 +127,67 @@ func TestSortEndToEndInSimulation(t *testing.T) {
 	require.Len(t, runs, 1)
 	assert.NotNil(t, runs[0].EndedAt)
 	assert.Equal(t, len(supply), runs[0].Distributed)
+}
+
+// With cameras over C2, C3 and C4, each piece's journey carries on across the falls
+// and ends as its record.
+func TestSortLinksJourneysAcrossChannels(t *testing.T) {
+	db := openTestDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	settings := func() sorter.MachineSettings {
+		s := fastSettings()
+		// Real speeds, so the simulated cameras see each piece ride rather than jump
+		// (their frames come irregularly on a busy test machine).
+		s.FeederRpm = map[string]float64{"c1": 20, "c2": 20, "c3": 20}
+		s.IndexRpm = 20
+		return s
+	}
+	hw := sorter.NewSimHardware(settings)
+	supply := []sorter.SimPart{sorter.SimCatalog[0], sorter.SimCatalog[2], sorter.SimCatalog[3]}
+	world := sorter.NewSimWorld(hw, settings, supply)
+	sorting := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	p, err := sorting.Import(ctx, []byte(bricksProfile))
+	require.NoError(t, err)
+	require.NoError(t, sorting.Activate(ctx, p.ID, sorter.ActivateKeep))
+	records := sorter.NewRecords(NewRecordsStore(db), t.TempDir())
+	go records.Run(ctx)
+	journeys := sorter.NewJourneyRecorder(t.TempDir(), settings)
+	go sorter.RunSimCameras(ctx, world, journeys, 10*time.Millisecond)
+
+	m := sorter.NewMachine(hw, settings, 2*time.Millisecond)
+	m.AttachSorting(sorter.SortDeps{Vision: world, Identifier: world, Sorting: sorting, Records: records, Journeys: journeys})
+	go m.Run(ctx)
+	_, err = m.Do(ctx, sorter.CommandHome)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return m.Snapshot().State == sorter.StateReady }, 5*time.Second, 5*time.Millisecond)
+	_, err = m.Do(ctx, sorter.CommandStart)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return len(world.Falls()) == len(supply) && len(m.Snapshot().Aboard) == 0
+	}, 60*time.Second, 10*time.Millisecond, "%d of %d delivered", len(world.Falls()), len(supply))
+	_, err = m.Do(ctx, sorter.CommandStop)
+	require.NoError(t, err)
+	records.Flush()
+
+	pieces, _, err := NewRecordsStore(db).ListPieces(ctx, sorter.PieceFilter{Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, pieces, len(supply))
+	for _, piece := range pieces {
+		raw, err := journeys.ForPiece(piece.ID)
+		require.NoError(t, err, "piece %s (%s) has no journey", piece.ID, piece.PartID)
+		var j sorter.Journey
+		require.NoError(t, json.Unmarshal(raw, &j))
+		var chans []sorter.Channel
+		for _, tr := range j.Tracks {
+			chans = append(chans, tr.Channel)
+		}
+		assert.Equal(t, []sorter.Channel{sorter.ChannelC2, sorter.ChannelC3, sorter.ChannelC4}, chans, "piece %s", piece.PartID)
+		for _, h := range j.Handoffs {
+			assert.Equal(t, sorter.HandoffLinked, h.Result, "%s→%s", h.From, h.To)
+		}
+	}
 }
 
 // failingIdentifier fails every request, or blocks until its context ends.

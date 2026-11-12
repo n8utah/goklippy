@@ -55,10 +55,11 @@ export const KEPT_COLOR = '#16a34a';
 export const reasonInfo = (id) =>
   REASONS.find((r) => r.id === id) ?? { id, label: id, color: '#94a3b8' };
 
-export function useJourneysPageLogic() {
+/** Diagnose › Piece journeys; `initialId` opens one journey (from ?id=). */
+export function useJourneysPageLogic(initialId) {
   const [list, setList] = useState([]);
   const [error, setError] = useState('');
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(initialId || null);
   const [journey, setJourney] = useState(null);
   const [filter, setFilter] = useState('all'); // all | kept | a reason id
   const [frame, setFrame] = useState(null); // { track, index } shown large

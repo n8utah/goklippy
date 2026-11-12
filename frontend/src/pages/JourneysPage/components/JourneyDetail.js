@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 
+import { arrivalText, useJourneyModal } from '@/components/JourneyModal/JourneyModal.logic';
 import { Button } from '@/components/ui/button';
 import { sorterJourneyFileURL } from '@/helpers/api';
 import { cn } from '@/lib/utils';
@@ -97,6 +98,7 @@ function Track({ j, t, ti, logic }) {
           <h3 className="font-display text-lg font-semibold">
             {t.channel.toUpperCase()} · track #{t.track_id}
           </h3>
+          <p className="text-sm text-muted-foreground">{arrivalText(j, t)}</p>
           <p className="text-sm text-muted-foreground">
             {new Date(t.started).toLocaleTimeString()} to{' '}
             {t.ended ? new Date(t.ended).toLocaleTimeString() : 'now'} ·{' '}
@@ -191,6 +193,7 @@ function Track({ j, t, ti, logic }) {
 
 /** One piece's journey: every channel it was tracked on, frame by frame. */
 export default function JourneyDetail({ logic }) {
+  const journeyModal = useJourneyModal();
   const j = logic.journey;
   if (!logic.selectedId) {
     return (
@@ -209,6 +212,25 @@ export default function JourneyDetail({ logic }) {
         {j.done ? 'finished' : 'still riding, updating live'}. Pick a dot or a picture for its
         details.
       </p>
+      {j.piece_id ? (
+        <p className="text-sm">
+          It became piece <span className="font-mono">{j.piece_id.slice(0, 8)}</span>.{' '}
+          <button
+            type="button"
+            onClick={() => journeyModal.open(j.piece_id)}
+            className="font-medium text-primary-text hover:underline"
+          >
+            Open its record
+          </button>
+        </p>
+      ) : (
+        j.done && (
+          <p className="text-sm text-muted-foreground">
+            Not linked to a sorted piece: it didn’t reach C4’s drop zone, or more than one piece
+            could have been it.
+          </p>
+        )
+      )}
       {j.tracks.map((t, ti) => (
         <Track key={`${t.channel}-${t.track_id}`} j={j} t={t} ti={ti} logic={logic} />
       ))}

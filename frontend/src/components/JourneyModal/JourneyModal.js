@@ -11,11 +11,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { sorterPieceImageURL } from '@/helpers/api';
+import { sorterJourneyFileURL, sorterPieceImageURL } from '@/helpers/api';
 import { PROBLEM_LABELS, pieceBin, pieceName, pieceStatus, scorePct } from '@/helpers/sorterPieces';
 import { cn } from '@/lib/utils';
 
-import { pieceStages, usePieceRecord } from './JourneyModal.logic';
+import {
+  arrivalText,
+  isSettled,
+  pieceStages,
+  usePieceJourney,
+  usePieceRecord,
+} from './JourneyModal.logic';
 import ReviewPanel from './ReviewPanel';
 
 const time = (t) =>
@@ -37,8 +43,48 @@ export default function JourneyModal({ pieceId, onClose }) {
   );
 }
 
+/** One camera channel the piece crossed: how it got there, and its kept pictures. */
+function CameraStage({ journey, track }) {
+  const kept = track.frames.filter((f) => f.kept);
+  const span = track.ended
+    ? ((new Date(track.ended) - new Date(track.started)) / 1000).toFixed(1)
+    : null;
+  return (
+    <li className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-medium">
+          {track.channel.toUpperCase()} · {kept.length} good picture{kept.length === 1 ? '' : 's'}{' '}
+          of {track.frames.length + (track.unlisted || 0)}
+        </p>
+        <span className="font-mono text-xs text-muted-foreground">
+          {time(track.started)}
+          {span && ` · ${span} s`}
+        </span>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {arrivalText(journey, track)}{' '}
+        {track.end_reason ? `It ${track.end_reason}.` : 'Still riding.'}
+      </p>
+      {kept.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {kept.map((f) => (
+            <img
+              key={f.crop}
+              src={sorterJourneyFileURL(journey.id, f.thumb || f.crop)}
+              alt={`On ${track.channel.toUpperCase()} at ${f.angle.toFixed(0)}°`}
+              title={`${f.angle.toFixed(0)}° · sharpness ${f.sharpness.toFixed(0)}`}
+              className="size-16 shrink-0 rounded-md bg-media object-cover"
+            />
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
+
 function Journey({ pieceId, onClose }) {
   const { piece, error, review } = usePieceRecord(pieceId);
+  const { journey, known } = usePieceJourney(pieceId, isSettled(piece));
 
   if (!piece) {
     return (
@@ -120,18 +166,28 @@ function Journey({ pieceId, onClose }) {
           Its way through the machine
         </h3>
         <ol className="flex flex-col gap-3">
-          <li className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-            <strong className="font-medium text-foreground">C2 and C3:</strong> pictures from these
-            channels join a piece once tracking links it across channels. Until then they’re under{' '}
-            <Link
-              to="/diagnose/journeys"
-              onClick={onClose}
-              className="font-medium text-primary-text hover:underline"
-            >
-              Diagnose › Piece journeys
-            </Link>
-            .
-          </li>
+          {journey ? (
+            journey.tracks.map((t) => (
+              <CameraStage key={`${t.channel}-${t.track_id}`} journey={journey} track={t} />
+            ))
+          ) : (
+            <li className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+              {known === null
+                ? 'Looking for its pictures from the cameras above…'
+                : 'No pictures from the cameras above: they didn’t see it fall, or more than one piece could have been it.'}
+            </li>
+          )}
+          {journey && (
+            <li className="text-sm">
+              <Link
+                to={`/diagnose/journeys?id=${journey.id}`}
+                onClick={onClose}
+                className="font-medium text-primary-text hover:underline"
+              >
+                Every frame and decision, under Diagnose › Piece journeys
+              </Link>
+            </li>
+          )}
           {pieceStages(piece).map((s) => (
             <li key={s.id} className="flex gap-3 rounded-lg border border-border px-4 py-3">
               {s.done ? (

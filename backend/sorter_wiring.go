@@ -41,6 +41,7 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 	var identifier sorter.Identifier = brickognize.NewClient()
 	journeys := sorter.NewJourneyRecorder(filepath.Join(dataDir, "journeys"), machineSettings)
 	routes.InitJourneys(journeys)
+	deps.Journeys = journeys
 	if cfg.Simulate {
 		sim := sorter.NewSimHardware(machineSettings)
 		world := sorter.NewSimWorld(sim, machineSettings, nil)

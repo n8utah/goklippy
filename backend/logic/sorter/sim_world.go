@@ -188,8 +188,8 @@ func (w *SimWorld) shaken(ch Channel) {
 func (w *SimWorld) turn(ch Channel, deg float64) {
 	var stay []*simPiece
 	for _, p := range w.onRotor[ch] {
-		if p.held > 0 {
-			stay = append(stay, p) // held: the channel turns under it
+		if p.held > 0 || (ch == ChannelC4 && p.part.NoFall && p.angle == simExitAngle) {
+			stay = append(stay, p) // held, or hanging in the exit: the channel turns under it
 			continue
 		}
 		before := p.angle

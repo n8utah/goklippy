@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
-import { getSorterPiece, reviewSorterPiece } from '@/helpers/api';
+import { getSorterPiece, getSorterPieceJourney, reviewSorterPiece } from '@/helpers/api';
 
 /** Opens a piece's journey: useJourneyModal().open(pieceId). */
 export const JourneyModalContext = createContext({ open: () => {} });
@@ -45,12 +45,68 @@ export function usePieceRecord(pieceId) {
   return { piece: piece?.id === pieceId ? piece : null, error, review };
 }
 
+/**
+ * The camera journey that became the piece (its tracks on C2, C3 and C4), refreshed
+ * while the piece is still on its way. null while loading or when none is known: the
+ * cameras above didn't see it fall, or it was one of several.
+ */
+export function usePieceJourney(pieceId, settled) {
+  const [journey, setJourney] = useState(null);
+  const [known, setKnown] = useState(null); // null loading, false none
+
+  useEffect(() => {
+    if (!pieceId) return undefined;
+    let cancelled = false;
+    let timer;
+    const load = () =>
+      getSorterPieceJourney(pieceId).then(
+        (data) => {
+          if (cancelled) return;
+          setJourney(data);
+          setKnown(true);
+          if (!data.done) timer = setTimeout(load, POLL_MS);
+        },
+        () => {
+          if (cancelled) return;
+          setKnown(false);
+          // It may yet be linked: the cameras settle it within a couple of seconds.
+          if (!settled) timer = setTimeout(load, POLL_MS);
+        },
+      );
+    load();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [pieceId, settled]);
+
+  return { journey: journey?.piece_id === pieceId ? journey : null, known };
+}
+
+export const isSettled = (piece) => Boolean(piece && SETTLED.has(piece.status));
+
+const CH = (c) => c.toUpperCase();
+
+/** How a piece came onto a track's channel, from the journey's handoffs. */
+export function arrivalText(journey, track) {
+  const h = journey.handoffs?.find((x) => x.to === track.channel);
+  if (!h) return 'First seen here.';
+  switch (h.result) {
+    case 'linked':
+      return `Fell from ${CH(h.from)} cleanly, landing ${h.gap_ms ?? 0} ms after it left.`;
+    case 'several':
+      return `Landed when ${h.candidates > 1 ? `${h.candidates} pieces` : 'more than one piece'} could have come from ${CH(h.from)}, so its pictures from there aren’t used.`;
+    default:
+      return `Nothing was seen leaving ${CH(h.from)} just before it landed.`;
+  }
+}
+
 /** The piece's stages so far, in order, each { id, title, at, text, done }. */
 export function pieceStages(piece) {
   const stages = [
     {
       id: 'c4',
-      title: 'C4 · photographed and identified',
+      title: 'Identification (C4)',
       at: piece.identified_at || piece.seen_at,
       done: Boolean(piece.identified_at),
       text: piece.identified_at

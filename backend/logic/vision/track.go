@@ -72,7 +72,9 @@ func (t *Tracker) Update(z ChannelZones, obs *Observation, colors [][3]float64) 
 		predicted := NormalizeAngle(tr.angle + tr.omega*dt)
 		rTol := math.Max(1, t.RadiusGateFrac*math.Max(tr.radius, 1))
 		for di, d := range dets {
-			ad := angleDist(predicted, d.angle)
+			// Near where it was heading, or where it was: the feeder moves pieces in
+			// pulses, so one that was speeding a moment ago may have stopped dead.
+			ad := math.Min(angleDist(predicted, d.angle), angleDist(tr.angle, d.angle))
 			if ad > t.AngularGateDeg || math.Abs(d.radius-tr.radius) > rTol {
 				continue
 			}

@@ -103,6 +103,10 @@ type PicturesSettings struct {
 	CropMaxPx     int     `json:"cropMaxPx"`
 	// KeepJourneys is how many finished journeys keep their debug pictures.
 	KeepJourneys int `json:"keepJourneys"`
+	// HandoffMs: a piece landing on a channel within this long of one leaving the
+	// channel above by its exit is that piece (if it's the only one), and its journey
+	// carries on.
+	HandoffMs int `json:"handoffMs"`
 }
 
 // withDefaults fills in the unset fields.
@@ -138,6 +142,9 @@ func (p PicturesSettings) withDefaults() PicturesSettings {
 	if p.KeepJourneys <= 0 {
 		p.KeepJourneys = d.KeepJourneys
 	}
+	if p.HandoffMs <= 0 {
+		p.HandoffMs = d.HandoffMs
+	}
 	return p
 }
 
@@ -146,6 +153,7 @@ func DefaultPictures() PicturesSettings {
 	return PicturesSettings{
 		IsolationPx: 12, SettleFrames: 3, MaxDegPerFrame: 6, MinSharpness: 40, SizeFactor: 1.6,
 		KeepEveryDeg: 15, MaxKept: 12, CropMarginPct: 20, CropMaxPx: 512, KeepJourneys: 200,
+		HandoffMs: 1500,
 	}
 }
 
