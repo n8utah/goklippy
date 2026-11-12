@@ -68,12 +68,18 @@ func (m *Machine) startRun(now time.Time) error {
 		return nil
 	}
 	st := m.sort
-	active := st.deps.Sorting.Active()
-	if active == nil {
-		return ErrNoActiveProfile
+	// With the chute left out pieces go nowhere in particular, so no profile is used
+	// (or needed): the run has none.
+	var profileID *int64
+	name := ""
+	if !m.settings().Distributor.LeftOut {
+		active := st.deps.Sorting.Active()
+		if active == nil {
+			return ErrNoActiveProfile
+		}
+		id := active.ID
+		profileID, name = &id, active.Name
 	}
-	id := active.ID
-	profileID, name := &id, active.Name
 	runID, err := st.deps.Records.Store().StartRun(context.Background(), profileID, name, now)
 	if err != nil {
 		return fmt.Errorf("start a sort run: %w", err)
@@ -216,12 +222,14 @@ func (m *Machine) onPlatterStall(aboard int) {
 	st := m.sort
 	settings := m.settings()
 	err := m.startJob("Recovery: clear the classification channel", func(ctx context.Context, report reportFunc) error {
-		report(1, 2, "Closing every layer, so pieces drop into the bucket")
-		if err := m.hw.SelectLayer(-1); err != nil {
-			return err
-		}
-		if err := waitFor(ctx, time.Duration(settings.Distributor.DoorSettleMs)*time.Millisecond); err != nil {
-			return err
+		if !settings.Distributor.LeftOut {
+			report(1, 2, "Closing every layer, so pieces drop into the bucket")
+			if err := m.hw.SelectLayer(-1); err != nil {
+				return err
+			}
+			if err := waitFor(ctx, time.Duration(settings.Distributor.DoorSettleMs)*time.Millisecond); err != nil {
+				return err
+			}
 		}
 		report(2, 2, fmt.Sprintf("Turning the channel %d times round", clearTurns))
 		done, err := m.hw.MoveChannel(ChannelC4, 360*clearTurns, settings.IndexRpm)

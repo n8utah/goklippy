@@ -80,9 +80,11 @@ export function useSetupChecklist() {
     state: !board ? 'unknown' : chute?.homed ? 'done' : 'todo',
     detail: !board
       ? 'Checked once the board is connected.'
-      : chute?.homed
-        ? `At ${chute.angle?.toFixed(1)}°. Calibrate its aim under Chute › Calibrate.`
-        : sentence(chute?.message) || 'Home the machine to find the chute’s 0°.',
+      : chute?.left_out
+        ? 'Left out for now: sorting runs without it. Untick “Leave the chute out” on Machine › Chute once it’s wired.'
+        : chute?.homed
+          ? `At ${chute.angle?.toFixed(1)}°. Calibrate its aim under Chute › Calibrate.`
+          : sentence(chute?.message) || 'Home the machine to find the chute’s 0°.',
     to: '/machine/chute',
   });
 
@@ -137,7 +139,13 @@ export function useSetupChecklist() {
     id: 'profile',
     label: 'Sorting profile active',
     state: profile === undefined ? 'unknown' : profile ? 'done' : 'todo',
-    detail: profile ? profile.name : 'Upload a Hive profile and activate it.',
+    // Not needed while the chute is left out: sorting doesn't use one then.
+    optional: Boolean(chute?.left_out),
+    detail: chute?.left_out
+      ? 'Not used while the chute is left out.'
+      : profile
+        ? profile.name
+        : 'Upload a Hive profile and activate it.',
     to: '/rules/profiles',
   });
 

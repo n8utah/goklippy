@@ -184,9 +184,11 @@ export function StatusDetails({ logic, onNavigate }) {
           )}
         </Row>
         <Row label="Chute">
-          {chute?.homed
-            ? `Homed${chute.angle != null ? ` · at ${chute.angle.toFixed(1)}°` : ''}`
-            : 'Not homed'}
+          {chute?.left_out
+            ? 'Left out for now'
+            : chute?.homed
+              ? `Homed${chute.angle != null ? ` · at ${chute.angle.toFixed(1)}°` : ''}`
+              : 'Not homed'}
         </Row>
         <div className="py-1.5 text-sm">
           <div className="flex items-center justify-between gap-4">

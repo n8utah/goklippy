@@ -52,6 +52,44 @@
   fill: #22d3ee;
 }
 
+/* Editing by hand (ringEdit.js): the picture takes the pointer, not the page. */
+.editing {
+  touch-action: none;
+  user-select: none;
+}
+
+.editing .stream {
+  pointer-events: none;
+}
+
+.exitRing {
+  stroke-dasharray: 6 6;
+  stroke: #f97316;
+}
+
+/* What the pointer would grab. */
+.lit {
+  stroke-width: 4;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.8));
+}
+
+.handle {
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.handle_drop {
+  fill: #3b82f6;
+}
+
+.handle_exit {
+  fill: #f97316;
+}
+
+.handle_precise {
+  fill: #d946ef;
+}
+
 .box {
   fill: none;
   stroke: #22c55e;

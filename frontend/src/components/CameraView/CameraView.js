@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { getSorterCameraObservation, sorterCameraStreamURL } from '../../helpers/api';
+import { getSorterCameraObservation, sorterCameraStreamURL } from '@/helpers/api';
+import { cn } from '@/lib/utils';
 
 import styles from './CameraView.module.css';
+import { dragTo, handles, hitTest, wheel as wheelZones } from './ringEdit';
 
 const OVERLAY_POLL_MS = 250;
 
@@ -28,16 +30,24 @@ function arcPath(cx, cy, r1, r2, start, end) {
   return `M ${ax} ${ay} A ${r2} ${r2} 0 ${large} 1 ${bx} ${by} L ${ix} ${iy} A ${r1} ${r1} 0 ${large} 0 ${jx} ${jy} Z`;
 }
 
+const CURSORS = { center: 'move', radius: 'ew-resize', rotate: 'grab', end: 'col-resize' };
+
 /**
  * A channel's live camera with its zones and what perception sees drawn over it.
- * zonesOverride shows zones being edited instead of the saved ones. onPick gets the
- * frame position of a click.
+ * zonesOverride shows zones being edited instead of the saved ones. With
+ * onZonesChange they're edited by hand (see ringEdit.js): drag inside the ring to move
+ * it, a circle's edge to size it, a section to slide it round, a section's end handle
+ * to stretch it; the wheel sizes the nearest circle (Shift: all of them); double-click
+ * puts the center there.
  */
-const CameraView = ({ channel, zonesOverride, showOverlay = true, onPick, compact }) => {
+const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange, compact }) => {
   const [observation, setObservation] = useState(null);
   const [savedZones, setSavedZones] = useState(null);
   const [failed, setFailed] = useState(false);
   const [size, setSize] = useState(null); // the stream's real frame size
+  const [hover, setHover] = useState(null); // what the pointer would grab
+  const [drag, setDrag] = useState(null); // { grab, p0, z0 }
+  const viewRef = useRef(null);
 
   useEffect(() => {
     if (!showOverlay) return undefined;
@@ -67,14 +77,66 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onPick, compac
   const sy = zones?.frame_h ? h / zones.frame_h : 1;
   const s = (sx + sy) / 2;
 
-  const pick = (e) => {
-    if (!onPick) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    onPick({
-      x: Math.round((((e.clientX - rect.left) / rect.width) * w) / sx),
-      y: Math.round((((e.clientY - rect.top) / rect.height) * h) / sy),
+  const editing = Boolean(onZonesChange && zones?.ring && showOverlay);
+
+  // A pointer's place in the zones' pixels, and a few screen pixels in those units.
+  const toZone = (e) => {
+    const rect = viewRef.current.getBoundingClientRect();
+    return {
+      p: {
+        x: (((e.clientX - rect.left) / rect.width) * w) / sx,
+        y: (((e.clientY - rect.top) / rect.height) * h) / sy,
+      },
+      tol: ((10 / rect.width) * w) / s,
+    };
+  };
+
+  const onPointerDown = (e) => {
+    if (!editing || e.button !== 0) return;
+    const { p, tol } = toZone(e);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDrag({ grab: hitTest(zones, p, tol), p0: p, z0: zones });
+  };
+  const onPointerMove = (e) => {
+    if (!editing) return;
+    const { p, tol } = toZone(e);
+    if (drag) onZonesChange(dragTo(drag.z0, drag.grab, drag.p0, p));
+    else setHover(hitTest(zones, p, tol));
+  };
+  const onPointerUp = () => setDrag(null);
+  const onDoubleClick = (e) => {
+    if (!editing) return;
+    const { p } = toZone(e);
+    onZonesChange({
+      ...zones,
+      ring: { ...zones.ring, center: { x: Math.round(p.x), y: Math.round(p.y) } },
     });
   };
+
+  // The wheel needs a non-passive listener to keep the page from scrolling.
+  const wheelRef = useRef(null);
+  useEffect(() => {
+    wheelRef.current = editing
+      ? (e) => {
+          e.preventDefault();
+          const { p } = toZone(e);
+          onZonesChange(wheelZones(zones, p, e.deltaY, e.shiftKey));
+        }
+      : null;
+  });
+  useEffect(() => {
+    const el = viewRef.current;
+    if (!el) return undefined;
+    const handler = (e) => wheelRef.current?.(e);
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, [failed]);
+
+  const active = drag?.grab ?? hover;
+  const lit = (kind, key) =>
+    editing &&
+    active?.kind === kind &&
+    (key === undefined || active.key === key || active.arc === key);
 
   if (failed) {
     return <div className={compact ? styles.emptyCompact : styles.empty}>No picture</div>;
@@ -91,34 +153,62 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onPick, compac
       zones.precise_width > 0
         ? { start: zones.exit.start - zones.precise_width, end: zones.exit.start }
         : null;
+    const ring = (key) => cn(styles.ring, lit('radius', key) && styles.lit);
+    const arc = (cls, key) => cn(cls, lit('rotate', key) && styles.lit);
     overlay = (
       <>
-        <circle cx={cx} cy={cy} r={r1} className={styles.ring} />
-        <circle cx={cx} cy={cy} r={r2} className={styles.ring} />
+        <circle cx={cx} cy={cy} r={r1} className={ring('inner_radius')} />
+        <circle cx={cx} cy={cy} r={r2} className={ring('outer_radius')} />
+        {editing && (
+          <circle cx={cx} cy={cy} r={re} className={cn(ring('exit_radius'), styles.exitRing)} />
+        )}
         <path
           d={arcPath(cx, cy, r1, r2, zones.drop.start, zones.drop.end)}
-          className={styles.drop}
+          className={arc(styles.drop, 'drop')}
         />
         {precise && (
           <path
             d={arcPath(cx, cy, r1, r2, precise.start, precise.end)}
-            className={styles.precise}
+            className={arc(styles.precise, 'exit')}
           />
         )}
         <path
           d={arcPath(cx, cy, r1, re, zones.exit.start, zones.exit.end)}
-          className={styles.exit}
+          className={arc(styles.exit, 'exit')}
         />
-        <circle cx={cx} cy={cy} r={4} className={styles.center} />
+        <circle cx={cx} cy={cy} r={lit('center') ? 7 : 4} className={styles.center} />
+        {editing &&
+          handles(zones).map((hd) => (
+            <circle
+              key={`${hd.arc}-${hd.end}`}
+              cx={hd.x * sx}
+              cy={hd.y * sy}
+              r={
+                (active?.kind === 'end' && active.arc === hd.arc && active.end === hd.end ? 9 : 6) *
+                Math.max(1, w / 640)
+              }
+              className={cn(styles.handle, styles[`handle_${hd.arc}`])}
+            />
+          ))}
       </>
     );
   }
 
   return (
     <div
-      className={compact ? styles.viewCompact : styles.view}
-      onClick={pick}
-      role={onPick ? 'button' : undefined}
+      ref={viewRef}
+      className={cn(compact ? styles.viewCompact : styles.view, editing && styles.editing)}
+      style={
+        editing
+          ? { cursor: drag?.grab.kind === 'rotate' ? 'grabbing' : CURSORS[active?.kind] }
+          : undefined
+      }
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onPointerLeave={() => !drag && setHover(null)}
+      onDoubleClick={onDoubleClick}
     >
       <img
         src={sorterCameraStreamURL(channel)}

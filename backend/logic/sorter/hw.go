@@ -111,6 +111,8 @@ type ChuteStatus struct {
 	// Endstop is "triggered", "open", or "" when there's no switch to read.
 	Endstop string `json:"endstop,omitempty"`
 	Message string `json:"message,omitempty"`
+	// LeftOut is the chute setting of that name: the machine runs without it.
+	LeftOut bool `json:"left_out,omitempty"`
 }
 
 var ErrChuteNotHomed = errors.New("the chute isn't homed; home it first")

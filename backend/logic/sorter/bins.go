@@ -47,6 +47,7 @@ const (
 	RouteMisc        = "misc"         // misc, with no misc bin: the bucket
 	RouteTooBig      = "too_big"      // longer than any bin takes: the bucket
 	RouteNoBin       = "no_bin"       // every bin is taken: the bucket
+	RouteNoChute     = "no_chute"     // the chute is left out (Distributor.LeftOut): not aimed
 )
 
 // BinChoice is where one piece goes. Bin is nil for the bucket under the tower.

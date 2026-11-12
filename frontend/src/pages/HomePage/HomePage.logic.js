@@ -36,7 +36,8 @@ export function blockers({ state, connected, profile, cameras }) {
       to: '/system/settings/power',
       link: 'Motor power settings',
     });
-  if (!profile)
+  // With the chute left out, sorting doesn't use a profile.
+  if (!profile && !state.chute?.left_out)
     list.push({
       id: 'profile',
       text: 'No sorting profile is active, so every piece would go to misc.',

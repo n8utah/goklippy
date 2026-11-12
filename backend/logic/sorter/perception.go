@@ -113,9 +113,42 @@ func (p *Perception) Run(ctx context.Context) {
 	}
 }
 
-// cameraConfig is how every camera is opened, from the settings.
-func cameraConfig(cs CameraSettings, device string) camera.Config {
-	return camera.Config{Device: device, Width: cs.Width, Height: cs.Height, Fps: cs.Fps, Ffmpeg: cs.Ffmpeg}
+// maxDetectWidth is the widest frame tracking works on. A camera capturing wider is
+// tracked on a copy scaled to this width: decoding a 4K frame in Go takes a large
+// part of a core at 10 fps, and tracking doesn't need the detail.
+const maxDetectWidth = 1280
+
+// detectSize is the size frames are tracked at for a w×h capture.
+func detectSize(w, h int) (int, int) {
+	if w <= maxDetectWidth || w <= 0 || h <= 0 {
+		return w, h
+	}
+	dh := int(float64(h)*maxDetectWidth/float64(w)/2+0.5) * 2 // even, for the scaler
+	return maxDetectWidth, dh
+}
+
+// cameraConfig is how ch's camera is opened, from the settings ("" for a camera no
+// channel uses, which opens at every camera's size).
+func cameraConfig(cs CameraSettings, ch Channel, device string) camera.Config {
+	w, h := cs.Width, cs.Height
+	if ch != "" {
+		w, h = cs.SizeFor(ch)
+	}
+	cfg := camera.Config{Device: device, Width: w, Height: h, Fps: cs.Fps, Ffmpeg: cs.Ffmpeg}
+	if dw, dh := detectSize(w, h); dw != w || dh != h {
+		cfg.DetectWidth, cfg.DetectHeight = dw, dh
+	}
+	return cfg
+}
+
+// channelOf is the channel a device is assigned to, if any.
+func channelOf(cs CameraSettings, device string) Channel {
+	for _, ch := range CameraChannels {
+		if cs.Devices[string(ch)] == device {
+			return ch
+		}
+	}
+	return ""
 }
 
 // TestDevice is ffmpeg's test picture, which can always be previewed.
@@ -156,7 +189,8 @@ func (p *Perception) Preview(device string) ([]byte, time.Time, camera.Status, e
 	if !p.MayOpen(device) {
 		return nil, time.Time{}, camera.Status{}, ErrUnknownDevice
 	}
-	cam := p.pool.preview(cameraConfig(p.settings().Cameras, device))
+	cs := p.settings().Cameras
+	cam := p.pool.preview(cameraConfig(cs, channelOf(cs, device), device))
 	f, ok := cam.Latest()
 	if !ok {
 		return nil, time.Time{}, cam.Status(), ErrNoFrame
@@ -170,11 +204,12 @@ func (p *Perception) reconcile(ctx context.Context) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, ch := range CameraChannels {
-		want := cameraConfig(cs, cs.Devices[string(ch)])
+		want := cameraConfig(cs, ch, cs.Devices[string(ch)])
+		dw, dh := trackedSize(want)
 		cur := p.chans[ch]
 		if cur != nil && cur.cfg == want {
 			// Same frame size, so the step (which the background was sampled at) stays.
-			cur.detector.Threshold, cur.detector.MinArea, _ = detectorParams(cs)
+			cur.detector.Threshold, cur.detector.MinArea, _ = detectorParams(cs, dw, dh)
 			continue
 		}
 		if cur != nil {
@@ -187,7 +222,7 @@ func (p *Perception) reconcile(ctx context.Context) {
 		}
 		cctx, cancel := context.WithCancel(ctx)
 		pc := &perceptionChannel{cfg: want, cam: p.pool.acquire(want), cancel: cancel, detector: vision.NewBackgroundDetector(), tracker: vision.NewTracker()}
-		pc.detector.Threshold, pc.detector.MinArea, pc.detector.Step = detectorParams(cs)
+		pc.detector.Threshold, pc.detector.MinArea, pc.detector.Step = detectorParams(cs, dw, dh)
 		if views, spacing, err := p.loadViews(ch); err == nil && len(views) > 0 {
 			if err := pc.detector.SetViews(views, spacing); err != nil {
 				slog.Warn("saved empty-channel pictures not used", "channel", ch, "error", err)
@@ -204,16 +239,24 @@ func (p *Perception) reconcile(ctx context.Context) {
 // The detector's defaults are for a 640×480 frame.
 const detectorBaseW, detectorBaseH = 640, 480
 
-// detectorParams are the detector's settings for the cameras' frame size. Unset ones
+// trackedSize is the size of the frames a capture tracks on.
+func trackedSize(cfg camera.Config) (int, int) {
+	if cfg.Split() {
+		return cfg.DetectWidth, cfg.DetectHeight
+	}
+	return cfg.Width, cfg.Height
+}
+
+// detectorParams are the detector's settings for a w×h tracked frame. Unset ones
 // scale from the 640×480 defaults: the smallest piece by pixel count, and the sampling
 // step by width, so a 1280×720 frame costs about what a 640×480 one does.
-func detectorParams(cs CameraSettings) (threshold, minArea, step int) {
+func detectorParams(cs CameraSettings, w, h int) (threshold, minArea, step int) {
 	d := vision.NewBackgroundDetector()
 	threshold, minArea, step = d.Threshold, d.MinArea, d.Step
-	if cs.Width > 0 && cs.Height > 0 {
-		scale := float64(cs.Width*cs.Height) / (detectorBaseW * detectorBaseH)
+	if w > 0 && h > 0 {
+		scale := float64(w*h) / (detectorBaseW * detectorBaseH)
 		minArea = max(1, int(float64(d.MinArea)*scale+0.5))
-		step = max(d.Step, d.Step*cs.Width/detectorBaseW)
+		step = max(d.Step, d.Step*w/detectorBaseW)
 	}
 	if cs.Threshold > 0 {
 		threshold = cs.Threshold
@@ -309,6 +352,23 @@ func (p *Perception) JPEG(ch Channel) ([]byte, time.Time, bool) {
 	}
 	f, ok := pc.cam.Latest()
 	return f.JPEG, f.At, ok
+}
+
+// HiRes is the newest full-size frame of a channel whose camera captures larger
+// than it's tracked at, as the camera sent it, with how many full-size pixels there
+// are per tracked one. ok is false for a camera that isn't split.
+func (p *Perception) HiRes(ch Channel) (jpg []byte, at time.Time, scale float64, ok bool) {
+	p.mu.Lock()
+	pc := p.chans[ch]
+	p.mu.Unlock()
+	if pc == nil || !pc.cfg.Split() {
+		return nil, time.Time{}, 0, false
+	}
+	f, ok := pc.cam.LatestFull()
+	if !ok {
+		return nil, time.Time{}, 0, false
+	}
+	return f.JPEG, f.At, float64(pc.cfg.Width) / float64(pc.cfg.DetectWidth), true
 }
 
 // CaptureBackground takes the newest frame as the empty channel, and keeps it for

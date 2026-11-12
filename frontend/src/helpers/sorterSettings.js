@@ -16,6 +16,7 @@ export const DEFAULT_SORTER_SETTINGS = {
   dwellMs: 1000,
   showSettings: true,
   distributor: {
+    leftOut: false,
     stepper: 'stepper_e1',
     gear: 5,
     rpm: 5,

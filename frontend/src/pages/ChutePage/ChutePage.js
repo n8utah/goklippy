@@ -71,6 +71,10 @@ const ChutePage = () => {
         </div>
       </section>
 
+      <section className="rounded-xl border border-border bg-card px-4 py-3">
+        <SettingField settingKey="distributor.leftOut" />
+      </section>
+
       {state?.job && (
         <section className="flex flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3">
           <div className="flex items-center justify-between gap-2">

@@ -190,6 +190,48 @@ func TestSortLinksJourneysAcrossChannels(t *testing.T) {
 	}
 }
 
+func TestSortWithTheChuteLeftOut(t *testing.T) {
+	settings := func() sorter.MachineSettings {
+		s := fastSettings()
+		s.Distributor.LeftOut = true
+		return s
+	}
+	db := openTestDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	hw := sorter.NewSimHardware(settings)
+	world := sorter.NewSimWorld(hw, settings, sorter.SimCatalog[:3])
+	// No profile is imported or active: with the chute left out none is needed.
+	sorting := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	records := sorter.NewRecords(NewRecordsStore(db), t.TempDir())
+	go records.Run(ctx)
+	m := sorter.NewMachine(hw, settings, 2*time.Millisecond)
+	m.AttachSorting(sorter.SortDeps{Vision: world, Identifier: world, Sorting: sorting, Records: records})
+	go m.Run(ctx)
+
+	_, err := m.Do(ctx, sorter.CommandHome)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return m.Snapshot().State == sorter.StateReady }, 5*time.Second, 5*time.Millisecond)
+	snap := m.Snapshot()
+	assert.False(t, snap.Chute.Homed, "the chute isn't homed")
+	assert.True(t, snap.Chute.LeftOut)
+
+	_, err = m.Do(ctx, sorter.CommandStart)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(m.Snapshot().Recent) == 3 }, 30*time.Second, 10*time.Millisecond)
+	assert.Equal(t, sorter.StateRunning, m.Snapshot().State, "it keeps sorting without a homed chute")
+	for _, piece := range m.Snapshot().Recent {
+		assert.Equal(t, sorter.PieceDistributed, piece.Status, piece.PartID)
+		assert.Equal(t, sorter.RouteNoChute, piece.RouteReason, piece.PartID)
+		assert.Zero(t, piece.BinLayer, piece.PartID)
+		assert.NotEmpty(t, piece.PartID, "still identified")
+		assert.Empty(t, piece.CategoryName, "no profile is asked")
+	}
+	for _, mv := range hw.Moves() {
+		assert.NotEqual(t, sorter.ChannelDistributor, mv.Channel, "the chute never moves")
+	}
+}
+
 // failingIdentifier fails every request, or blocks until its context ends.
 type failingIdentifier struct{ block bool }
 

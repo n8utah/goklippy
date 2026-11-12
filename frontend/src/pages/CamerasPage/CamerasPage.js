@@ -16,6 +16,9 @@ import {
 import {
   CAMERA_CHANNELS,
   CAMERA_SIZES,
+  HIGH_RES_SIZES,
+  TRACK_WIDTH,
+  cameraSizeFor,
   CHANNEL_LABELS,
   TEST_DEVICE,
   deviceLabel,
@@ -73,6 +76,56 @@ function ZoneEditor({ zones, onField }) {
         </div>
       </fieldset>
     </div>
+  );
+}
+
+const SAME = '__same__';
+
+/** This channel's camera size: every camera's, or its own (up to 4K). */
+function ChannelSize({ logic }) {
+  const { cams, channel } = logic;
+  const size = cameraSizeFor(cams, channel);
+  const key = (w, h) => `${w}x${h}`;
+  const listed = [...HIGH_RES_SIZES, ...CAMERA_SIZES];
+  return (
+    <label className="flex flex-col gap-1.5 text-sm">
+      <span className="font-medium">Picture size</span>
+      <Select
+        value={size.own ? key(size.width, size.height) : SAME}
+        onValueChange={(v) => {
+          if (v === SAME) return logic.setChannelSize(null);
+          const [width, height] = v.split('x').map(Number);
+          logic.setChannelSize({ width, height });
+        }}
+      >
+        <SelectTrigger className="w-64">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={SAME}>
+            Every camera’s ({cams.width}×{cams.height})
+          </SelectItem>
+          {listed.map(([w, h]) => (
+            <SelectItem key={key(w, h)} value={key(w, h)}>
+              {w}×{h}
+              {w > TRACK_WIDTH ? ' · full size for photos' : ''}
+            </SelectItem>
+          ))}
+          {size.own && !listed.some(([w, h]) => w === size.width && h === size.height) && (
+            <SelectItem value={key(size.width, size.height)}>
+              {size.width}×{size.height}
+            </SelectItem>
+          )}
+        </SelectContent>
+      </Select>
+      <span className="text-xs text-muted-foreground">
+        {size.width > TRACK_WIDTH
+          ? `Captured at ${size.width}×${size.height} in the camera’s MJPEG. Pieces are tracked on a ${TRACK_WIDTH}-wide copy; the photos sent to Brickognize are cut from the full-size picture. `
+          : ''}
+        The camera must offer the size (Check its sizes on Setup). Changing it needs the ring
+        measured and the empty channel captured again.
+      </span>
+    </label>
   );
 }
 
@@ -143,7 +196,7 @@ const CamerasPage = () => {
                     key={`${channel}-${device}`}
                     channel={channel}
                     zonesOverride={zones}
-                    onPick={zones ? logic.pickCenter : undefined}
+                    onZonesChange={zones ? logic.setZones : undefined}
                   />
                 </div>
               ) : (
@@ -152,7 +205,9 @@ const CamerasPage = () => {
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                {zones ? 'Click the picture to put the ring’s center there. ' : ''}
+                {zones
+                  ? 'Drag inside the ring to move it, or a circle’s edge to size it; the wheel sizes the nearest circle (Shift: all of them). Drag a colored section to slide it round, or its dots to stretch it. Double-click puts the center there. '
+                  : ''}
                 Blue: drop zone · magenta: precise · orange: exit · green boxes: pieces found.
               </p>
               {chStatus && (
@@ -206,6 +261,7 @@ const CamerasPage = () => {
                   </Button>
                 </div>
                 {devices.error && <p className="text-sm text-muted-foreground">{devices.error}</p>}
+                <ChannelSize logic={logic} />
               </Panel>
 
               <Panel title="Empty all the way round">

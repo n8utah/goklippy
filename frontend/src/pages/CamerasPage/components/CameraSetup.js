@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
-import { CAMERA_CHANNELS, CHANNEL_LABELS, deviceLabel } from '../CamerasPage.logic';
+import { CAMERA_CHANNELS, CHANNEL_LABELS, cameraSizeFor, deviceLabel } from '../CamerasPage.logic';
 import CameraFinder from './CameraFinder';
 import DeviceModes from './DeviceModes';
 import DevicePreview from './DevicePreview';
@@ -84,8 +84,9 @@ function DeviceCard({ device, logic }) {
       </div>
       <DeviceModes
         deviceId={device.id}
-        width={logic.cams.width}
-        height={logic.cams.height}
+        width={cameraSizeFor(logic.cams, on).width}
+        height={cameraSizeFor(logic.cams, on).height}
+        own={cameraSizeFor(logic.cams, on).own}
         disabled={logic.simulated}
       />
     </div>

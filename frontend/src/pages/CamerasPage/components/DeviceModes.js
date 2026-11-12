@@ -3,8 +3,11 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { listSorterCameraModes } from '@/helpers/api';
 
-/** The sizes a camera offers, checked on request, against the size every camera uses. */
-export default function DeviceModes({ deviceId, width, height, disabled }) {
+/**
+ * The sizes a camera offers, checked on request, against the size it opens at (its
+ * channel's own, when `own`, else every camera's).
+ */
+export default function DeviceModes({ deviceId, width, height, own, disabled }) {
   const [state, setState] = useState({ loading: false, sizes: null, error: '' });
 
   const check = async () => {
@@ -36,7 +39,9 @@ export default function DeviceModes({ deviceId, width, height, disabled }) {
         <p className={fits ? 'text-xs text-muted-foreground' : 'text-xs text-warning'}>
           {fits
             ? `Takes ${width}×${height}. `
-            : `Doesn’t offer ${width}×${height}, the size every camera uses, so it won’t open. Change the size on any channel tab. `}
+            : own
+              ? `Doesn’t offer ${width}×${height}, the size set for its channel, so it won’t open. Change it on the channel’s tab. `
+              : `Doesn’t offer ${width}×${height}, the size every camera uses, so it won’t open. Change the size on any channel tab. `}
           Offers: {state.sizes.map((s) => `${s.key} (${s.fps} fps)`).join(', ')}
         </p>
       )}

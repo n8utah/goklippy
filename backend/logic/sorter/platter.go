@@ -62,7 +62,7 @@ type platterSlot struct {
 	state     slotState
 	landedAt  time.Time
 	box       vision.Box // where it lay in the drop zone
-	frames    [][]byte
+	shots     []platterShot
 	lastFrame time.Time
 	sentAt    time.Time
 	// The bin it was routed to, once it is next to fall.
@@ -268,12 +268,17 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 		return
 	}
 	s.lastFrame = at
-	if jpg, err := cropJPEG(frame, s.box); err == nil {
-		p.deps.Records.SaveImage(s.piece.ID, len(s.frames), jpg, true, at)
-		s.frames = append(s.frames, jpg)
+	shot := platterShot{frame: frame, box: s.box, at: at}
+	if hr, ok := p.deps.Vision.(hiResSource); ok {
+		// The camera's full-size frame from the same moment, when it has one: the
+		// piece lies still on the platter, so the newest is the same picture.
+		if jpg, fullAt, scale, ok := hr.HiRes(ChannelC4); ok && scale > 1 && !fullAt.Before(s.landedAt) {
+			shot.full, shot.scale = jpg, scale
+		}
 	}
+	s.shots = append(s.shots, shot)
 	want := min(max(1, ps.BurstFrames), brickognize.MaxImages)
-	if len(s.frames) < want {
+	if len(s.shots) < want {
 		return
 	}
 	s.state = slotIdentifying
@@ -281,13 +286,59 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 	s.piece.Status = PieceIdentifying
 	p.deps.Records.SavePiece(s.piece)
 	p.progress(now)
-	frames, id := s.frames, s.piece.ID
+	shots, id := s.shots, s.piece.ID
 	go func() {
+		// Cut here, off the control loop: a full-size frame takes a while to decode.
+		var frames [][]byte
+		for _, sh := range shots {
+			jpg, err := sh.crop()
+			if err != nil {
+				slog.Warn("cropping a photo of a piece failed", "piece", id, "error", err)
+				continue
+			}
+			p.deps.Records.SaveImage(id, len(frames), jpg, true, sh.at)
+			frames = append(frames, jpg)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(ps.IdentifyTimeoutMs)*time.Millisecond)
 		defer cancel()
 		res, err := p.deps.Identifier.Identify(ctx, frames)
 		p.idents <- identResult{pieceID: id, result: res, err: err}
 	}()
+}
+
+// hiResSource is vision with a full-size frame next to the tracked one (Perception
+// for a camera capturing larger than it's tracked at).
+type hiResSource interface {
+	HiRes(ch Channel) (jpg []byte, at time.Time, scale float64, ok bool)
+}
+
+// platterShot is one photo of a piece on C4: the tracked frame and the piece's box in
+// it, and the full-size frame (scale full pixels per tracked one) when there is one.
+type platterShot struct {
+	frame image.Image
+	box   vision.Box
+	full  []byte
+	scale float64
+	at    time.Time
+}
+
+// crop is the piece cut out of the full-size frame, or else the tracked one.
+func (sh platterShot) crop() ([]byte, error) {
+	if len(sh.full) > 0 && sh.scale > 1 {
+		img, err := jpeg.Decode(bytes.NewReader(sh.full))
+		if err == nil {
+			s := sh.scale
+			box := vision.Box{
+				X1: int(float64(sh.box.X1) * s), Y1: int(float64(sh.box.Y1) * s),
+				X2: int(float64(sh.box.X2)*s + 0.5), Y2: int(float64(sh.box.Y2)*s + 0.5),
+			}
+			if jpg, err := cropJPEG(img, box); err == nil {
+				return jpg, nil
+			}
+		}
+		slog.Warn("the full-size photo couldn't be used; cropping the tracked one", "error", err)
+	}
+	return cropJPEG(sh.frame, sh.box)
 }
 
 func dropPiece(obs vision.Observation) (vision.PieceObs, bool) {
@@ -382,6 +433,15 @@ func (p *Platter) prepareExit(now time.Time, settings MachineSettings) {
 		return
 	}
 
+	if settings.Distributor.LeftOut {
+		// No chute: nothing is aimed, and no profile is asked where it would go.
+		s.choice = BinChoice{Reason: RouteNoChute}
+		s.piece.RouteReason = RouteNoChute
+		s.routed = true
+		p.aim(now, s, settings)
+		return
+	}
+
 	ctx := context.Background()
 	var res RouteResult
 	var err error
@@ -412,6 +472,10 @@ func (p *Platter) prepareExit(now time.Time, settings MachineSettings) {
 
 // aim sets the doors and turns the chute for a routed piece.
 func (p *Platter) aim(now time.Time, s *platterSlot, settings MachineSettings) {
+	if settings.Distributor.LeftOut {
+		p.doorsSettled, p.aimedFor, p.aimDone = now, s.piece.ID, nil
+		return
+	}
 	layer := -1
 	if s.choice.Bin != nil {
 		layer = s.choice.Bin.Layer - 1

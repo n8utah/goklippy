@@ -39,6 +39,13 @@ The **Chute** page homes, calibrates and aims it, through the backend:
 The chute's angle is read from the MCU's step count from home, so jogging the distributor
 elsewhere doesn't lose it. A board reset or reconnect does, and the chute must be homed again.
 
+**Leave the chute out for now** (top of the Chute page, also under System › Settings › Chute)
+runs the machine before the chute's motor and home switch are wired. Home then skips the chute
+and the layer doors and just makes the machine ready, losing the chute's home doesn't stop a
+sort, and sorting still feeds and identifies each piece but ignores profiles (none needs to be
+active; the run is saved without one) and aims nothing: the piece drops off C4 wherever it is,
+recorded as "No chute (left out)". Untick it once the chute is wired, then Home.
+
 ### Wiring the home switch
 
 Plug the switch into a free RAMPS endstop socket and add its pin to the distributor's stepper
@@ -111,6 +118,13 @@ replaces it. The **Channels** list says how each assigned camera is doing, and a
 any assigned camera that isn't plugged in. Each channel's tab then draws its zones and captures
 the empty channel.
 
+The ring and zones are set on the picture by hand (or with **Measure the ring**, then touched
+up). Drag inside the ring to move it, or a circle's edge (inner, outer, dashed exit) to size it.
+The wheel sizes the circle nearest the pointer, Shift+wheel all three. Drag a colored section
+(drop, exit) to slide it round the ring, or the dots at its ends to stretch it; the magenta dot
+sets the precise width. Double-click puts the center there. The number fields below show the
+same values for fine tuning.
+
 **How cameras are recognized.** Identical cameras share a name ("USB Camera"), so they're saved by
 their DirectShow device path, such as
 `@device_pnp_\\?\usb#vid_0bda&pid_5844&mi_00#7&3390689c&0&0000#{…}\global`. These cameras have no
@@ -131,6 +145,17 @@ ffmpeg and version it found.
 of the camera (most offer only 30 fps); ffmpeg drops frames down to the FPS setting. The USB
 camera here offers 160×120 to 1280×720 in MJPEG at 30 fps, and runs a steady 10 fps at
 1280×720 using about a fifth of a CPU core each for ffmpeg and the backend.
+
+**A channel's own size** (Camera panel on each channel's tab, up to 3840×2160) overrides it for
+that channel's camera, such as the Innomaker U30CAM-4K-S1 over C4. Above 1280 wide the capture
+is split: ffmpeg asks the camera for MJPEG (this one's raw YUYV modes run at 1–2 fps at high
+sizes; MJPEG is 30 fps up to 4K), drops frames down to the FPS setting before decoding them (the
+camera's rate comes from its mode list; 30 assumed), tracks on a copy scaled to 1280 wide, and
+keeps the camera's own full-size JPEGs untouched alongside. The photos of each piece on C4 sent
+to Brickognize are cut from the full-size picture. Measured 2026-11-11 at 3840×2160 and 10 fps:
+ffmpeg 0.67 of a core (1.7 without the drop), the backend 0.28. `GET
+/sorter/cameras/c4/frame?full=1` shows the full-size picture. Changing a channel's size needs its
+ring measured and empty channel captured again (a 4:3 ring doesn't fit a 16:9 picture).
 
 The detector's defaults scale with the size: the smallest piece by pixel count (120 px at
 640×480, 360 at 1280×720) and its sampling step by width (every 2nd pixel at 640, every 4th at
@@ -202,9 +227,12 @@ other.
 1. **Motor power.** Check 12 V on the RAMPS **5 A** input (steppers, D9, D10). On 2026-11-11 the
    board took every command but the light stayed dark and the camera saw no channel turn; only a
    C1 move nudged the blue brick, so C1 may be powered, or that was vibration.
-2. **Light (D10).** With power, switch it on and off (Dashboard) and compare C2's pictures; check
-   D10's LED on the board and the strip's polarity. Leave it on a minute to confirm the 5 s
-   safety timeout never trips.
+2. **Light (D10).** The strip turned out to be 24 V, not 12 V. As of 2026-11-11 evening it's
+   wired always-on, not through D10, so the Light button does nothing to it (C3's brightness
+   didn't move when switched). The D10 side checks out: the board took on/off and stayed up
+   20 s with the light on (the 5 s safety timeout didn't trip). Before switching a 24 V strip
+   from D10: D10 switches the 5 A input's voltage, which also feeds the steppers, so it needs
+   its own 24 V supply through a separate MOSFET or relay driven from D10, or a 12 V strip.
 3. **Gear ratios.** Done: all four set to 130/12. Your saved mapping is C1 stepper_y, C2
    stepper_z, C3 stepper_x, C4 stepper_e0; the 2026-11-11 C1 nudge was stepper_x, so your C3.
 4. **Find which camera is where.** Put a piece or tape on each channel and run it from the

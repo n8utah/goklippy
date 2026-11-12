@@ -387,6 +387,13 @@ export const SETTING_SECTIONS = [
       'How the chute moves and shares bins. Its wiring, layers and calibration are on Machine › Chute.',
     settings: [
       {
+        key: 'distributor.leftOut',
+        label: 'Leave the chute out for now',
+        kind: 'boolean',
+        help: 'Run without it, before its motor and home switch are wired: Home skips the chute and the layer doors, and sorting still feeds and identifies each piece but uses no profile and aims nowhere, so pieces drop off C4 where it lets them go.',
+        keywords: 'distributor disable skip endstop homing without',
+      },
+      {
         key: 'distributor.rpm',
         label: 'Speed',
         unit: 'rpm',

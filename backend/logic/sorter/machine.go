@@ -562,6 +562,10 @@ func (m *Machine) home(ctx context.Context, report reportFunc) error {
 	if health := m.hw.Health(); !health.Connected {
 		return errors.New(health.Message)
 	}
+	if m.settings().Distributor.LeftOut {
+		report(1, 1, "The chute is left out, so there's nothing to home")
+		return nil
+	}
 	report(1, 3, "Homing the chute")
 	if err := m.hw.HomeChute(ctx); err != nil {
 		return err
@@ -666,7 +670,7 @@ func (m *Machine) checkHealth() {
 	switch {
 	case !health.Connected:
 		m.stopForError("Board disconnected: " + health.Message)
-	case !m.chute.Homed:
+	case !m.chute.Homed && !m.chute.LeftOut:
 		m.stopForError("The chute lost its home position (was the board reset?). Home again.")
 	case m.supply.Known && m.supply.Low && (m.state == StateRunning || m.state == StatePaused):
 		m.stopForError(m.supply.lowError().Error())
@@ -701,6 +705,10 @@ func (m *Machine) stopForError(msg string) {
 
 func (m *Machine) refreshChute() {
 	chute := m.hw.ChuteStatus()
+	if m.settings().Distributor.LeftOut {
+		chute.LeftOut = true
+		chute.Message = "Left out for now (Machine › Chute): sorting runs without homing or aiming it."
+	}
 	if !chuteStatusEqual(chute, m.chute) {
 		m.chute = chute
 		m.changed = true
@@ -708,7 +716,7 @@ func (m *Machine) refreshChute() {
 }
 
 func chuteStatusEqual(a, b ChuteStatus) bool {
-	if a.Homed != b.Homed || a.Endstop != b.Endstop || a.Message != b.Message {
+	if a.Homed != b.Homed || a.LeftOut != b.LeftOut || a.Endstop != b.Endstop || a.Message != b.Message {
 		return false
 	}
 	if (a.Angle == nil) != (b.Angle == nil) {

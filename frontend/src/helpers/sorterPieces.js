@@ -46,6 +46,7 @@ export function pieceName(piece) {
 /** "Layer 1 · bin 4", or the bucket. Only meaningful once routed. */
 export function pieceBin(piece) {
   if (piece.bin_layer) return `Layer ${piece.bin_layer} · bin ${piece.bin_number}`;
+  if (piece.route_reason === 'no_chute') return 'No chute (left out)';
   if (piece.route_reason) return 'Bucket';
   return '—';
 }

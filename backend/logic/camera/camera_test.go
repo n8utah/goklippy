@@ -2,11 +2,14 @@ package camera
 
 import (
 	"bytes"
+	"context"
 	"image"
 	"image/jpeg"
+	"os/exec"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -96,14 +99,57 @@ func TestParseDshowModes(t *testing.T) {
 }
 
 func TestArgs(t *testing.T) {
-	args := strings.Join(Config{Device: "lavfi:testsrc", Width: 320, Height: 240, Fps: 10}.args(), " ")
+	args := strings.Join(Config{Device: "lavfi:testsrc", Width: 320, Height: 240, Fps: 10}.args(""), " ")
 	assert.Contains(t, args, "-f lavfi -i testsrc=size=320x240:rate=10")
 	assert.True(t, strings.HasSuffix(args, "-f mjpeg -q:v 4 -"))
 
-	args = strings.Join(Config{Device: "USB Camera", Width: 640, Height: 480, Fps: 15}.args(), " ")
+	args = strings.Join(Config{Device: "USB Camera", Width: 640, Height: 480, Fps: 15}.args(""), " ")
 	if runtime.GOOS == "windows" {
 		assert.Contains(t, args, "-f dshow -video_size 640x480 -i video=USB Camera -r 15")
 	} else {
 		assert.Contains(t, args, "-f v4l2")
 	}
+}
+
+func TestArgsSplit(t *testing.T) {
+	cfg := Config{Device: "4K Camera", Width: 3840, Height: 2160, Fps: 10, DetectWidth: 1280, DetectHeight: 720}
+	require.True(t, cfg.Split())
+	args := strings.Join(cfg.args("tcp://127.0.0.1:5000"), " ")
+	if runtime.GOOS == "windows" {
+		// 30 fps from the camera (assumed) to 10: keep every 3rd before decoding.
+		assert.Contains(t, args, `-f dshow -vcodec mjpeg -video_size 3840x2160 -bsf:v noise=drop=mod(n\,3) -i video=4K Camera`)
+	}
+	cfg.SourceFps = 60
+	assert.Equal(t, 6, cfg.keepEvery())
+	cfg.SourceFps, cfg.Fps = 30, 30
+	assert.Equal(t, 1, cfg.keepEvery(), "nothing to drop")
+	assert.Contains(t, args, "-map 0:v -vf scale=1280:720 -r 10 -an -f mjpeg -q:v 4 -")
+	assert.True(t, strings.HasSuffix(args, "-map 0:v -an -c:v copy -bsf:v mjpeg2jpeg -f mjpeg tcp://127.0.0.1:5000"), args)
+
+	assert.False(t, Config{Width: 1280, Height: 720, DetectWidth: 1280, DetectHeight: 720}.Split(), "nothing to scale")
+	assert.False(t, Config{Width: 1280, Height: 720}.Split())
+}
+
+// A split capture of the test picture keeps full-size frames next to the scaled ones.
+func TestCaptureSplit(t *testing.T) {
+	if _, err := exec.LookPath(ResolveFFmpeg("")); err != nil {
+		t.Skip("no ffmpeg")
+	}
+	cam := New(Config{Device: "lavfi:testsrc", Width: 640, Height: 480, Fps: 10, DetectWidth: 320, DetectHeight: 240})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go cam.Run(ctx)
+	require.Eventually(t, func() bool {
+		_, a := cam.Latest()
+		_, b := cam.LatestFull()
+		return a && b
+	}, 15*time.Second, 50*time.Millisecond)
+	small, _ := cam.Latest()
+	full, _ := cam.LatestFull()
+	si, err := jpeg.DecodeConfig(bytes.NewReader(small.JPEG))
+	require.NoError(t, err)
+	fi, err := jpeg.DecodeConfig(bytes.NewReader(full.JPEG))
+	require.NoError(t, err)
+	assert.Equal(t, [2]int{320, 240}, [2]int{si.Width, si.Height})
+	assert.Equal(t, [2]int{640, 480}, [2]int{fi.Width, fi.Height})
 }

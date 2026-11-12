@@ -19,6 +19,7 @@ export const ROUTE_REASONS = {
   misc: 'misc, with no misc bin: the bucket under the tower',
   too_big: 'longer than any bin takes: the bucket',
   no_bin: 'every bin is taken: the bucket',
+  no_chute: 'the chute is left out, so it wasn’t aimed',
 };
 
 export function useBinsPageLogic() {

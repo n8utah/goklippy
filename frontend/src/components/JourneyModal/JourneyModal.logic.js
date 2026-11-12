@@ -121,9 +121,11 @@ export function pieceStages(piece) {
       at: piece.distributed_at,
       done: Boolean(piece.distributed_at),
       text: piece.distributed_at
-        ? piece.bin_layer
-          ? `Dropped into layer ${piece.bin_layer}, bin ${piece.bin_number}${piece.route_reason ? ` (${piece.route_reason})` : ''}.`
-          : `Dropped into the bucket${piece.route_reason ? ` (${piece.route_reason})` : ''}.`
+        ? piece.route_reason === 'no_chute'
+          ? 'Dropped off C4 with the chute left out, so it wasn’t sorted.'
+          : piece.bin_layer
+            ? `Dropped into layer ${piece.bin_layer}, bin ${piece.bin_number}${piece.route_reason ? ` (${piece.route_reason})` : ''}.`
+            : `Dropped into the bucket${piece.route_reason ? ` (${piece.route_reason})` : ''}.`
         : piece.status === 'lost'
           ? 'Lost before it reached the chute.'
           : 'Not there yet.',

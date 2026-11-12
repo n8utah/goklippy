@@ -263,6 +263,17 @@ func GetSorterCameraFrame(c *gin.Context) {
 		return
 	}
 	jpg, _, ok := sorterFeed.JPEG(ch)
+	// ?full=1: the full-size picture of a camera capturing larger than it's tracked
+	// at (a channel's own size above the tracking width), when there is one.
+	if c.Query("full") == "1" {
+		if hr, isHR := sorterFeed.(interface {
+			HiRes(sorter.Channel) ([]byte, time.Time, float64, bool)
+		}); isHR {
+			if full, _, _, fullOK := hr.HiRes(ch); fullOK {
+				jpg, ok = full, true
+			}
+		}
+	}
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": sorter.ErrNoFrame.Error()})
 		return

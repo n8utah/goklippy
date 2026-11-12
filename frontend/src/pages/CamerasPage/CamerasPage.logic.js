@@ -29,6 +29,27 @@ export const CAMERA_SIZES = [
   [352, 288],
   [320, 240],
 ];
+/**
+ * Larger sizes, for one channel's own camera (a 4K camera over C4). Above
+ * TRACK_WIDTH it's tracked on a copy scaled to that width, and the full-size pictures
+ * are what's sent to Brickognize.
+ */
+export const HIGH_RES_SIZES = [
+  [3840, 2160],
+  [2688, 1944],
+  [2592, 1944],
+  [2560, 1440],
+  [1920, 1080],
+];
+export const TRACK_WIDTH = 1280;
+
+/** The size a channel's camera opens at: its own, or every camera's. */
+export function cameraSizeFor(cams, channel) {
+  const own = channel && cams.sizes?.[channel];
+  return own?.width > 0 && own?.height > 0
+    ? { width: own.width, height: own.height, own: true }
+    : { width: cams.width, height: cams.height, own: false };
+}
 const STATUS_POLL_MS = 2000;
 
 /** Zones to start from on a frame: the ring centred, Sorter V2-ish arcs. */
@@ -197,6 +218,14 @@ export function useCamerasPageLogic(view, setView) {
 
   const setZones = (next) => setCameras({ zones: { ...cams.zones, [channel]: next } });
 
+  /** Gives this channel's camera its own size; null goes back to every camera's. */
+  const setChannelSize = (size) => {
+    const sizes = { ...cams.sizes };
+    if (size) sizes[channel] = size;
+    else delete sizes[channel];
+    setCameras({ sizes });
+  };
+
   const startZones = () => {
     const w = chStatus?.frame_w || cams.width || 640;
     const h = chStatus?.frame_h || cams.height || 480;
@@ -260,11 +289,6 @@ export function useCamerasPageLogic(view, setView) {
     setZones(next);
   };
 
-  const pickCenter = ({ x, y }) => {
-    if (!zones) return;
-    setZoneField(['ring', 'center'], { x, y });
-  };
-
   const captureBackground = async () => {
     setError('');
     setNotice('');
@@ -322,7 +346,8 @@ export function useCamerasPageLogic(view, setView) {
     measuring,
     setupSteps,
     setZoneField,
-    pickCenter,
+    setZones,
+    setChannelSize,
     captureBackground,
     error: error || syncError,
     notice,

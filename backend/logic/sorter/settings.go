@@ -176,7 +176,11 @@ type CameraSettings struct {
 	Zones  map[string]vision.ChannelZones `json:"zones"`
 	Width  int                            `json:"width"`
 	Height int                            `json:"height"`
-	Fps    int                            `json:"fps"`
+	// Sizes gives a channel's camera its own capture size instead of Width×Height,
+	// such as a 4K camera over C4. Above maxDetectWidth it's tracked on a scaled copy
+	// and the full-size frames are kept for the pictures sent to Brickognize.
+	Sizes map[string]CameraSize `json:"sizes"`
+	Fps   int                   `json:"fps"`
 	// Ffmpeg is the ffmpeg executable; empty uses the one on PATH.
 	Ffmpeg string `json:"ffmpeg"`
 	// The detector: a pixel is a piece when |ΔR|+|ΔG|+|ΔB| from the empty channel
@@ -184,6 +188,20 @@ type CameraSettings struct {
 	// defaults.
 	Threshold int `json:"threshold"`
 	MinArea   int `json:"minArea"`
+}
+
+// CameraSize is a capture size in pixels.
+type CameraSize struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+// SizeFor is the size ch's camera captures at: its own, or every camera's.
+func (cs CameraSettings) SizeFor(ch Channel) (int, int) {
+	if s, ok := cs.Sizes[string(ch)]; ok && s.Width > 0 && s.Height > 0 {
+		return s.Width, s.Height
+	}
+	return cs.Width, cs.Height
 }
 
 // FeederSettings tune the pulsing feeder (C1–C3), after Sorter V2's "Feeder simple
@@ -254,6 +272,10 @@ func (s MachineSettings) RotorPeriod(ch Channel) float64 {
 // DistributorSettings is the chute stepper, its home switch and aiming geometry (see
 // chute.go), and the layer servos.
 type DistributorSettings struct {
+	// LeftOut runs the machine without the chute, for before its motor and home switch
+	// are wired: Home skips it and the layer servos, and sorted pieces aren't aimed
+	// anywhere (they drop off C4 where it lets them go, recorded as RouteNoChute).
+	LeftOut bool    `json:"leftOut"`
 	Stepper string  `json:"stepper"`
 	Gear    float64 `json:"gear"`
 	Rpm     float64 `json:"rpm"`
