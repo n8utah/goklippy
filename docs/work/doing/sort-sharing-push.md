@@ -36,7 +36,58 @@ what's happening.
 - [ ] Sorter shows sharing status (connected, queued count, last error).
 
 ## Plan
-Filled in when the item is claimed: approach, files touched, open questions.
+
+Sends to the site's push API as documented in `services/sortviewer/README.md` (Push API).
+
+**The outbox** (the heart of it). A table `share_outbox (kind, ref, queued_at, attempts,
+last_error)`, unique on `(kind, ref)`: kinds `collection`, `run`, `piece`, `photo`,
+`clear_unknowns`, with `ref` the id. Something changing just marks "send this again"; the
+sender reads the *current* record from the database when it sends, so ten changes to a piece
+become one send, and a backfill is just marking everything. Kept in the database, so a restart
+or a long outage loses nothing.
+
+**Sender** (`logic/sorter/sharing.go`, its own goroutine, never on the control loop): takes the
+oldest marks in order (collections and runs before their pieces, a piece before its photo),
+sends each, deletes it on success. On failure it notes the error and backs off (2 s doubling to
+1 min); a 4xx other than 404/408/429 (bad data) is dropped after 5 tries so one bad record can't
+block the rest. Sorting never waits on it.
+
+**What marks what** (hooks, all after the record is saved):
+- Collection shared on: marks the collection (name + plan), all its runs, pieces and photos
+  (the backfill). Shared off: drops its marks. Rename: the collection.
+- Run start/stop (`machine_sort.go`): the run.
+- Piece saved (`Records.SavePiece` job) and review saved: the piece; photo saved: the photo.
+- Plan changed (a bin gets a category, Bins page edits, profile change, collection picked):
+  the collection, via a callback from the sorting service.
+- Clear unknowns: `clear_unknowns` for the collection, and its unknown pieces' marks dropped.
+Only collections switched to shared are marked; everything else is a no-op.
+
+**What's sent**
+- Piece: the fields the API takes; `part_img_url` is the official picture (from the
+  Brickognize prediction). A review is applied: a wrong colour with the right one given sends
+  the right colour; a wrong part (or "not LEGO"/"no piece") sends it as unknown.
+- Photo: the piece's last photo (the newest C4 one), shrunk on the sorter to 800 px JPEG
+  before upload (the site keeps 800 px anyway; saves upload bandwidth).
+- Plan: `{profile: {name}, bins: [{layer, bin, categories}], bins_started_at}` from the
+  collection's plan.
+
+**Data**: `collections.shared BOOLEAN`, `share_outbox`, and a `sharing` settings document
+(`url`, `api_key`) in `sorter_settings`. The key is never sent back to the browser (only
+whether one is set).
+
+**Routes**: `GET /sorter/sharing` (URL, key set?, status: connected, queued, last error, last
+sent), `PUT /sorter/sharing` `{url, api_key}`, `POST /sorter/sharing/test` (the site's
+`/api/push/ping`), `PATCH /sorter/collections/:id` gains `shared`.
+
+**UI**: Run › Collections gets a **Sharing** panel (site address, key, Test, and the status
+line: "Up to date" / "12 waiting" / the last error), and each collection a **Share to
+lego.n8p.xyz** switch with a link to its page there.
+
+**Tests**: models (outbox marks collapse, shared-only marking, ordering), sender against a fake
+site (sends, retries after a failure, drops bad data, backfill on share), review applied to
+the sent piece, photo shrunk. Then a simulator sort pushing to a locally run sort viewer.
+
+**Questions**: none blocking. Assumed: a reviewed "wrong part" shows as unknown on the site.
 
 ## Notes
 - Depends on [sorter-collections](sorter-collections.md). The API itself is defined in
