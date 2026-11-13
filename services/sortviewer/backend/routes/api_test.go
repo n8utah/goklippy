@@ -219,6 +219,30 @@ func TestPushedSortShowsToItsViewersOnly(t *testing.T) {
 	assert.EqualValues(t, 0, body["unknown"])
 }
 
+// The admin clears a collection's photos (pieces stay), then deletes the collection.
+func TestAdminClearsPhotosAndDeletesCollections(t *testing.T) {
+	s := newSite(t)
+	s.pushSort()
+	admin := s.browser()
+	code, _ := admin.do("GET", "/auth/login", nil)
+	require.Equal(t, http.StatusFound, code)
+
+	code, body := admin.do("POST", "/api/admin/collections/7/clear-photos", nil)
+	require.Equal(t, 200, code)
+	assert.EqualValues(t, 1, body["cleared"])
+	code, _ = admin.do("GET", "/api/photos/"+pieceA, nil)
+	assert.Equal(t, 404, code, "the photo is gone")
+	_, body = admin.do("GET", "/api/collections/7", nil)
+	assert.EqualValues(t, 2, body["pieces"], "the pieces stay")
+
+	code, _ = admin.do("DELETE", "/api/admin/collections/7", nil)
+	require.Equal(t, 200, code)
+	code, _ = admin.do("GET", "/api/collections/7", nil)
+	assert.Equal(t, 404, code)
+	code, _ = admin.do("DELETE", "/api/admin/collections/7", nil)
+	assert.Equal(t, 404, code)
+}
+
 func TestPushRejectsBadInput(t *testing.T) {
 	s := newSite(t)
 	sorter := s.sorter(s.key)
