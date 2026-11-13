@@ -133,6 +133,7 @@ func (m *Machine) recoverLanding(ch Channel) {
 		}
 		if pile {
 			m.raiseIncident(Incident{
+				Focus:   m.focusNear(ch, box, true),
 				Kind:    IncidentLandingStuck,
 				Title:   fmt.Sprintf("%s is jammed with pieces", ch),
 				Message: "Pieces are packed together on it and running it didn't clear them. Take some off (big plates jam it most), then press Done.",
@@ -143,6 +144,7 @@ func (m *Machine) recoverLanding(ch Channel) {
 			return
 		}
 		m.raiseIncident(Incident{
+			Focus:   m.focusNear(ch, box, false),
 			Kind:    IncidentLandingStuck,
 			Title:   fmt.Sprintf("A piece is stuck where pieces land on %s", ch),
 			Message: "It doesn't move with the channel, and shaking and pushing didn't free it. Take it off, then press Done.",

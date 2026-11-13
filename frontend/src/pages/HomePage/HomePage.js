@@ -196,8 +196,11 @@ const HomePage = () => {
           <h3 id="home-problems" className="font-display text-lg font-semibold">
             Recent problems
           </h3>
-          <Link to="/run/records" className="text-sm font-medium text-primary-text hover:underline">
-            All records
+          <Link
+            to="/run/incidents"
+            className="text-sm font-medium text-primary-text hover:underline"
+          >
+            All incidents
           </Link>
         </div>
         {logic.incidents.length === 0 ? (
@@ -213,7 +216,12 @@ const HomePage = () => {
                   {when(inc.opened_at)}
                 </span>
                 <span className="min-w-0 flex-1 text-sm">
-                  <span className="font-medium">{inc.title}</span>
+                  <Link
+                    to={`/run/incidents?incident=${inc.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    <span className="font-mono">#{inc.id}</span> {inc.title}
+                  </Link>
                   <span className="block text-muted-foreground">{inc.message}</span>
                 </span>
                 <Badge variant={inc.resolved_at ? 'idle' : 'warning'} className="self-start">

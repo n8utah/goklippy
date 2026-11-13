@@ -37,6 +37,7 @@ function facts(summary) {
 function Shot({ incidentId, cam, className }) {
   const [size, setSize] = useState(null);
   const obs = cam.state?.observation;
+  const focus = cam.state?.focus ?? [];
   const w = obs?.frame_w || size?.w || 640;
   const h = obs?.frame_h || size?.h || 480;
   return (
@@ -53,13 +54,13 @@ function Shot({ incidentId, cam, className }) {
           setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
         }
       />
-      {obs && (
+      {(obs || focus.length > 0) && (
         <svg
           viewBox={`0 0 ${w} ${h}`}
           preserveAspectRatio="none"
           className="pointer-events-none absolute inset-0 size-full"
         >
-          {obs.ignored?.map((b, i) => (
+          {obs?.ignored?.map((b, i) => (
             <rect
               key={`i${i}`}
               x={b.x1}
@@ -72,7 +73,7 @@ function Shot({ incidentId, cam, className }) {
               strokeDasharray="8 6"
             />
           ))}
-          {obs.pieces?.map((p, i) => (
+          {obs?.pieces?.map((p, i) => (
             <g key={i}>
               <rect
                 x={p.box.x1}
@@ -96,6 +97,23 @@ function Shot({ incidentId, cam, className }) {
               ) : null}
             </g>
           ))}
+          {/* Where the problem is: a red box a little outside the piece, drawn last. */}
+          {focus.map((b, i) => {
+            const pad = Math.max(6, w / 100);
+            return (
+              <rect
+                key={`f${i}`}
+                x={b.x1 - pad}
+                y={b.y1 - pad}
+                width={b.x2 - b.x1 + 2 * pad}
+                height={b.y2 - b.y1 + 2 * pad}
+                rx={pad / 2}
+                fill="none"
+                stroke="#ef4444"
+                strokeWidth={Math.max(3, w / 180)}
+              />
+            );
+          })}
         </svg>
       )}
     </div>
@@ -129,11 +147,21 @@ export default function IncidentCameras({ incident }) {
         {cams.map((cam) => (
           <li
             key={cam.channel}
-            className="flex flex-col gap-1.5 rounded-lg border border-border bg-background p-2"
+            className={cn(
+              'flex flex-col gap-1.5 rounded-lg border bg-background p-2',
+              cam.state?.focus?.length ? 'border-destructive/60' : 'border-border',
+            )}
           >
-            <p className="text-xs font-medium">
-              {cam.channel.toUpperCase()}{' '}
-              <span className="font-normal text-muted-foreground">· {NAMES[cam.channel]}</span>
+            <p className="flex items-center gap-2 text-xs font-medium">
+              <span>
+                {cam.channel.toUpperCase()}{' '}
+                <span className="font-normal text-muted-foreground">· {NAMES[cam.channel]}</span>
+              </span>
+              {cam.state?.focus?.length > 0 && (
+                <Badge variant="destructive" className="ml-auto px-1.5 py-0 text-[11px]">
+                  Look here
+                </Badge>
+              )}
             </p>
             {cam.image ? (
               <button
@@ -160,10 +188,11 @@ export default function IncidentCameras({ incident }) {
             <>
               <DialogHeader>
                 <DialogTitle>
-                  {open.channel.toUpperCase()} · {NAMES[open.channel]}
+                  Incident #{incident.id} · {open.channel.toUpperCase()} · {NAMES[open.channel]}
                 </DialogTitle>
                 <DialogDescription>
                   {incident.title} · {new Date(open.taken_at).toLocaleString()}
+                  {open.state?.focus?.length > 0 && ' · the red box is where the problem is'}
                 </DialogDescription>
               </DialogHeader>
               <Shot incidentId={incident.id} cam={open} className="w-full rounded-lg" />

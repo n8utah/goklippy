@@ -12,6 +12,7 @@ import CamerasPage from './pages/CamerasPage/CamerasPage';
 import ChannelsPage from './pages/ChannelsPage/ChannelsPage';
 import ChutePage from './pages/ChutePage/ChutePage';
 import HomePage from './pages/HomePage/HomePage';
+import IncidentsPage from './pages/IncidentsPage/IncidentsPage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
 import OverviewPage from './pages/OverviewPage/OverviewPage';
 import PiecesPage from './pages/PiecesPage/PiecesPage';
@@ -48,6 +49,7 @@ const App = () => (
                 <Route index element={<Navigate to="sort" replace />} />
                 <Route path="sort" element={<SortPage />} />
                 <Route path="records/:part?" element={<RecordsPage />} />
+                <Route path="incidents" element={<IncidentsPage />} />
               </Route>
 
               <Route path="pieces/:part?" element={<PiecesPage />} />

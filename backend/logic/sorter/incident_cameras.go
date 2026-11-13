@@ -36,6 +36,54 @@ type IncidentChannelState struct {
 	Summary *ChannelSummary `json:"summary,omitempty"`
 	// Observation is what its camera saw in the picture (piece boxes in its pixels).
 	Observation *vision.Observation `json:"observation,omitempty"`
+	// Focus is where the problem is in the picture, when it's known: the stuck piece,
+	// the pile, the piece that won't fall.
+	Focus []vision.Box `json:"focus,omitempty"`
+}
+
+// IncidentFocus is where an incident's problem is: a box in a channel's picture.
+type IncidentFocus struct {
+	Channel Channel    `json:"channel"`
+	Box     vision.Box `json:"box"`
+}
+
+// focusNear is the piece now seen nearest box on ch (where it was when the recovery
+// began), or box itself when it isn't seen. A pile is every pile on the channel.
+func (m *Machine) focusNear(ch Channel, box vision.Box, pile bool) []IncidentFocus {
+	if m.sort == nil || m.sort.deps.Vision == nil {
+		return nil
+	}
+	obs := m.sort.deps.Vision.Observation(ch)
+	var out []IncidentFocus
+	if pile {
+		for _, p := range obs.Pieces {
+			if obs.Clump(p.Box) {
+				out = append(out, IncidentFocus{ch, p.Box})
+			}
+		}
+	}
+	if len(out) == 0 {
+		if p, ok := pieceNearIn(obs, box); ok {
+			out = append(out, IncidentFocus{ch, p.Box})
+		} else if box != (vision.Box{}) {
+			out = append(out, IncidentFocus{ch, box})
+		}
+	}
+	return out
+}
+
+// focusZone is every piece now seen in zone on ch (every piece for ZoneNone).
+func (m *Machine) focusZone(ch Channel, zone vision.Zone) []IncidentFocus {
+	if m.sort == nil || m.sort.deps.Vision == nil {
+		return nil
+	}
+	var out []IncidentFocus
+	for _, p := range m.sort.deps.Vision.Observation(ch).Pieces {
+		if zone == vision.ZoneNone || p.Zone == zone {
+			out = append(out, IncidentFocus{ch, p.Box})
+		}
+	}
+	return out
 }
 
 // IncidentCameraStore keeps the cameras with the incidents.
@@ -69,7 +117,7 @@ type incidentShot struct {
 
 // captureIncident takes every channel's picture and state now and queues them to be
 // kept with the incident. Runs on the control loop: it only copies.
-func (m *Machine) captureIncident(id int64, at time.Time) {
+func (m *Machine) captureIncident(id int64, at time.Time, focus []IncidentFocus) {
 	st := m.sort
 	if id == 0 || st == nil || st.deps.Records == nil {
 		return
@@ -84,6 +132,11 @@ func (m *Machine) captureIncident(id int64, at time.Time) {
 		}}
 		if s, ok := snap.Channels[ch]; ok {
 			cam.State.Summary = &s
+		}
+		for _, f := range focus {
+			if f.Channel == ch {
+				cam.State.Focus = append(cam.State.Focus, f.Box)
+			}
 		}
 		var jpg []byte
 		if ch != ChannelC1 && st.deps.Vision != nil {

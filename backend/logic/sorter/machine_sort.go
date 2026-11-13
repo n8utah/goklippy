@@ -199,7 +199,7 @@ func (m *Machine) raiseIncident(inc Incident) {
 			slog.Warn("recording the incident failed", "kind", inc.Kind, "error", err)
 		}
 		inc.ID = id
-		m.captureIncident(id, inc.OpenedAt)
+		m.captureIncident(id, inc.OpenedAt, inc.Focus)
 	}
 	_ = m.hw.StopAll()
 	m.incident = &IncidentHold{Incident: inc, Actions: []string{ResolveDone}}
@@ -267,7 +267,7 @@ func (m *Machine) workAroundStuck(ch Channel, box vision.Box) bool {
 		if id, err := store.OpenIncident(context.Background(), inc); err != nil {
 			slog.Warn("recording the worked-around piece failed", "error", err)
 		} else {
-			m.captureIncident(id, now)
+			m.captureIncident(id, now, []IncidentFocus{{Channel: ch, Box: lead.Box}})
 			if err := store.ResolveIncident(context.Background(), id, ResolveWorkedAround, now); err != nil {
 				slog.Warn("recording the worked-around piece failed", "error", err)
 			}
@@ -331,6 +331,7 @@ func (m *Machine) onPlatterStall(aboard int) {
 			Kind:    IncidentPlatterStuck,
 			Title:   "Stuck on the classification channel",
 			Message: fmt.Sprintf("%d piece(s) made no progress, and turning the channel round didn't clear it. Clear the channel, then press Done.", aboard),
+			Focus:   m.focusZone(ChannelC4, vision.ZoneNone),
 		})
 	})
 	if err != nil {
@@ -412,7 +413,12 @@ func (m *Machine) onDidntFall() {
 		if err != nil || freed {
 			return
 		}
+		focus := m.focusZone(ChannelC4, vision.ZoneExit)
+		if len(focus) == 0 {
+			focus = m.focusZone(ChannelC4, vision.ZoneNone)
+		}
 		m.raiseIncident(Incident{
+			Focus:   focus,
 			Kind:    IncidentDidntFall,
 			Title:   "A piece won't fall off the classification channel",
 			Message: "It stays at C4's exit: turning C4 on a little, then shaking it harder and harder, didn't free it (often a tyre). Take it off, then press Done.",

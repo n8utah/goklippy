@@ -33,11 +33,13 @@ export const NAV_GROUPS = [
         id: 'records',
         label: 'Records',
         path: '/run/records',
-        about: 'Every run and incident',
-        parts: [
-          { id: 'runs', label: 'Runs' },
-          { id: 'incidents', label: 'Incidents' },
-        ],
+        about: 'Every run, opening its pieces',
+      },
+      {
+        id: 'incidents',
+        label: 'Incidents',
+        path: '/run/incidents',
+        about: 'Problems the sort met, by number, with every camera from that moment',
       },
     ],
   },

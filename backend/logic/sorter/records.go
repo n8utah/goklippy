@@ -148,6 +148,8 @@ type Incident struct {
 	Resolution string     `json:"resolution,omitempty"`
 	// Cameras are every channel's picture and state when it opened (incident_cameras.go).
 	Cameras []IncidentCamera `json:"cameras,omitempty"`
+	// Focus is where the problem is, when known; kept with the cameras' states.
+	Focus []IncidentFocus `json:"focus,omitempty"`
 }
 
 // PieceFilter narrows the pieces list.

@@ -338,6 +338,9 @@ func TestSortStallRaisesAnIncident(t *testing.T) {
 		if cam.Channel == sorter.ChannelC4 {
 			require.NotNil(t, cam.State.Observation)
 			assert.NotEmpty(t, cam.State.Observation.Pieces, "the stuck piece, as C4 saw it")
+			assert.NotEmpty(t, cam.State.Focus, "where to look: the piece left on C4")
+		} else {
+			assert.Empty(t, cam.State.Focus, "%s: nothing wrong there", cam.Channel)
 		}
 	}
 	path, err := store.IncidentCameraPath(ctx, incs[0].ID, sorter.ChannelC4)
@@ -419,6 +422,17 @@ func TestSortWorksAroundAStuckPiece(t *testing.T) {
 	require.Len(t, incs, 1)
 	assert.Equal(t, sorter.IncidentLandingWorkedAround, incs[0].Kind)
 	assert.Equal(t, sorter.ResolveWorkedAround, incs[0].Resolution)
+	require.Eventually(t, func() bool {
+		incs, err = store.ListIncidents(context.Background(), 5)
+		return err == nil && len(incs[0].Cameras) == 4
+	}, 5*time.Second, 10*time.Millisecond)
+	for _, cam := range incs[0].Cameras {
+		if cam.Channel == sorter.ChannelC3 {
+			assert.Len(t, cam.State.Focus, 1, "a red box on the stuck piece")
+		} else {
+			assert.Empty(t, cam.State.Focus, "%s: nothing wrong there", cam.Channel)
+		}
+	}
 
 	// Taken off by hand and forgotten: C3 is watched in full again.
 	require.NoError(t, m.ForgetIgnored(context.Background(), sorter.ChannelC3))

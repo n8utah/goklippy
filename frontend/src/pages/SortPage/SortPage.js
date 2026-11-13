@@ -108,7 +108,18 @@ const SortPage = () => {
           <div className="flex gap-3">
             <TriangleAlert className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden />
             <div>
-              <p className="font-medium text-warning">{state.incident.title}</p>
+              <p className="font-medium text-warning">
+                {state.incident.id ? (
+                  <Link
+                    to={`/run/incidents?incident=${state.incident.id}`}
+                    className="font-mono hover:underline"
+                    title="Its pictures and every channel's state, under Run › Incidents"
+                  >
+                    #{state.incident.id}
+                  </Link>
+                ) : null}{' '}
+                {state.incident.title}
+              </p>
               <p className="text-sm">{state.incident.message}</p>
             </div>
           </div>
