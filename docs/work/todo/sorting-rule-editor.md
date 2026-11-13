@@ -27,8 +27,9 @@ change sorting rules on the sorter itself, and start them from lists that alread
 - **Imports** that turn an outside list into a rule (or a set of kit rules). Set by number is
   built first; the rest follow:
   - a LEGO set by number (`75192-1`): its inventory becomes a kit rule, without its
-    minifigures. A rule can hold one set or several. Uses a Rebrickable API key entered once
-    per sorter in Settings;
+    minifigures or spare parts. A rule can hold one set or several; each set still fills
+    separately, into its own bins. Uses a Rebrickable API key entered once per sorter in
+    Settings;
   - a BrickLink wanted list / set inventory XML, or a BrickStore `.bsx` file (already BrickLink
     part and colour ids, which is what Brickognize gives us);
   - a Rebrickable part list or MOC parts CSV;
@@ -36,7 +37,10 @@ change sorting rules on the sorter itself, and start them from lists that alread
     time");
   - Hive profiles, as today.
 - Profiles made here can be exported as JSON and imported on another sorter.
-- The viewer site shows a shared collection's rules as well as its categories.
+- The viewer site shows a shared collection's rules as well as its categories: each rule's
+  name and description, not its part lists.
+- Uploading a Hive profile that was edited here makes a second profile; the edited one is
+  left as it is.
 
 ## Done when
 - [ ] A profile can be created from scratch or copied from any existing one, and its rules
@@ -45,10 +49,14 @@ change sorting rules on the sorter itself, and start them from lists that alread
 - [ ] Rules can match on part type, part numbers, colours, and set/list inventories (kits),
       and the leftover behaviour (misc / by part type / by colour) is chosen per profile.
 - [ ] A set can be imported by set number and becomes a kit rule with the right BrickLink part
-      and colour ids, minifigures left out; one rule can take one set or several.
+      and colour ids, minifigures and spare parts left out; one rule can take one set or
+      several, and each set fills separately into its own bins.
+- [ ] Re-uploading a Hive profile that was edited here makes a second profile and leaves the
+      edited one untouched.
 - [ ] The Rebrickable API key is set once per sorter in Settings; without one, set import says
       so and points there.
-- [ ] The viewer site shows a shared collection's rules alongside its categories.
+- [ ] The viewer site shows a shared collection's rules (name and description) alongside its
+      categories.
 - [ ] BrickLink XML / BrickStore and Rebrickable CSV part lists import as rules.
 - [ ] A rule can be built from the parts seen in a collection.
 - [ ] The editor's "where would this go?" shows the matching rule for a part and colour.
@@ -82,11 +90,9 @@ Filled in when the item is claimed.
   - Price- or rarity-based rules ("high value" pieces) are not part of this item.
 - The viewer part touches the sharing push and `services/sortviewer/`
   ([sort-sharing-push](../done/sort-sharing-push.md), [sort-viewer-app](../done/sort-viewer-app.md)).
-- Open questions:
-  - Set import: are a set's spare parts counted in the kit, or left out like the minifigures?
-  - Several sets in one rule: one shared pile (need = the sets' parts added together), or does
-    each set still fill separately inside the rule?
-  - Editing a Hive upload in place: a later re-upload of the same Hive profile would overwrite
-    the edits or make a second profile?
-  - How much of a rule does the viewer show: its name and what it matches in words, or the full
-    part lists?
+- 2026-11-13, Nate (follow-ups):
+  - Set imports leave out spare parts as well as minifigures; neither is needed.
+  - Several sets in one rule each fill separately, into separate bins (not one shared pile).
+  - Re-uploading a Hive profile that was edited in place makes a second profile.
+  - The viewer shows each rule's name and description, not the part lists. So a rule has a
+    description field.
