@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { getSorterCameraObservation, sorterCameraStreamURL } from '@/helpers/api';
+import { useWake } from '@/helpers/wake';
 import { cn } from '@/lib/utils';
 
 import styles from './CameraView.module.css';
 import { dragTo, handles, hitTest, wheel as wheelZones } from './ringEdit';
 
 const OVERLAY_POLL_MS = 250;
+const STREAM_RETRY_MS = 3000;
 
 /** A point on the ring: angles are image angles (0° right, clockwise on screen). */
 function polar(cx, cy, r, deg) {
@@ -49,6 +51,21 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange,
   const [drag, setDrag] = useState(null); // { grab, p0, z0 }
   const viewRef = useRef(null);
   const imgRef = useRef(null);
+  // Bumped to reopen the stream: after an error (a few seconds later), and when the
+  // page wakes, since a phone that slept leaves the old stream dead but not errored.
+  const [attempt, setAttempt] = useState(0);
+  useWake(() => {
+    setFailed(false);
+    setAttempt((n) => n + 1);
+  });
+  useEffect(() => {
+    if (!failed) return undefined;
+    const timer = setTimeout(() => {
+      setFailed(false);
+      setAttempt((n) => n + 1);
+    }, STREAM_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [failed]);
 
   // A live stream fires load once, so a size changed mid-stream (a new camera size)
   // is caught by looking again every second.
@@ -231,8 +248,9 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange,
       onDoubleClick={onDoubleClick}
     >
       <img
+        key={attempt}
         ref={imgRef}
-        src={sorterCameraStreamURL(channel)}
+        src={`${sorterCameraStreamURL(channel)}${attempt ? `?n=${attempt}` : ''}`}
         alt={`Camera over ${channel}`}
         className={styles.stream}
         onLoad={(e) =>

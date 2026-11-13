@@ -77,6 +77,7 @@ export const DEFAULT_SORTER_SETTINGS = {
     workAroundStuck: true,
     pushPastStuck: true,
     pushSeconds: 3,
+    pileSeconds: 30,
     shakeBeforePush: false,
     pushBumpDeg: 45,
     clearSeconds: 30,

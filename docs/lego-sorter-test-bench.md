@@ -6,6 +6,16 @@ style C-channel feed from a RAMPS 1.4 board instead of the project's custom elec
 The autonomous sorting loop built around this page is planned in
 [lego-sorter-server-plan.md](./lego-sorter-server-plan.md).
 
+## From a phone
+
+The dev server listens on every interface (`frontend/vite.config.js`, `host: '0.0.0.0'`), so
+on the same Wi-Fi open `http://<laptop-ip>:4173` (the laptop's address from `ipconfig`; on
+2026-11-12 `192.168.240.203`). The API goes through Vite's proxy, so nothing else needs
+opening. Windows asks once to let Node.js through its firewall; allow it on private networks,
+and keep the Wi-Fi set as a private network. When the phone wakes (screen back on, tab brought
+back, network back), the page reopens its live connection and the camera streams at once
+(`helpers/wake.js`): a phone often wakes a page with connections that look open but are dead.
+
 ## Default motor mapping
 
 | Channel | Role | RAMPS socket | Motion |

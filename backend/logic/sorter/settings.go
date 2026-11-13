@@ -268,6 +268,9 @@ type FeederSettings struct {
 	// after it for PushSeconds at the Clear speed so they shove it along
 	// (machine_stuck.go).
 	PushPastStuck bool `json:"pushPastStuck"`
+	// PileSeconds: a pile of pieces jammed together is cleared off for at least this
+	// long (on the machine 10 s left a big plate's pile; 30 s cleared it).
+	PileSeconds int `json:"pileSeconds"`
 	// ShakeBeforePush: shake a stuck piece first, and push only if that fails. Off, it's
 	// pushed straight away (shaking rarely frees one caught on a fixed part).
 	ShakeBeforePush bool    `json:"shakeBeforePush"`
@@ -456,6 +459,7 @@ func DefaultMachineSettings() MachineSettings {
 			BackupMs:        1000,
 			WorkAroundStuck: true,
 			PushPastStuck:   true,
+			PileSeconds:     30,
 			PushSeconds:     3,
 			PushBumpDeg:     45,
 			ClearSeconds:    30,

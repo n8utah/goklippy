@@ -163,7 +163,7 @@ func (m *Machine) pushPast(ctx context.Context, ch Channel, settings MachineSett
 	chs := pushChannels(ch)
 	secs, bump := fs.PushSeconds, fs.PushBumpDeg
 	if pile {
-		secs, bump = max(fs.PushSeconds, fs.ClearSeconds), 0
+		secs, bump = max(fs.PushSeconds, fs.ClearSeconds, fs.PileSeconds), 0
 	}
 	total := secs + 2
 	if !settings.Distributor.LeftOut {

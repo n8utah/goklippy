@@ -32,7 +32,9 @@ export default defineConfig({
     },
   },
   server: {
-    host: '127.0.0.1',
+    // Every network interface, so a phone on the same Wi-Fi can open it at this
+    // laptop's address (http://<laptop-ip>:4173). The API goes through the proxy below.
+    host: '0.0.0.0',
     port: 4173,
     strictPort: true,
     proxy: {

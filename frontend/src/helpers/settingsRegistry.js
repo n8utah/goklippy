@@ -317,6 +317,16 @@ export const SETTING_SECTIONS = [
         keywords: 'stuck shake push recovery',
       },
       {
+        key: 'feeder.pileSeconds',
+        label: 'Clear a pile for',
+        unit: 's',
+        step: 5,
+        min: 5,
+        max: 300,
+        help: 'When pieces are jammed together in a pile, the machine runs the channel and those after it at least this long to clear them off (more than the Clear button’s own time if that’s shorter). Only if the pile is still there does it stop for you.',
+        keywords: 'pile jam clear clump',
+      },
+      {
         key: 'feeder.pushBumpDeg',
         label: 'Push: turn the channel before by',
         unit: '°',
