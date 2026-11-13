@@ -14,7 +14,7 @@ import {
   shakeSorterChannel,
   sorterCommand,
 } from '../../helpers/api';
-import { perMinute, sortingMs } from '../../helpers/sorterRuns';
+import { perMinute, perMinuteText, sortingMs } from '../../helpers/sorterRuns';
 import { useMachineSettings } from '../../helpers/sorterSettings';
 import { useSorterState } from '../../helpers/sorterState';
 
@@ -62,6 +62,8 @@ function useRunNumbers(runId, finishing) {
     run,
     current,
     perMinute: perMinute(run, current && finishing),
+    /** Per minute for people, with a * under a minute of sorting. */
+    perMinuteText: perMinuteText(run, current && finishing),
     /** How long it really sorted (to its last piece once done or finishing). */
     sortingMs: sortingMs(run, current && finishing),
     binsFull: allBins.filter((b) => b.full).length,

@@ -10,7 +10,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-import { formatDuration, perMinute, sortingMs } from '@/helpers/sorterRuns';
+import {
+  formatDuration,
+  perMinuteText,
+  SHORT_RUN_MS,
+  SHORT_RUN_NOTE,
+  sortingMs,
+} from '@/helpers/sorterRuns';
 
 import { useRecordsPageLogic } from './RecordsPage.logic';
 
@@ -86,13 +92,21 @@ const RecordsPage = () => {
                   >
                     {r.last_piece_at ? formatDuration(sortingMs(r)) : '—'}
                   </TableCell>
-                  <TableCell className="pr-5 text-right font-mono">
-                    {r.distributed ? perMinute(r).toFixed(1) : '—'}
+                  <TableCell
+                    className="pr-5 text-right font-mono"
+                    title={perMinuteText(r).endsWith('*') ? SHORT_RUN_NOTE : undefined}
+                  >
+                    {perMinuteText(r)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+        )}
+        {logic.runs.some((r) => r.distributed && sortingMs(r) < SHORT_RUN_MS) && (
+          <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
+            {SHORT_RUN_NOTE}
+          </p>
         )}
       </section>
     </div>

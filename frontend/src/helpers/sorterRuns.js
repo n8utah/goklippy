@@ -24,6 +24,22 @@ export function perMinute(run, finishing = false, now = Date.now()) {
   return ms >= 1000 ? run.distributed / (ms / 60000) : 0;
 }
 
+/** Under this much sorting, a per-minute figure isn't a steady rate. */
+export const SHORT_RUN_MS = 60_000;
+
+export const SHORT_RUN_NOTE =
+  '* Sorted for under a minute: too short for a steady rate, so the figure isn’t comparable.';
+
+/**
+ * Pieces per minute for people: "8.0", or "14.4*" when the run sorted for under a
+ * minute (SHORT_RUN_NOTE says why). "—" when nothing was sorted.
+ */
+export function perMinuteText(run, finishing = false, now = Date.now()) {
+  if (!run?.distributed) return '—';
+  const rate = perMinute(run, finishing, now).toFixed(1);
+  return sortingMs(run, finishing, now) < SHORT_RUN_MS ? `${rate}*` : rate;
+}
+
 /** A duration for people: "45 s", "2.2 min", "1 h 05 min". */
 export function formatDuration(ms) {
   const s = ms / 1000;

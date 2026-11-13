@@ -178,11 +178,13 @@ const SortPage = () => {
         />
         <Stat
           label="Per minute"
-          value={run ? numbers.perMinute.toFixed(1) : '—'}
+          value={run ? numbers.perMinuteText : '—'}
           detail={
-            run
-              ? `Over ${formatDuration(numbers.sortingMs)} of sorting${run.ended_at || !numbers.current ? ', to the last piece' : ''}`
-              : 'No runs yet'
+            run && !run.distributed
+              ? 'Nothing sorted yet'
+              : run
+                ? `Over ${formatDuration(numbers.sortingMs)} of sorting${run.ended_at || !numbers.current ? ', to the last piece' : ''}${numbers.perMinuteText.endsWith('*') ? ' · * under a minute: not a steady rate yet' : ''}`
+                : 'No runs yet'
           }
         />
         <Stat
