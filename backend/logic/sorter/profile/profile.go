@@ -28,6 +28,10 @@ const (
 
 var ErrInvalid = errors.New("invalid sorting profile")
 
+func invalidf(format string, args ...any) error {
+	return fmt.Errorf("%w: "+format, append([]any{ErrInvalid}, args...)...)
+}
+
 // Category is one bin-worthy group of pieces.
 type Category struct {
 	ID   string `json:"id"`
@@ -46,6 +50,17 @@ type Summary struct {
 	DefaultID     string     `json:"default_category_id"`
 	SetBased      bool       `json:"set_based,omitempty"`
 	FallbackColor bool       `json:"fallback_by_color,omitempty"`
+	// Builtin is the built-in kind (part_type, color); empty for an uploaded profile.
+	Builtin string `json:"builtin,omitempty"`
+}
+
+// Piece is what's known about a piece when it's routed. Hive profiles use the part and
+// colour; the built-ins use Brickognize's category or the colour.
+type Piece struct {
+	Part         string
+	Color        string // "" or AnyColor when unknown
+	PartCategory string // Brickognize's category of the part ("Plate, Round")
+	ColorName    string // the colour's name, to name colour categories; not used to route
 }
 
 // KitFull reports whether a kit already has enough of a part in a color. nil means
@@ -60,6 +75,7 @@ type Profile struct {
 	program *program
 	partMap map[string]string // flat format: "{color}-{part}" -> category
 	kits    map[string][]KitLine
+	builtin string
 }
 
 // file is the on-disk shape, only the parts the sorter uses.
@@ -76,6 +92,7 @@ type file struct {
 	ArtifactHash   string                     `json:"artifact_hash"`
 	ProfileType    string                     `json:"profile_type"`
 	SetInventories map[string]json.RawMessage `json:"set_inventories"`
+	Builtin        string                     `json:"builtin"`
 }
 
 type fileRule struct {
@@ -133,6 +150,9 @@ func Parse(data []byte) (*Profile, error) {
 	}
 	if f.SchemaVersion != nil && *f.SchemaVersion != supportedSchema {
 		return nil, fmt.Errorf("%w: schema_version %d is not supported (only %d)", ErrInvalid, *f.SchemaVersion, supportedSchema)
+	}
+	if f.Builtin != "" {
+		return parseBuiltin(f.Builtin)
 	}
 	if f.Program == nil && f.PartToCategory == nil {
 		return nil, fmt.Errorf("%w: it has neither a program nor a part_to_category map", ErrInvalid)
@@ -258,9 +278,18 @@ func (p *Profile) CategoryName(id string) string {
 	return id
 }
 
-// Route is the category for a part in a color. color may be "" or AnyColor when
-// unknown; then only rules for any color can take it.
-func (p *Profile) Route(part, color string, kitFull KitFull) string {
+// Builtin is the built-in kind, or "" for an uploaded profile.
+func (p *Profile) Builtin() string {
+	return p.builtin
+}
+
+// Route is the category for a piece. Its color may be "" or AnyColor when unknown;
+// then only rules for any color can take it.
+func (p *Profile) Route(piece Piece, kitFull KitFull) string {
+	if p.builtin != "" {
+		return p.routeBuiltin(piece)
+	}
+	part, color := piece.Part, piece.Color
 	if color == AnyColor {
 		color = ""
 	}

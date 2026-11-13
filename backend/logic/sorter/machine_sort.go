@@ -94,7 +94,7 @@ func (m *Machine) startRun(now time.Time) error {
 	name := ""
 	active := st.deps.Sorting.Active()
 	if active == nil && !m.settings().Distributor.LeftOut {
-		return ErrNoActiveProfile
+		return ErrNoProfile
 	}
 	if active != nil {
 		id := active.ID
@@ -125,6 +125,24 @@ func (m *Machine) SelectCollection(ctx context.Context, col Collection) error {
 			return fmt.Errorf("%w: stop the run before picking another collection", ErrInvalidTransition)
 		}
 		if err := m.sort.deps.Sorting.SelectCollection(ctx, col); err != nil {
+			return err
+		}
+		m.changed = true
+		return nil
+	}})
+}
+
+// ChangeCollectionProfile makes a collection sort by another profile (see
+// SortingService.ChangeProfile). Not while a run is sorting into it: stop it first.
+func (m *Machine) ChangeCollectionProfile(ctx context.Context, collectionID, profileID int64, binsEmptied bool) error {
+	return m.send(ctx, request{do: func() error {
+		if m.sort == nil {
+			return ErrNoCollection
+		}
+		if col := m.sort.deps.Sorting.Collection(); m.sort.runID != 0 && col != nil && col.ID == collectionID {
+			return fmt.Errorf("%w: stop the run before changing the collection's profile", ErrInvalidTransition)
+		}
+		if err := m.sort.deps.Sorting.ChangeProfile(ctx, collectionID, profileID, binsEmptied); err != nil {
 			return err
 		}
 		m.changed = true

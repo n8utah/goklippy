@@ -28,29 +28,45 @@ type profileRow struct {
 	Name      string    `db:"name"`
 	Source    string    `db:"source"`
 	Summary   string    `db:"summary"`
-	Active    bool      `db:"active"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
 func (r profileRow) stored() (sorter.StoredProfile, error) {
-	p := sorter.StoredProfile{ID: r.ID, Name: r.Name, Source: r.Source, Active: r.Active, CreatedAt: r.CreatedAt}
+	p := sorter.StoredProfile{ID: r.ID, Name: r.Name, Source: r.Source, CreatedAt: r.CreatedAt, UsedBy: []sorter.CollectionRef{}}
 	if err := json.Unmarshal([]byte(r.Summary), &p.Summary); err != nil {
 		return p, fmt.Errorf("profile %d summary: %w", r.ID, err)
 	}
 	return p, nil
 }
 
+// ListProfiles lists the built-in profiles first, then uploads newest first, each with
+// the collections that sort by it.
 func (s *SortingStore) ListProfiles(ctx context.Context) ([]sorter.StoredProfile, error) {
 	if s.db == nil {
 		return nil, ErrDBNotConfigured
 	}
 	const query = `
-SELECT id, name, source, summary, active, created_at
+SELECT id, name, source, summary, created_at
 FROM sorting_profiles
-ORDER BY active DESC, created_at DESC, id DESC
+ORDER BY source = 'builtin' DESC,
+  CASE WHEN source = 'builtin' THEN id END,
+  created_at DESC, id DESC
 `
 	var rows []profileRow
 	if err := s.db.SelectContext(ctx, &rows, query); err != nil {
+		return nil, err
+	}
+	var users []struct {
+		ProfileID int64  `db:"profile_id"`
+		ID        int64  `db:"id"`
+		Name      string `db:"name"`
+	}
+	const usersQuery = `
+SELECT profile_id, id, name FROM collections
+WHERE profile_id IS NOT NULL
+ORDER BY archived_at IS NOT NULL, name
+`
+	if err := s.db.SelectContext(ctx, &users, usersQuery); err != nil {
 		return nil, err
 	}
 	out := make([]sorter.StoredProfile, 0, len(rows))
@@ -58,6 +74,11 @@ ORDER BY active DESC, created_at DESC, id DESC
 		p, err := r.stored()
 		if err != nil {
 			return nil, err
+		}
+		for _, u := range users {
+			if u.ProfileID == p.ID {
+				p.UsedBy = append(p.UsedBy, sorter.CollectionRef{ID: u.ID, Name: u.Name})
+			}
 		}
 		out = append(out, p)
 	}
@@ -69,7 +90,7 @@ func (s *SortingStore) ProfileData(ctx context.Context, id int64) (sorter.Stored
 		return sorter.StoredProfile{}, nil, ErrDBNotConfigured
 	}
 	const query = `
-SELECT id, name, source, summary, active, created_at, data
+SELECT id, name, source, summary, created_at, data
 FROM sorting_profiles
 WHERE id = ?
 `
@@ -104,21 +125,8 @@ func (s *SortingStore) CreateProfile(ctx context.Context, p sorter.StoredProfile
 	return res.LastInsertId()
 }
 
+// DeleteProfile deletes a profile no collection sorts by, with its bin assignments.
 func (s *SortingStore) DeleteProfile(ctx context.Context, id int64) error {
-	if s.db == nil {
-		return ErrDBNotConfigured
-	}
-	res, err := s.db.ExecContext(ctx, `DELETE FROM sorting_profiles WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sorter.ErrProfileNotFound
-	}
-	return nil
-}
-
-func (s *SortingStore) ActivateProfile(ctx context.Context, id int64) error {
 	if s.db == nil {
 		return ErrDBNotConfigured
 	}
@@ -127,10 +135,14 @@ func (s *SortingStore) ActivateProfile(ctx context.Context, id int64) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE sorting_profiles SET active = FALSE WHERE active`); err != nil {
+	var users int
+	if err := tx.GetContext(ctx, &users, `SELECT COUNT(*) FROM collections WHERE profile_id = ?`, id); err != nil {
 		return err
 	}
-	res, err := tx.ExecContext(ctx, `UPDATE sorting_profiles SET active = TRUE WHERE id = ?`, id)
+	if users > 0 {
+		return sorter.ErrProfileInUse
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM sorting_profiles WHERE id = ?`, id)
 	if err != nil {
 		return err
 	}
@@ -140,35 +152,63 @@ func (s *SortingStore) ActivateProfile(ctx context.Context, id int64) error {
 	return tx.Commit()
 }
 
-func (s *SortingStore) ActiveProfileID(ctx context.Context) (int64, bool, error) {
-	if s.db == nil {
-		return 0, false, ErrDBNotConfigured
-	}
-	var id int64
-	err := s.db.GetContext(ctx, &id, `SELECT id FROM sorting_profiles WHERE active LIMIT 1`)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, nil
-	}
-	if err != nil {
-		return 0, false, err
-	}
-	return id, true, nil
-}
-
 // CurrentCollection is the collection the bins hold, if one has been picked.
 func (s *SortingStore) CurrentCollection(ctx context.Context) (sorter.CollectionRef, bool, error) {
 	if s.db == nil {
 		return sorter.CollectionRef{}, false, ErrDBNotConfigured
 	}
-	var c sorter.CollectionRef
-	err := s.db.QueryRowxContext(ctx, `SELECT id, name FROM collections WHERE current LIMIT 1`).Scan(&c.ID, &c.Name)
+	var row struct {
+		ID        int64         `db:"id"`
+		Name      string        `db:"name"`
+		ProfileID sql.NullInt64 `db:"profile_id"`
+	}
+	err := s.db.GetContext(ctx, &row, `SELECT id, name, profile_id FROM collections WHERE current LIMIT 1`)
 	if errors.Is(err, sql.ErrNoRows) {
-		return c, false, nil
+		return sorter.CollectionRef{}, false, nil
 	}
 	if err != nil {
-		return c, false, err
+		return sorter.CollectionRef{}, false, err
+	}
+	c := sorter.CollectionRef{ID: row.ID, Name: row.Name}
+	if row.ProfileID.Valid {
+		c.ProfileID = &row.ProfileID.Int64
 	}
 	return c, true, nil
+}
+
+// SetCollectionProfile makes the collection sort by the profile.
+func (s *SortingStore) SetCollectionProfile(ctx context.Context, collectionID, profileID int64) error {
+	if s.db == nil {
+		return ErrDBNotConfigured
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE collections SET profile_id = ? WHERE id = ?`, profileID, collectionID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sorter.ErrCollectionNotFound
+	}
+	return nil
+}
+
+// ColorNames is every colour identified so far, id -> name, from the catalog.
+func (s *SortingStore) ColorNames(ctx context.Context) (map[string]string, error) {
+	if s.db == nil {
+		return nil, ErrDBNotConfigured
+	}
+	var rows []struct {
+		ID   string `db:"color_id"`
+		Name string `db:"color_name"`
+	}
+	const query = `SELECT color_id, MAX(color_name) AS color_name FROM catalog_parts WHERE color_id != '' AND color_name != '' GROUP BY color_id`
+	if err := s.db.SelectContext(ctx, &rows, query); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		out[r.ID] = r.Name
+	}
+	return out, nil
 }
 
 // SelectCollection makes the collection current with its bins started afresh at at:

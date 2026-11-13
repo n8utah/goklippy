@@ -3,6 +3,7 @@ package sorter
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image"
 	"image/png"
 	"net/http"
@@ -60,10 +61,16 @@ func TestIdentifyAndRouteNoPart(t *testing.T) {
 	assert.Contains(t, res.RouteError, "no part")
 }
 
-// memSortingStore is an empty store: no profiles.
+// memSortingStore is an empty store: no profiles, and none can be added.
 type memSortingStore struct{ SortingStore }
 
-func (memSortingStore) ActiveProfileID(context.Context) (int64, bool, error) { return 0, false, nil }
+func (memSortingStore) ListProfiles(context.Context) ([]StoredProfile, error) { return nil, nil }
+
+func (memSortingStore) CreateProfile(context.Context, StoredProfile, []byte) (int64, error) {
+	return 0, errors.New("read-only store")
+}
+
+func (memSortingStore) ColorNames(context.Context) (map[string]string, error) { return nil, nil }
 
 func (memSortingStore) CurrentCollection(context.Context) (CollectionRef, bool, error) {
 	return CollectionRef{}, false, nil

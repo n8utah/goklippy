@@ -113,7 +113,9 @@ func (d DistributorSettings) ChooseBin(assigned Assignments, counts BinCounts, c
 		case slices.Contains(cats, category):
 			matching = append(matching, pos)
 		case len(cats) == 0:
-			if firstEmpty == nil {
+			// A bin with no category but pieces in it (left from another profile, or
+			// stripped by hand) takes nothing new until it's emptied.
+			if firstEmpty == nil && counts[BinKey{pos.Layer, pos.Bin}] == 0 {
 				firstEmpty = &usable[i]
 			}
 		case !slices.Contains(cats, profile.Misc):

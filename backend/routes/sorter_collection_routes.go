@@ -28,18 +28,26 @@ func ListSorterCollections(c *gin.Context) {
 }
 
 type collectionRequest struct {
-	Name     *string `json:"name"`
-	Archived *bool   `json:"archived"`
+	Name      *string `json:"name"`
+	Archived  *bool   `json:"archived"`
+	ProfileID *int64  `json:"profile_id"`
+	// Bins, with profile_id on the current collection: "emptied" (the bins were
+	// emptied) or "continue" (keep what's in them; use the unused ones).
+	Bins string `json:"bins"`
 }
 
-// CreateSorterCollection POST /sorter/collections {"name": "Sam's LEGO"}
+// CreateSorterCollection POST /sorter/collections {"name": "Sam's LEGO", "profile_id": 1}
 func CreateSorterCollection(c *gin.Context) {
 	var req collectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.Name == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
 		return
 	}
-	col, err := sorterCollections.Create(c.Request.Context(), *req.Name)
+	if req.ProfileID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "profile_id is required: pick the profile it sorts by"})
+		return
+	}
+	col, err := sorterCollections.Create(c.Request.Context(), *req.Name, *req.ProfileID)
 	if err != nil {
 		collectionError(c, err)
 		return
@@ -61,8 +69,9 @@ func GetSorterCollection(c *gin.Context) {
 	c.JSON(http.StatusOK, col)
 }
 
-// UpdateSorterCollection PATCH /sorter/collections/:id {"name": "...", "archived": true}:
-// renames and/or archives (or unarchives) it.
+// UpdateSorterCollection PATCH /sorter/collections/:id {"name": "...", "archived": true,
+// "profile_id": 2, "bins": "emptied|continue"}: renames, archives (or unarchives) and/or
+// changes the profile it sorts by.
 func UpdateSorterCollection(c *gin.Context) {
 	id, ok := collectionID(c)
 	if !ok {
@@ -73,8 +82,17 @@ func UpdateSorterCollection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
+	if req.ProfileID != nil && req.Bins != "" && req.Bins != "emptied" && req.Bins != "continue" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": `bins must be "emptied" or "continue"`})
+		return
+	}
 	ctx := c.Request.Context()
 	col, err := sorterCollections.Get(ctx, id)
+	if err == nil && req.ProfileID != nil {
+		if err = sorterMachine.ChangeCollectionProfile(ctx, id, *req.ProfileID, req.Bins == "emptied"); err == nil {
+			col, err = sorterCollections.Get(ctx, id)
+		}
+	}
 	if err == nil && req.Name != nil {
 		col, err = sorterCollections.Rename(ctx, id, *req.Name)
 	}

@@ -49,14 +49,14 @@ func TestProgramRouting(t *testing.T) {
 		{"3020", "7", "kit"}, // any-color kit line
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.want, p.Route(c.part, c.color, nil), "%s in %q", c.part, c.color)
+		assert.Equal(t, c.want, p.Route(Piece{Part: c.part, Color: c.color}, nil), "%s in %q", c.part, c.color)
 	}
 }
 
 func TestProgramVariantNeverFillsAKit(t *testing.T) {
 	p := mustParse(t, programProfile)
 	// 3001pb028 in red is not the exact kit part, so it skips the kit.
-	assert.Equal(t, "red-bricks", p.Route("3001pb028", "5", nil))
+	assert.Equal(t, "red-bricks", p.Route(Piece{Part: "3001pb028", Color: "5"}, nil))
 }
 
 func TestKitPassesPiecesOnOnceFull(t *testing.T) {
@@ -64,32 +64,32 @@ func TestKitPassesPiecesOnOnceFull(t *testing.T) {
 	full := func(category, part, color string) bool {
 		return category == "kit" && part == "3001" && color == "5"
 	}
-	assert.Equal(t, "red-bricks", p.Route("3001", "5", full))
-	assert.Equal(t, "kit", p.Route("3020", "7", full), "other kit lines still collect")
+	assert.Equal(t, "red-bricks", p.Route(Piece{Part: "3001", Color: "5"}, full))
+	assert.Equal(t, "kit", p.Route(Piece{Part: "3020", Color: "7"}, full), "other kit lines still collect")
 }
 
 func TestColorFallback(t *testing.T) {
 	p := mustParse(t, `{"name": "C", "program": {"rules": [], "fallback": {"by": "color"}}}`)
-	assert.Equal(t, "color_7", p.Route("3068b", "7", nil))
-	assert.Equal(t, "misc", p.Route("3068b", "", nil))
+	assert.Equal(t, "color_7", p.Route(Piece{Part: "3068b", Color: "7"}, nil))
+	assert.Equal(t, "misc", p.Route(Piece{Part: "3068b", Color: ""}, nil))
 	assert.True(t, p.Summary().FallbackColor)
 	assert.Equal(t, "Color 7", p.CategoryName("color_7"))
 }
 
 func TestFlatMap(t *testing.T) {
 	p := mustParse(t, `{"name": "Flat", "part_to_category": {"5-3001": "red", "any_color-3001": "bricks"}, "default_category_id": "misc"}`)
-	assert.Equal(t, "red", p.Route("3001", "5", nil))
-	assert.Equal(t, "bricks", p.Route("3001", "7", nil))
-	assert.Equal(t, "misc", p.Route("3002", "7", nil))
+	assert.Equal(t, "red", p.Route(Piece{Part: "3001", Color: "5"}, nil))
+	assert.Equal(t, "bricks", p.Route(Piece{Part: "3001", Color: "7"}, nil))
+	assert.Equal(t, "misc", p.Route(Piece{Part: "3002", Color: "7"}, nil))
 	assert.Equal(t, "part_map", p.Summary().Format)
 }
 
 func TestFlatMapVariantsTakeTheirBasePart(t *testing.T) {
 	p := mustParse(t, `{"name": "Flat", "part_to_category": {"5-3010": "red", "any_color-3010": "bricks", "any_color-3464": "wheels"}, "default_category_id": "everything_else"}`)
-	assert.Equal(t, "red", p.Route("3010pb176R", "5", nil))
-	assert.Equal(t, "bricks", p.Route("3010pb176R", "7", nil))
-	assert.Equal(t, "wheels", p.Route("3464c02", "11", nil))
-	assert.Equal(t, "everything_else", p.Route("BA002pb01", "11", nil))
+	assert.Equal(t, "red", p.Route(Piece{Part: "3010pb176R", Color: "5"}, nil))
+	assert.Equal(t, "bricks", p.Route(Piece{Part: "3010pb176R", Color: "7"}, nil))
+	assert.Equal(t, "wheels", p.Route(Piece{Part: "3464c02", Color: "11"}, nil))
+	assert.Equal(t, "everything_else", p.Route(Piece{Part: "BA002pb01", Color: "11"}, nil))
 }
 
 func TestBasePartIDs(t *testing.T) {

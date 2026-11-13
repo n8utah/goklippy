@@ -15,61 +15,64 @@ import (
 )
 
 var (
-	ErrProfileNotFound   = errors.New("sorting profile not found")
-	ErrNoActiveProfile   = errors.New("no sorting profile is active; activate one on the Profiles page")
-	ErrProfileActive     = errors.New("that profile is active; activate another before deleting it")
-	ErrUnknownCategory   = errors.New("not a category of the active profile")
-	ErrInvalidActivation = errors.New("activation mode must be keep, reset or preassign")
+	ErrProfileNotFound = errors.New("sorting profile not found")
+	ErrNoProfile       = errors.New("the collection has no sorting profile; pick one on Run › Collections")
+	ErrProfileInUse    = errors.New("a collection sorts by that profile; give it another profile first")
+	ErrProfileBuiltin  = errors.New("built-in profiles can't be deleted")
+	ErrUnknownCategory = errors.New("not a category of the collection's profile")
 )
+
+// SourceBuiltin is a built-in profile's source; uploads are "upload".
+const SourceBuiltin = "builtin"
 
 // StoredProfile is a saved profile without its contents.
 type StoredProfile struct {
 	ID        int64           `json:"id"`
 	Name      string          `json:"name"`
 	Source    string          `json:"source"`
-	Active    bool            `json:"active"`
 	CreatedAt time.Time       `json:"created_at"`
 	Summary   profile.Summary `json:"summary"`
+	// UsedBy is the collections that sort by it (only filled in lists).
+	UsedBy []CollectionRef `json:"used_by"`
 }
 
 // SortingStore keeps profiles, the current collection, and each collection's bin
 // assignments under each profile.
 type SortingStore interface {
+	// ListProfiles lists built-ins first, then uploads, each with its UsedBy.
 	ListProfiles(ctx context.Context) ([]StoredProfile, error)
 	// ProfileData returns ErrProfileNotFound for an unknown id.
 	ProfileData(ctx context.Context, id int64) (StoredProfile, []byte, error)
 	CreateProfile(ctx context.Context, p StoredProfile, data []byte) (int64, error)
+	// DeleteProfile returns ErrProfileInUse while a collection sorts by it.
 	DeleteProfile(ctx context.Context, id int64) error
-	ActivateProfile(ctx context.Context, id int64) error
-	ActiveProfileID(ctx context.Context) (int64, bool, error)
 	CurrentCollection(ctx context.Context) (CollectionRef, bool, error)
 	// SelectCollection makes the collection current and clears its bin assignments
 	// under every profile, as of at.
 	SelectCollection(ctx context.Context, id int64, at time.Time) error
+	SetCollectionProfile(ctx context.Context, collectionID, profileID int64) error
 	BinCategories(ctx context.Context, collectionID, profileID int64) (Assignments, error)
 	ReplaceBinCategories(ctx context.Context, collectionID, profileID int64, bins Assignments) error
 	SetBinCategories(ctx context.Context, collectionID, profileID int64, bin BinKey, categories []string) error
+	// ColorNames is every colour identified so far: id -> name.
+	ColorNames(ctx context.Context) (map[string]string, error)
 }
 
-// Activation says what happens to the bins when a profile is activated.
-type Activation string
-
-const (
-	ActivateKeep      Activation = "keep"      // keep the bins it had last time
-	ActivateReset     Activation = "reset"     // every bin starts unassigned
-	ActivatePreassign Activation = "preassign" // rule order, from layer 1 bin 1
-)
-
-// SortingService answers where pieces go under the active profile and keeps the
-// bins' categories.
+// SortingService answers where pieces go under the current collection's profile and
+// keeps the bins' categories.
 type SortingService struct {
 	store    SortingStore
 	settings func() MachineSettings
 
-	mu     sync.Mutex
+	mu sync.Mutex
+	// active is the profile the current collection sorts by; nil when there's no
+	// collection or it has no profile.
 	active *activeProfile
 	// collection is the current collection: whose bins these are. nil until one is picked.
 	collection *CollectionRef
+	// colorNames names colour categories (color_5 -> "Red"): from the catalog, then
+	// from each piece routed.
+	colorNames map[string]string
 	rng        *rand.Rand
 	// What's in each bin, when AttachCounts was called.
 	counts    CountsStore
@@ -145,36 +148,75 @@ func (s *SortingService) EmptyBin(ctx context.Context, bin BinKey) error {
 	return nil
 }
 
-// KitProgress is how far each kit of the active profile has got.
+// KitProgress is how far each kit of the current collection's profile has got.
 func (s *SortingService) KitProgress() []KitProgress {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.active == nil {
 		return []KitProgress{}
 	}
-	return s.active.kits.progress(s.active.profile.CategoryName)
+	return s.active.kits.progress(s.categoryNameLocked)
 }
 
-// NewSortingService loads the active profile, if any. A profile that can't be read
-// is logged and left inactive, so the backend still starts.
+// NewSortingService makes sure the built-in profiles exist and loads the current
+// collection's profile, if any. A profile that can't be read is logged and left
+// unloaded, so the backend still starts.
 func NewSortingService(ctx context.Context, store SortingStore, settings func() MachineSettings) *SortingService {
-	s := &SortingService{store: store, settings: settings, rng: rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))}
-	if col, ok, err := store.CurrentCollection(ctx); err != nil {
-		slog.Warn("current collection not loaded", "error", err)
-	} else if ok {
-		s.collection = &col
+	s := &SortingService{store: store, settings: settings, colorNames: map[string]string{},
+		rng: rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))}
+	if err := s.ensureBuiltins(ctx); err != nil {
+		slog.Warn("built-in sorting profiles not made", "error", err)
 	}
-	id, ok, err := store.ActiveProfileID(ctx)
+	if names, err := store.ColorNames(ctx); err != nil {
+		slog.Warn("colour names not loaded", "error", err)
+	} else {
+		s.colorNames = names
+	}
+	col, ok, err := store.CurrentCollection(ctx)
 	if err != nil {
-		slog.Warn("sorting profiles not loaded", "error", err)
+		slog.Warn("current collection not loaded", "error", err)
 		return s
 	}
-	if ok {
-		if err := s.load(ctx, id); err != nil {
-			slog.Warn("active sorting profile not loaded", "id", id, "error", err)
+	if !ok {
+		return s
+	}
+	s.collection = &col
+	if col.ProfileID != nil {
+		if err := s.load(ctx, *col.ProfileID); err != nil {
+			slog.Warn("the collection's sorting profile not loaded", "collection", col.ID, "profile", *col.ProfileID, "error", err)
 		}
 	}
 	return s
+}
+
+// ensureBuiltins adds any built-in profile that isn't saved yet.
+func (s *SortingService) ensureBuiltins(ctx context.Context) error {
+	list, err := s.store.ListProfiles(ctx)
+	if err != nil {
+		return err
+	}
+	have := map[string]bool{}
+	for _, p := range list {
+		if p.Source == SourceBuiltin {
+			have[p.Summary.Builtin] = true
+		}
+	}
+	for _, kind := range profile.Builtins {
+		if have[kind] {
+			continue
+		}
+		data := profile.BuiltinData(kind)
+		p, err := profile.Parse(data)
+		if err != nil {
+			return err
+		}
+		stored := StoredProfile{Name: p.Summary().Name, Source: SourceBuiltin, Summary: p.Summary()}
+		if _, err := s.store.CreateProfile(ctx, stored, data); err != nil {
+			return err
+		}
+		slog.Info("built-in sorting profile added", "kind", kind)
+	}
+	return nil
 }
 
 // parse reads a saved profile.
@@ -190,7 +232,7 @@ func (s *SortingService) parse(ctx context.Context, id int64) (StoredProfile, *p
 	return stored, p, nil
 }
 
-// load makes a profile the active one, with the current collection's bins under it.
+// load makes a profile the one sorted by, with the current collection's bins under it.
 func (s *SortingService) load(ctx context.Context, id int64) error {
 	stored, p, err := s.parse(ctx, id)
 	if err != nil {
@@ -219,14 +261,13 @@ func (s *SortingService) load(ctx context.Context, id int64) error {
 			kits.record(k.Category, k.Part, k.Color)
 		}
 	}
-	stored.Active = true
 	s.mu.Lock()
 	s.active = &activeProfile{stored: stored, profile: p, bins: bins, kits: kits}
 	s.mu.Unlock()
 	return nil
 }
 
-// Active is the active profile, or nil.
+// Active is the profile the current collection sorts by, or nil.
 func (s *SortingService) Active() *StoredProfile {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -242,13 +283,16 @@ func (s *SortingService) Profiles(ctx context.Context) ([]StoredProfile, error) 
 	return s.store.ListProfiles(ctx)
 }
 
-// Import saves an uploaded profile file. It doesn't activate it.
+// Import saves an uploaded profile file; a collection can then sort by it.
 func (s *SortingService) Import(ctx context.Context, data []byte) (StoredProfile, error) {
 	p, err := profile.Parse(data)
 	if err != nil {
 		return StoredProfile{}, err
 	}
-	stored := StoredProfile{Name: p.Summary().Name, Source: "upload", Summary: p.Summary()}
+	if p.Builtin() != "" {
+		return StoredProfile{}, fmt.Errorf("%w: built-in profiles are already there", profile.ErrInvalid)
+	}
+	stored := StoredProfile{Name: p.Summary().Name, Source: "upload", Summary: p.Summary(), UsedBy: []CollectionRef{}}
 	id, err := s.store.CreateProfile(ctx, stored, data)
 	if err != nil {
 		return StoredProfile{}, err
@@ -258,58 +302,119 @@ func (s *SortingService) Import(ctx context.Context, data []byte) (StoredProfile
 	return stored, nil
 }
 
-// Delete removes a profile that isn't active, with its bin assignments.
+// Delete removes an uploaded profile no collection sorts by, with its bin assignments.
 func (s *SortingService) Delete(ctx context.Context, id int64) error {
-	s.mu.Lock()
-	active := s.active != nil && s.active.stored.ID == id
-	s.mu.Unlock()
-	if active {
-		return ErrProfileActive
+	stored, _, err := s.store.ProfileData(ctx, id)
+	if err != nil {
+		return err
+	}
+	if stored.Source == SourceBuiltin {
+		return ErrProfileBuiltin
 	}
 	return s.store.DeleteProfile(ctx, id)
 }
 
-// Activate makes a profile the one the machine sorts with.
-func (s *SortingService) Activate(ctx context.Context, id int64, mode Activation) error {
-	switch mode {
-	case ActivateKeep, ActivateReset, ActivatePreassign:
-	default:
-		return ErrInvalidActivation
-	}
-	_, p, err := s.parse(ctx, id)
-	if err != nil {
-		return err
-	}
-	col := s.Collection()
-	if col == nil && mode != ActivateKeep {
-		return ErrNoCollection // the bins being reset or preassigned are a collection's
-	}
-	if err := s.store.ActivateProfile(ctx, id); err != nil {
-		return err
-	}
-	switch mode {
-	case ActivateReset:
-		err = s.store.ReplaceBinCategories(ctx, col.ID, id, Assignments{})
-	case ActivatePreassign:
-		err = s.store.ReplaceBinCategories(ctx, col.ID, id, s.preassign(p))
-	}
-	if err != nil {
-		return err
-	}
-	return s.load(ctx, id)
+// checkProfile makes sure a profile exists and can be read.
+func (s *SortingService) checkProfile(ctx context.Context, id int64) error {
+	_, _, err := s.parse(ctx, id)
+	return err
 }
 
-// preassign gives each category of the profile, in rule order, the next usable bin.
-func (s *SortingService) preassign(p *profile.Profile) Assignments {
+// ChangeProfile makes a collection sort by another profile. For the current collection
+// binsEmptied says what's in the bins: emptied, every bin counts from zero and the new
+// profile starts a fresh layout; not emptied, the new profile starts a fresh layout
+// too, but bins still holding pieces get no categories until they're emptied. For any
+// other collection it only records the profile: its bins start afresh when it's picked.
+// The caller makes sure no run is sorting into the collection.
+func (s *SortingService) ChangeProfile(ctx context.Context, collectionID, profileID int64, binsEmptied bool) error {
+	if err := s.checkProfile(ctx, profileID); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	current := s.collection != nil && s.collection.ID == collectionID
+	same := current && s.active != nil && s.active.stored.ID == profileID
+	counts := s.counts
+	s.mu.Unlock()
+	if err := s.store.SetCollectionProfile(ctx, collectionID, profileID); err != nil {
+		return err
+	}
+	if !current || same && !binsEmptied {
+		return nil
+	}
+	if binsEmptied {
+		// The same as picking the collection afresh: its bins start now, with no layout.
+		now := time.Now().UTC()
+		if err := s.store.SelectCollection(ctx, collectionID, now); err != nil {
+			return err
+		}
+		if counts != nil {
+			if err := counts.EmptyAllBins(ctx, now); err != nil {
+				return fmt.Errorf("empty the bins: %w", err)
+			}
+		}
+	} else if err := s.store.ReplaceBinCategories(ctx, collectionID, profileID, Assignments{}); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.collection.ProfileID = &profileID
+	if binsEmptied {
+		s.binCounts = BinCounts{}
+	}
+	s.mu.Unlock()
+	slog.Info("collection's profile changed", "collection", collectionID, "profile", profileID, "bins_emptied", binsEmptied)
+	return s.load(ctx, profileID)
+}
+
+// PreassignBins gives each of the profile's categories, in order (rule order, or the
+// usual part types), the next usable bin that holds no pieces. Every other bin is
+// left unassigned.
+func (s *SortingService) PreassignBins(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		return ErrNoProfile
+	}
+	if s.collection == nil {
+		return ErrNoCollection
+	}
 	bins := Assignments{}
-	usable := s.settings().Distributor.usableBins(0, nil)
-	for i, c := range p.Summary().Categories {
-		if i >= len(usable) {
+	var free []BinPosition
+	for _, pos := range s.settings().Distributor.usableBins(0, nil) {
+		if s.binCounts[BinKey{pos.Layer, pos.Bin}] == 0 {
+			free = append(free, pos)
+		}
+	}
+	for i, c := range s.active.profile.Summary().Categories {
+		if i >= len(free) {
 			break
 		}
-		bins[BinKey{usable[i].Layer, usable[i].Bin}] = []string{c.ID}
+		bins[BinKey{free[i].Layer, free[i].Bin}] = []string{c.ID}
 	}
-	return bins
+	if err := s.store.ReplaceBinCategories(ctx, s.collection.ID, s.active.stored.ID, bins); err != nil {
+		return err
+	}
+	s.active.bins = bins
+	return nil
+}
+
+// categoryNameLocked names a category of the current profile, using colour names for
+// colour categories. s.mu must be held and s.active set.
+func (s *SortingService) categoryNameLocked(id string) string {
+	return namer(s.active.profile, s.colorNames)(id)
+}
+
+// namer names a profile's categories, colours by their names (colour id -> name).
+func namer(p *profile.Profile, names map[string]string) func(string) string {
+	return func(id string) string {
+		name := p.CategoryName(id)
+		if name != id && !strings.HasPrefix(name, "Color ") {
+			return name
+		}
+		if color, ok := strings.CutPrefix(id, "color_"); ok && names[color] != "" {
+			return names[color]
+		}
+		return name
+	}
 }
 
 // CategoryRef is a category with its name, for the UI.
@@ -365,10 +470,13 @@ func (s *SortingService) Bins() BinsView {
 	for k, v := range s.binCounts {
 		counts[k] = v
 	}
+	colorNames := s.colorNames
 	s.mu.Unlock()
 
 	view := BinsView{Collection: s.Collection(), SharedBins: d.SharedBins, Categories: []CategoryRef{}, Layers: []LayerView{}}
+	var name func(string) string
 	if active != nil {
+		name = namer(active.profile, colorNames)
 		stored := active.stored
 		view.Profile = &stored
 		listed := map[string]bool{profile.Misc: true}
@@ -376,7 +484,8 @@ func (s *SortingService) Bins() BinsView {
 			view.Categories = append(view.Categories, CategoryRef{c.ID, c.Name})
 			listed[c.ID] = true
 		}
-		// Categories made as pieces arrive (color_7) are listed once a bin has one.
+		// Categories made as pieces arrive (color_7) are listed once a bin has one, and
+		// when sorting by colour, every colour seen so far.
 		var extra []string
 		for _, cats := range assigned {
 			for _, c := range cats {
@@ -386,11 +495,21 @@ func (s *SortingService) Bins() BinsView {
 				}
 			}
 		}
-		slices.Sort(extra)
-		for _, c := range extra {
-			view.Categories = append(view.Categories, CategoryRef{c, active.profile.CategoryName(c)})
+		if active.profile.Summary().FallbackColor {
+			for color := range colorNames {
+				if c := profile.ColorCategory(color); !listed[c] {
+					listed[c] = true
+					extra = append(extra, c)
+				}
+			}
 		}
-		view.Categories = append(view.Categories, CategoryRef{profile.Misc, active.profile.CategoryName(profile.Misc)})
+		slices.SortFunc(extra, func(a, b string) int {
+			return strings.Compare(strings.ToLower(name(a)), strings.ToLower(name(b)))
+		})
+		for _, c := range extra {
+			view.Categories = append(view.Categories, CategoryRef{c, name(c)})
+		}
+		view.Categories = append(view.Categories, CategoryRef{profile.Misc, name(profile.Misc)})
 	}
 	for l, layerBins := range d.LayerBins() {
 		layer := d.Layers[l]
@@ -406,7 +525,7 @@ func (s *SortingService) Bins() BinsView {
 			bv.Full = layer.MaxPieces > 0 && bv.Count >= layer.MaxPieces
 			if active != nil {
 				for _, id := range assigned[BinKey{pos.Layer, pos.Bin}] {
-					bv.Categories = append(bv.Categories, CategoryRef{id, active.profile.CategoryName(id)})
+					bv.Categories = append(bv.Categories, CategoryRef{id, name(id)})
 				}
 			}
 			sec := &lv.Sections[pos.Section-1]
@@ -426,16 +545,15 @@ func (s *SortingService) SetBin(ctx context.Context, key BinKey, categories []st
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.active == nil {
-		return ErrNoActiveProfile
+		return ErrNoProfile
 	}
 	if s.collection == nil {
 		return ErrNoCollection
 	}
 	known := s.knownCategoriesLocked()
-	byColor := s.active.profile.Summary().FallbackColor
 	var cats []string
 	for _, c := range categories {
-		if !known[c] && !(byColor && strings.HasPrefix(c, "color_")) {
+		if !known[c] && !s.active.profile.Accepts(c) {
 			return fmt.Errorf("%w: %q", ErrUnknownCategory, c)
 		}
 		if !slices.Contains(cats, c) {
@@ -478,12 +596,12 @@ func (s *SortingService) knownCategoriesLocked() map[string]bool {
 	return known
 }
 
-// ResetBins unassigns every bin of the current collection under the active profile.
+// ResetBins unassigns every bin of the current collection under its profile.
 func (s *SortingService) ResetBins(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.active == nil {
-		return ErrNoActiveProfile
+		return ErrNoProfile
 	}
 	if s.collection == nil {
 		return ErrNoCollection
@@ -502,23 +620,38 @@ type RouteResult struct {
 	Choice       BinChoice `json:"choice"`
 }
 
-// Route decides where a piece goes: its category under the active profile, then
-// its bin. pieceMm is its longest side (0 if unknown). With commit, a bin newly
-// given the category is saved; without, nothing changes (for "where would this
-// go?").
-func (s *SortingService) Route(ctx context.Context, part, color string, pieceMm float64, commit bool) (RouteResult, error) {
+// Route decides where a piece goes: its category under the current collection's
+// profile, then its bin. pieceMm is its longest side (0 if unknown). With commit, a
+// bin newly given the category is saved; without, nothing changes (for "where would
+// this go?").
+func (s *SortingService) Route(ctx context.Context, piece profile.Piece, pieceMm float64, commit bool) (RouteResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.active == nil {
-		return RouteResult{}, ErrNoActiveProfile
+		return RouteResult{}, ErrNoProfile
 	}
+	s.learnColorLocked(piece.Color, piece.ColorName)
 	kits := s.active.kits
-	category := s.active.profile.Route(part, color, kits.full)
+	category := s.active.profile.Route(piece, kits.full)
 	res, err := s.routeLocked(ctx, category, pieceMm, commit)
 	if err == nil && commit {
-		kits.record(category, part, color)
+		kits.record(category, piece.Part, piece.Color)
 	}
 	return res, err
+}
+
+// learnColorLocked remembers a colour's name for naming colour categories. The map is
+// replaced, not changed, so names handed out earlier stay safe to read.
+func (s *SortingService) learnColorLocked(color, name string) {
+	if color == "" || name == "" || s.colorNames[color] == name {
+		return
+	}
+	names := make(map[string]string, len(s.colorNames)+1)
+	for k, v := range s.colorNames {
+		names[k] = v
+	}
+	names[color] = name
+	s.colorNames = names
 }
 
 // RouteCategory finds the bin for a category directly, such as misc for a piece that
@@ -527,7 +660,7 @@ func (s *SortingService) RouteCategory(ctx context.Context, category string, pie
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.active == nil {
-		return RouteResult{}, ErrNoActiveProfile
+		return RouteResult{}, ErrNoProfile
 	}
 	return s.routeLocked(ctx, category, pieceMm, commit)
 }
@@ -535,7 +668,7 @@ func (s *SortingService) RouteCategory(ctx context.Context, category string, pie
 func (s *SortingService) routeLocked(ctx context.Context, category string, pieceMm float64, commit bool) (RouteResult, error) {
 	d := s.settings().Distributor
 	choice, newCats := d.ChooseBin(s.active.bins, s.binCounts, category, pieceMm, s.rng.IntN)
-	result := RouteResult{Category: category, CategoryName: s.active.profile.CategoryName(category), Choice: choice}
+	result := RouteResult{Category: category, CategoryName: s.categoryNameLocked(category), Choice: choice}
 	if !commit || !choice.Assigned {
 		return result, nil
 	}

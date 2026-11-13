@@ -110,29 +110,8 @@ func ImportSortingProfile(c *gin.Context) {
 	c.JSON(http.StatusCreated, p)
 }
 
-type activateRequest struct {
-	Mode string `json:"mode"`
-}
-
-// ActivateSortingProfile POST /sorter/profiles/:id/activate {"mode": "keep|reset|preassign"}
-func ActivateSortingProfile(c *gin.Context) {
-	id, ok := profileID(c)
-	if !ok {
-		return
-	}
-	var req activateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "mode is required"})
-		return
-	}
-	if err := sorterSorting.Activate(c.Request.Context(), id, sorter.Activation(req.Mode)); err != nil {
-		sortingError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
-// DeleteSortingProfile DELETE /sorter/profiles/:id
+// DeleteSortingProfile DELETE /sorter/profiles/:id: an uploaded profile no collection
+// sorts by.
 func DeleteSortingProfile(c *gin.Context) {
 	id, ok := profileID(c)
 	if !ok {
@@ -183,21 +162,33 @@ func ResetSorterBins(c *gin.Context) {
 	c.JSON(http.StatusOK, sorterSorting.Bins())
 }
 
-type routeRequest struct {
-	PartID  string  `json:"part_id" binding:"required"`
-	ColorID string  `json:"color_id"`
-	PieceMm float64 `json:"piece_mm"`
+// PreassignSorterBins POST /sorter/bins/preassign gives the profile's categories, in
+// order, the bins that hold no pieces.
+func PreassignSorterBins(c *gin.Context) {
+	if err := sorterSorting.PreassignBins(c.Request.Context()); err != nil {
+		sortingError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, sorterSorting.Bins())
 }
 
-// RouteSorterPiece POST /sorter/route {"part_id": "3001", "color_id": "5"}: where a
-// piece would go now. Nothing is saved.
+type routeRequest struct {
+	PartID       string  `json:"part_id" binding:"required"`
+	ColorID      string  `json:"color_id"`
+	PartCategory string  `json:"part_category"`
+	PieceMm      float64 `json:"piece_mm"`
+}
+
+// RouteSorterPiece POST /sorter/route {"part_id": "3001", "color_id": "5",
+// "part_category": "Brick"}: where a piece would go now. Nothing is saved.
 func RouteSorterPiece(c *gin.Context) {
 	var req routeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "part_id is required"})
 		return
 	}
-	res, err := sorterSorting.Route(c.Request.Context(), req.PartID, req.ColorID, req.PieceMm, false)
+	piece := profile.Piece{Part: req.PartID, Color: req.ColorID, PartCategory: req.PartCategory}
+	res, err := sorterSorting.Route(c.Request.Context(), piece, req.PieceMm, false)
 	if err != nil {
 		sortingError(c, err)
 		return
@@ -218,10 +209,10 @@ func sortingError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, sorter.ErrProfileNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-	case errors.Is(err, profile.ErrInvalid), errors.Is(err, sorter.ErrInvalidActivation),
-		errors.Is(err, sorter.ErrUnknownCategory):
+	case errors.Is(err, profile.ErrInvalid), errors.Is(err, sorter.ErrUnknownCategory):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	case errors.Is(err, sorter.ErrNoActiveProfile), errors.Is(err, sorter.ErrProfileActive):
+	case errors.Is(err, sorter.ErrNoProfile), errors.Is(err, sorter.ErrProfileInUse),
+		errors.Is(err, sorter.ErrProfileBuiltin):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	default:
 		sorterError(c, err)

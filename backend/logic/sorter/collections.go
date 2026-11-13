@@ -34,6 +34,10 @@ type Collection struct {
 	BinsStartedAt *time.Time `json:"bins_started_at,omitempty"`
 	ArchivedAt    *time.Time `json:"archived_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
+	// ProfileID is the profile it sorts by; nil only for collections made before
+	// collections had profiles.
+	ProfileID   *int64 `json:"profile_id"`
+	ProfileName string `json:"profile_name"`
 
 	Runs       int `json:"runs"`
 	Pieces     int `json:"pieces"`
@@ -46,8 +50,9 @@ type Collection struct {
 
 // CollectionRef names a collection, for the machine's snapshot.
 type CollectionRef struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	ProfileID *int64 `json:"profile_id,omitempty"`
 }
 
 // CollectionStore keeps collections. The records store implements it.
@@ -56,13 +61,13 @@ type CollectionStore interface {
 	// GetCollection returns ErrCollectionNotFound for an unknown id.
 	GetCollection(ctx context.Context, id int64) (Collection, error)
 	// CreateCollection and RenameCollection return ErrCollectionName for a name in use.
-	CreateCollection(ctx context.Context, name string, at time.Time) (int64, error)
+	CreateCollection(ctx context.Context, name string, profileID *int64, at time.Time) (int64, error)
 	RenameCollection(ctx context.Context, id int64, name string) error
 	// ArchiveCollection archives (at set) or unarchives (at nil) a collection.
 	ArchiveCollection(ctx context.Context, id int64, at *time.Time) error
 	// CollectionBins is the pieces delivered to each bin since the collection's bins
-	// last started afresh, and the profile of its latest run.
-	CollectionBins(ctx context.Context, id int64) (BinCounts, *int64, error)
+	// last started afresh.
+	CollectionBins(ctx context.Context, id int64) (BinCounts, error)
 	// ClearUnknowns deletes the collection's unknown pieces and returns their ids, so
 	// their photos can be removed.
 	ClearUnknowns(ctx context.Context, id int64) ([]string, error)
@@ -95,12 +100,19 @@ func (c *Collections) Get(ctx context.Context, id int64) (Collection, error) {
 	return c.store.GetCollection(ctx, id)
 }
 
-func (c *Collections) Create(ctx context.Context, name string) (Collection, error) {
+// Create makes a collection that sorts by the profile.
+func (c *Collections) Create(ctx context.Context, name string, profileID int64) (Collection, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Collection{}, ErrCollectionName
 	}
-	id, err := c.store.CreateCollection(ctx, name, time.Now().UTC())
+	if profileID == 0 {
+		return Collection{}, ErrNoProfile
+	}
+	if err := c.sorting.checkProfile(ctx, profileID); err != nil {
+		return Collection{}, err
+	}
+	id, err := c.store.CreateCollection(ctx, name, &profileID, time.Now().UTC())
 	if err != nil {
 		return Collection{}, err
 	}
@@ -179,26 +191,21 @@ type Plan struct {
 	Bucket int `json:"bucket"`
 }
 
-// Plan is the collection's current plan: the bins its latest run's profile gave
-// categories to, with how many pieces each has had.
+// Plan is the collection's current plan: the bins its profile gave categories to,
+// with how many pieces each has had.
 func (c *Collections) Plan(ctx context.Context, id int64) (Plan, error) {
 	col, err := c.store.GetCollection(ctx, id)
 	if err != nil {
 		return Plan{}, err
 	}
-	counts, profileID, err := c.store.CollectionBins(ctx, id)
+	counts, err := c.store.CollectionBins(ctx, id)
 	if err != nil {
 		return Plan{}, err
 	}
 	plan := Plan{Collection: col, Bins: []PlanBin{}, Bucket: counts[BinKey{}]}
-	if profileID == nil && col.Current {
-		if active := c.sorting.Active(); active != nil {
-			profileID = &active.ID
-		}
-	}
 	var bins Assignments
-	if profileID != nil {
-		stored, names, assigned, err := c.sorting.planOf(ctx, id, *profileID)
+	if col.ProfileID != nil {
+		stored, names, assigned, err := c.sorting.planOf(ctx, id, *col.ProfileID)
 		if err != nil {
 			return Plan{}, err
 		}
@@ -251,13 +258,13 @@ func (s *SortingService) SelectCollection(ctx context.Context, col Collection) e
 		}
 	}
 	s.mu.Lock()
-	s.collection = &CollectionRef{ID: col.ID, Name: col.Name}
+	s.collection = &CollectionRef{ID: col.ID, Name: col.Name, ProfileID: col.ProfileID}
 	s.binCounts = BinCounts{}
-	active := s.active
+	s.active = nil
 	s.mu.Unlock()
 	slog.Info("collection picked; bins start afresh", "collection", col.ID, "name", col.Name)
-	if active != nil {
-		return s.load(ctx, active.stored.ID)
+	if col.ProfileID != nil {
+		return s.load(ctx, *col.ProfileID)
 	}
 	return nil
 }
@@ -289,14 +296,14 @@ func (s *SortingService) planOf(ctx context.Context, collectionID, profileID int
 		return StoredProfile{}, nil, nil, err
 	}
 	s.mu.Lock()
-	active := s.active
+	active, colorNames := s.active, s.colorNames
 	s.mu.Unlock()
 	if active != nil && active.stored.ID == profileID {
-		return active.stored, active.profile.CategoryName, bins, nil
+		return active.stored, namer(active.profile, colorNames), bins, nil
 	}
 	stored, p, err := s.parse(ctx, profileID)
 	if err != nil {
 		return StoredProfile{}, nil, nil, err
 	}
-	return stored, p.CategoryName, bins, nil
+	return stored, namer(p, colorNames), bins, nil
 }

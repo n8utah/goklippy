@@ -33,27 +33,27 @@ CREATE TABLE IF NOT EXISTS sorter_settings (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Sorting profiles in Hive's sorting_profile.json format. `data` is the file as
--- uploaded (it can run to tens of MB); `summary` is what the lists show, so they
--- never parse `data`. At most one profile is active.
+-- Sorting profiles. source 'upload' is Hive's sorting_profile.json, with `data` the file
+-- as uploaded (it can run to tens of MB); source 'builtin' is one of the built-in kinds,
+-- with `data` just {"builtin": "<kind>"}. `summary` is what the lists show, so they
+-- never parse `data`. Each collection picks the profile it sorts by.
 CREATE TABLE IF NOT EXISTS sorting_profiles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'upload',
   summary TEXT NOT NULL CHECK (json_valid(summary)),
   data TEXT NOT NULL,
-  active BOOLEAN NOT NULL DEFAULT FALSE,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sorting_profiles_one_active ON sorting_profiles(active) WHERE active;
-
 -- A collection: one person's LEGO being sorted, over as many runs as it takes. At most
 -- one is current: the one the bins hold and the next run sorts into. bins_started_at is
--- when it last became current, i.e. when its bins were last started afresh.
+-- when it last became current, i.e. when its bins were last started afresh. profile_id
+-- is the profile it sorts by (NULL only for collections made before profiles moved here).
 CREATE TABLE IF NOT EXISTS collections (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
+  profile_id INTEGER NULL REFERENCES sorting_profiles(id),
   current BOOLEAN NOT NULL DEFAULT FALSE,
   bins_started_at DATETIME NULL,
   archived_at DATETIME NULL,

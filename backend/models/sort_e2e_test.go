@@ -9,6 +9,7 @@ import (
 
 	"goklippy/backend/logic/brickognize"
 	"goklippy/backend/logic/sorter"
+	"goklippy/backend/logic/sorter/profile"
 	"goklippy/backend/logic/vision"
 
 	"github.com/stretchr/testify/assert"
@@ -47,7 +48,7 @@ func TestSortEndToEndInSimulation(t *testing.T) {
 	pickCollection(t, db, sorting, "Test")
 	p, err := sorting.Import(ctx, []byte(bricksProfile))
 	require.NoError(t, err)
-	require.NoError(t, sorting.Activate(ctx, p.ID, sorter.ActivateKeep))
+	useProfile(t, sorting, p.ID)
 
 	records := sorter.NewRecords(NewRecordsStore(db), t.TempDir())
 	go records.Run(ctx)
@@ -152,7 +153,7 @@ func TestSortLinksJourneysAcrossChannels(t *testing.T) {
 	pickCollection(t, db, sorting, "Test")
 	p, err := sorting.Import(ctx, []byte(bricksProfile))
 	require.NoError(t, err)
-	require.NoError(t, sorting.Activate(ctx, p.ID, sorter.ActivateKeep))
+	useProfile(t, sorting, p.ID)
 	records := sorter.NewRecords(NewRecordsStore(db), t.TempDir())
 	go records.Run(ctx)
 	journeys := sorter.NewJourneyRecorder(t.TempDir(), settings)
@@ -283,7 +284,7 @@ func startSimSort(t *testing.T, settings func() sorter.MachineSettings, supply [
 	pickCollection(t, db, sorting, "Test")
 	p, err := sorting.Import(ctx, []byte(bricksProfile))
 	require.NoError(t, err)
-	require.NoError(t, sorting.Activate(ctx, p.ID, sorter.ActivateKeep))
+	useProfile(t, sorting, p.ID)
 	store := NewRecordsStore(db)
 	records := sorter.NewRecords(store, t.TempDir())
 	go records.Run(ctx)
@@ -605,14 +606,14 @@ func TestSortingKitsAndFullBins(t *testing.T) {
 	pickCollection(t, db, svc, "Test")
 	p, err := svc.Import(ctx, []byte(kitProfile))
 	require.NoError(t, err)
-	require.NoError(t, svc.Activate(ctx, p.ID, sorter.ActivateKeep))
+	useProfile(t, svc, p.ID)
 	runID, err := records.StartRun(ctx, testCollectionID, &p.ID, p.Name, time.Now())
 	require.NoError(t, err)
 
 	// deliver routes a red 3001 and records it as delivered where it was sent.
 	deliver := func() sorter.RouteResult {
 		t.Helper()
-		res, err := svc.Route(ctx, "3001", "5", 0, true)
+		res, err := svc.Route(ctx, profile.Piece{Part: "3001", Color: "5"}, 0, true)
 		require.NoError(t, err)
 		now := time.Now().UTC()
 		piece := sorter.Piece{ID: sorter.NewPieceID(), RunID: runID, Status: sorter.PieceDistributed, SeenAt: now,
@@ -644,7 +645,7 @@ func TestSortingKitsAndFullBins(t *testing.T) {
 	svc2 := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
 	require.NoError(t, svc2.AttachCounts(ctx, records))
 	assert.Equal(t, 1, svc2.KitProgress()[0].Found)
-	res, err := svc2.Route(ctx, "3001", "5", 0, false)
+	res, err := svc2.Route(ctx, profile.Piece{Part: "3001", Color: "5"}, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, "r-bricks", res.Category)
 	assert.Equal(t, fourth.Choice.Bin.Bin, res.Choice.Bin.Bin, "still skipping the full bin")

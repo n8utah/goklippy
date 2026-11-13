@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"goklippy/backend/logic/sorter"
+	"goklippy/backend/logic/sorter/profile"
 )
 
 // testCollectionID is the first collection made in a fresh database.
@@ -20,7 +21,7 @@ const testCollectionID = 1
 // newCollection makes a collection and returns its id.
 func newCollection(t *testing.T, store *RecordsStore, name string) int64 {
 	t.Helper()
-	id, err := store.CreateCollection(context.Background(), name, time.Now())
+	id, err := store.CreateCollection(context.Background(), name, nil, time.Now())
 	require.NoError(t, err)
 	return id
 }
@@ -36,12 +37,20 @@ func pickCollection(t *testing.T, db *sqlx.DB, svc *sorter.SortingService, name 
 	return id
 }
 
+// useProfile makes the current collection sort by the profile, bins not emptied.
+func useProfile(t *testing.T, svc *sorter.SortingService, profileID int64) {
+	t.Helper()
+	col := svc.Collection()
+	require.NotNil(t, col, "pick a collection first")
+	require.NoError(t, svc.ChangeProfile(context.Background(), col.ID, profileID, false))
+}
+
 func TestCollectionsCreateRenameArchive(t *testing.T) {
 	ctx := context.Background()
 	store := NewRecordsStore(openTestDB(t))
 
 	id := newCollection(t, store, "Sam's LEGO")
-	_, err := store.CreateCollection(ctx, "Sam's LEGO", time.Now())
+	_, err := store.CreateCollection(ctx, "Sam's LEGO", nil, time.Now())
 	assert.ErrorIs(t, err, sorter.ErrCollectionName)
 	other := newCollection(t, store, "Alex's LEGO")
 	assert.ErrorIs(t, store.RenameCollection(ctx, other, "Sam's LEGO"), sorter.ErrCollectionName)
@@ -145,13 +154,13 @@ func TestCollectionsHaveTheirOwnBins(t *testing.T) {
 	require.NoError(t, svc.AttachCounts(ctx, records))
 	p, err := svc.Import(ctx, []byte(bricksProfile))
 	require.NoError(t, err)
-	require.NoError(t, svc.Activate(ctx, p.ID, sorter.ActivateKeep))
 
-	_, err = svc.Route(ctx, "3001", "5", 0, true)
-	assert.ErrorIs(t, err, sorter.ErrNoCollection, "nothing to remember the bin under")
+	_, err = svc.Route(ctx, profile.Piece{Part: "3001", Color: "5"}, 0, true)
+	assert.ErrorIs(t, err, sorter.ErrNoProfile, "no collection, so no profile to sort by")
 
 	sam := pickCollection(t, db, svc, "Sam")
-	res, err := svc.Route(ctx, "3001", "5", 0, true)
+	useProfile(t, svc, p.ID)
+	res, err := svc.Route(ctx, profile.Piece{Part: "3001", Color: "5"}, 0, true)
 	require.NoError(t, err)
 	brickBin := sorter.BinKey{Layer: res.Choice.Bin.Layer, Bin: res.Choice.Bin.Bin}
 	run, err := records.StartRun(ctx, sam, &p.ID, p.Name, time.Now())
