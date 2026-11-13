@@ -107,3 +107,15 @@ its layout. Bins page counts stay machine-wide (they describe what's physically 
   one shown and synced. Existing pieces/runs were all test data and can be cleared.
 - 2026-11-13, Nate: the collection is set per run. To switch collections, stop and start a
   new run.
+- 2026-11-13, Nate: with the chute left out, still say which bin each piece would have gone to
+  (a virtual bin), to help test everything else.
+- 2026-11-13, progress: built in `1b3f314` (backend) and `ac3b02d` (UI). Switching is done
+  by picking the collection (Run › Sort or Run › Collections), not on Start, so a picked
+  collection's bins can be preassigned before starting. Backend tests pass, including the
+  chute-left-out virtual bins; tried against the simulator's API. Not yet looked at in a browser.
+- 2026-11-13, sorter database: backed up to `private/backups/goklippy-before-collections-20261113.db`,
+  test runs/pieces/photos/catalog/bin assignments cleared (incidents kept), schema applied.
+  `mage atlasPush` currently fails on SQLite's built-in `app_users` email index (Atlas tries to
+  drop `app_users_email`), so the change was applied from Atlas's own plan without the
+  index lines.
+- Left: look the pages over on the real machine, then close with `/task-done`.
