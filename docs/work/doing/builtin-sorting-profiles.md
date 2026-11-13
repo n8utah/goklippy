@@ -36,20 +36,99 @@ uses.
     the unused bins, and sorting continues.
 
 ## Done when
-- [ ] A "by part type" and a "by colour" profile can be created from the Profiles page without
-      uploading anything, and show alongside uploaded ones.
+- [ ] "By part type" and "By colour" are always on the Profiles page, with nothing to upload,
+      alongside uploaded ones.
 - [ ] Sorting with them routes each piece by its Brickognize part type (grouped) or its colour;
       pieces without one go to misc.
-- [ ] Bins can be assigned these categories on the Bins page like any other profile's.
+- [ ] Bins can be given these categories on the Bins page, and pre-assigned from them.
 - [ ] A collection has a profile, chosen when it's created and changeable later.
 - [ ] Starting a run requires the collection to have a profile, and the run sorts by it.
-- [ ] The machine-wide active profile is gone; nothing depends on it.
-- [ ] Changing a collection's profile asks "bins emptied, or use the unused bins and continue?"
-      and does that.
-- [ ] Hive uploads still import, activate and route as before.
+- [ ] The machine-wide active profile is gone (no Activate, no `active` column); the Bins page,
+      dry run, plan and home page follow the current collection's profile.
+- [ ] Changing the current collection's profile asks "bins emptied, or use the unused bins and
+      continue?" and does that; bins holding pieces get no new categories in the second case.
+- [ ] A profile a collection uses can't be deleted.
+- [ ] Hive uploads still import and route as before.
 
 ## Plan
-Filled in when the item is claimed: approach, files touched, open questions.
+
+**Model.** The profile moves from the machine onto the collection. The sorter's "active
+profile" becomes the current collection's profile: picking a collection, or changing its
+profile, loads that profile. Bin layouts stay keyed by (collection, profile), as now.
+
+**Built-in profiles** (`logic/sorter/profile/builtin.go`)
+- Two fixed kinds, stored as small rows in `sorting_profiles` with `source = 'builtin'` and
+  `data = {"builtin": "part_type"}` / `{"builtin": "color"}`. The backend makes sure both rows
+  exist at startup; they can't be deleted. `Parse` recognises the `builtin` key.
+- Routing gets the whole identification, not just part and colour:
+  `Route(Piece{Part, Color, ColorName, PartCategory}, kitFull)`. Hive profiles ignore the
+  extra fields; built-ins use them.
+- **By part type:** category = Brickognize's category up to the first comma ("Plate, Round" →
+  `Plate`); the id is that text. A built-in list of the usual families (Brick, Plate, Tile,
+  Slope, Wedge, Technic, Wheel, Hinge, Bracket, Arch, Panel, Window, Door, Minifigure, Plant,
+  ...) is the profile's category list, so bins can be given or pre-assigned them before any
+  piece arrives; a family not on the list still works and is listed once a bin has it.
+- **By colour:** category `color_<id>`, named from Brickognize's colour name. Names already
+  seen are read back from the catalog at load, so the Bins page shows "Red", not "Color 5"
+  (Hive's sort-the-rest-by-colour gets the same names).
+- No part type / no colour → misc, as now.
+
+**Data** (`database/schema.sql`)
+- `collections.profile_id INTEGER NULL REFERENCES sorting_profiles(id)`: NULL only for
+  collections made before this; new ones must have one. Existing collections get the
+  currently active profile when the change is applied.
+- Drop `sorting_profiles.active` and its one-active index.
+- Applied by hand on the sorter after a backup, the way sorter-collections was
+  (`mage atlasPush` trips over the `app_users` email index).
+
+**Backend**
+- `models/sorting_store.go`: drop `ActivateProfile`/`ActiveProfileID`; `EnsureBuiltinProfiles`;
+  `ListProfiles` returns which collections use each profile; `DeleteProfile` refuses one in use.
+  `models/collections_store.go`: `CreateCollection` takes a profile; `SetCollectionProfile`;
+  the collection's `profile_id`/name in `GetCollection`/`ListCollections`; colour names from
+  `catalog_parts`.
+- `logic/sorter/sorting.go`: `NewSortingService` and `SelectCollection` load the current
+  collection's profile; `Activate` goes; new `ChangeProfile(collection, profile, binsEmptied)`:
+  refused while a run is sorting into that collection (stop first, as with switching
+  collections). If it's the current collection: emptied → every bin marked emptied and a fresh
+  layout; not emptied → fresh layout for the new profile, and bins still holding pieces stay
+  out of it. For any other collection it just records the profile (its bins start afresh
+  when it's picked anyway). `PreassignBins` moves here from activation (skips bins holding
+  pieces).
+- `logic/sorter/bins.go` `ChooseBin`: a bin with pieces in it and no category under the current
+  profile isn't free. That's the "use the unused bins" rule, and it also stops a bin
+  you've stripped by hand from taking a new category before it's emptied.
+- `logic/sorter/machine_sort.go`: Start without a profile → "this collection has no sorting
+  profile; pick one on Run › Collections".
+- `collections.go` `Plan`: uses the collection's profile, not its latest run's.
+- Callers of `Route` pass the part category and colour name (`platter.go`, `identify.go`, the
+  `/sorter/route` dry run).
+- Routes: `POST /sorter/profiles/:id/activate` goes; `POST /sorter/collections` takes
+  `profile_id` (required); `PATCH /sorter/collections/:id` takes
+  `{profile_id, bins: "emptied" | "continue"}`; `POST /sorter/bins/preassign`.
+
+**Frontend**
+- `ProfilesPage`: built-ins first ("Built-in" badge, no delete), then uploads; each shows the
+  collections using it. Activate and the keep/reset/pre-assign menu go.
+- `CollectionsPage`: a profile picker in the create dialog (required); the detail shows the
+  profile with **Change**. For the current collection the change dialog asks "I emptied the
+  bins" / "Keep what's in the bins, use the unused ones and carry on".
+- `BinsPage`: a **Pre-assign from the profile** button beside Reset.
+- `SortPage`: Start disabled, with a link, when the picked collection has no profile.
+- `helpers/api.js`: drop `activateSortingProfile`; add the collection profile change and
+  pre-assign calls.
+
+**Tests**: profile package table tests for both built-ins (families, commas, no category, no
+colour); sorting tests for loading the collection's profile, change with emptied/continue
+(occupied bins skipped), Start without a profile, deleting a profile in use; models tests for
+the new columns; update `sort_e2e_test.go`. Then on the simulator (its parts carry
+categories): sort into a collection by part type, switch it to colour with and without
+emptying, check the Bins and Plan pages in a browser.
+
+**Overlap with other work**: sort-viewer-app is all in `services/sortviewer/`, nothing shared.
+sorter-collections is built and only waiting on a look in the browser; this changes its
+files (`collections.go`, `collections_store.go`, `CollectionsPage`), so I'll pull before
+starting and commit in small steps.
 
 ## Notes
 - Builds on [sorter-collections](../doing/sorter-collections.md) (collections and their
@@ -60,6 +139,8 @@ Filled in when the item is claimed: approach, files touched, open questions.
   piece's Brickognize category.
 - Out of scope for now: exact (ungrouped) BrickLink category, part type + colour combined, a
   rule editor, Hive sync.
+- Open: built-ins are always there (one of each) rather than created on demand; is that right?
+- Open: a profile change needs the run stopped first, like switching collections; OK?
 - 2026-11-13, Nate: no machine-wide active profile once collections choose their own.
 - 2026-11-13, Nate: changing a collection's profile asks whether the bins were emptied; if not,
   the new profile uses only the unused bins and the sort continues.
