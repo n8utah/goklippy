@@ -353,7 +353,7 @@ func (s *Session) stepperRoutinePatternMove(oid int, segments []StepperRoutineSe
 	if err := s.failIfShutdown(); err != nil {
 		return 0, err
 	}
-	slog.Info("stepper routine pattern scheduled",
+	slog.Debug("stepper routine pattern scheduled",
 		"port", s.Port,
 		"oid", oid,
 		"segments", len(segments),
@@ -504,7 +504,7 @@ func (s *Session) stepperRoutineLoop(oid int, state *stepperRoutineKeeper) {
 			return nil
 		})
 		if err == nil && restart {
-			slog.Info("stepper routine queue ran low, restarting after it drains",
+			slog.Debug("stepper routine queue ran low, restarting after it drains",
 				"port", s.Port,
 				"oid", oid,
 				"drain_ms", drainFor.Milliseconds(),

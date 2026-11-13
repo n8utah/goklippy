@@ -295,6 +295,26 @@ export function getSorterStats() {
   return getJSON('/api/v1/sorter/stats');
 }
 
+/** The backend's kept logs, newest first. params: { level, q, since, before, limit } */
+export function listLogs(params = {}) {
+  const p = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => v && p.set(k, String(v)));
+  return getJSON(`/api/v1/logs?${p}`);
+}
+
+/** The matching logs as a text file. */
+export function logsDownloadURL({ level, q } = {}) {
+  const p = new URLSearchParams();
+  if (level) p.set('level', level);
+  if (q) p.set('q', q);
+  return `${API_BASE_URL}/api/v1/logs/download?${p}`;
+}
+
+export async function clearLogs() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/logs`, { method: 'DELETE' });
+  return parseJSON(response);
+}
+
 /** The catalog of every part and colour found. filters: { q, color, category, run, sort, dir } */
 export function listSorterCatalog(filters = {}) {
   const params = new URLSearchParams();

@@ -51,6 +51,10 @@ func registerRoutes(r *gin.Engine, cfg config.Config) {
 	mcuGroup.POST("/sessions/:id/stepper/index", routes.IndexMCUStepper)
 	mcuGroup.POST("/sessions/:id/stepper/stop", routes.StopMCUStepper)
 
+	api.GET("/logs", routes.ListLogs)
+	api.GET("/logs/download", routes.DownloadLogs)
+	api.DELETE("/logs", routes.ClearLogs)
+
 	sorterGroup := api.Group("/sorter")
 	sorterGroup.GET("/settings/:name", routes.GetSorterSettings)
 	sorterGroup.PUT("/settings/:name", routes.PutSorterSettings)

@@ -252,7 +252,7 @@ func (c *Conn) SyncClock() error {
 
 // Identify fetches the MCU data dictionary and initializes the message parser.
 func (c *Conn) Identify() error {
-	slog.Info("mcu identify starting",
+	slog.Debug("mcu identify starting",
 		"port", c.logPort,
 		"timeout", c.timeout,
 		"identify_wait", c.effectiveIdentifyWait(),
@@ -286,7 +286,7 @@ func (c *Conn) fetchIdentifyData() ([]byte, error) {
 
 	for time.Now().Before(deadline) {
 		if time.Since(lastProgress) >= 3*time.Second {
-			slog.Info("mcu identify waiting",
+			slog.Debug("mcu identify waiting",
 				"port", c.logPort,
 				"bytes_received", len(identifyData),
 				"saw_incoming", c.sawIncomingBytes,

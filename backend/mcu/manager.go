@@ -104,7 +104,7 @@ func (m *Manager) Connect(port string, baud int, timeout time.Duration, build cf
 		return nil, err
 	}
 
-	slog.Info("mcu connect syncing clock", "port", port, "baud", usedBaud)
+	slog.Debug("mcu connect syncing clock", "port", port, "baud", usedBaud)
 	if err := conn.SyncClock(); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("sync clock: %w", err)
@@ -197,7 +197,7 @@ func openAndConfigure(port string, primaryBaud int, timeout time.Duration, lines
 				scanIdentify = true
 			}
 		}
-		slog.Info("mcu connect baud attempt",
+		slog.Debug("mcu connect baud attempt",
 			"port", port,
 			"baud", baud,
 			"attempt", i+1,
@@ -241,7 +241,7 @@ func openAndConfigureBaud(port string, baud int, timeout time.Duration, scanIden
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
 		hardReset := attempt > 0
-		slog.Info("mcu serial open",
+		slog.Debug("mcu serial open",
 			"port", port,
 			"baud", baud,
 			"attempt", attempt+1,

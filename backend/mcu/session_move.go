@@ -95,7 +95,7 @@ func (s *Session) StepperShake(oid int, forward bool, stroke TrapezoidMove, stro
 		return 0, err
 	}
 	sec := float64(queueStepsTicks(steps)) / s.ClockFreq * float64(strokes)
-	slog.Info("stepper shake scheduled", "port", s.Port, "oid", oid, "strokes", strokes, "steps", stroke.Steps, "ms", int(sec*1000))
+	slog.Debug("stepper shake scheduled", "port", s.Port, "oid", oid, "strokes", strokes, "steps", stroke.Steps, "ms", int(sec*1000))
 	return time.Duration((motionStartMarginSec + sec) * float64(time.Second)), nil
 }
 
@@ -140,7 +140,7 @@ func (s *Session) stepperTrapezoidMove(oid int, forward bool, move TrapezoidMove
 	}
 
 	moveSec := float64(queueStepsTicks(steps)) / s.ClockFreq
-	slog.Info("stepper move scheduled",
+	slog.Debug("stepper move scheduled",
 		"port", s.Port,
 		"oid", oid,
 		"forward", forward,

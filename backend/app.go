@@ -14,6 +14,7 @@ import (
 
 	"goklippy/backend/config"
 	"goklippy/backend/logic"
+	"goklippy/backend/logic/applog"
 	"goklippy/backend/logic/klipperconfig"
 	"goklippy/backend/models"
 	"goklippy/backend/routes"
@@ -30,6 +31,20 @@ func main() {
 		slog.Error("failed to load config", "path", *configPath, "error", err)
 		return
 	}
+
+	// Logs go to the console and, for Diagnose › Logs, to hourly files next to the
+	// database, kept 24 h.
+	logStore, err := applog.Open(filepath.Join(filepath.Dir(cfg.Database.Path), "logs"), 24*time.Hour)
+	if err != nil {
+		slog.Error("failed to open the log folder", "error", err)
+		return
+	}
+	defer logStore.Close()
+	slog.SetDefault(slog.New(applog.Tee{
+		slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		logStore.Handler(slog.LevelInfo),
+	}))
+	routes.InitLogs(logStore)
 
 	db, err := models.OpenDB(cfg.Database.Path)
 	if err != nil {

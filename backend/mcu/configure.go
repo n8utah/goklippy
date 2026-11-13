@@ -141,13 +141,13 @@ func (c *Conn) ConfigureWithInit(finalized []string, initCommands []string) erro
 	}
 
 	if !c.skipConfigSend {
-		slog.Info("mcu configure sending config lines", "port", c.logPort, "lines", len(finalized))
+		slog.Debug("mcu configure sending config lines", "port", c.logPort, "lines", len(finalized))
 		for i, line := range finalized {
 			if err := c.SendCommand(line); err != nil {
 				return fmt.Errorf("send %q: %w", line, err)
 			}
 			if (i+1)%10 == 0 || i+1 == len(finalized) {
-				slog.Info("mcu configure progress",
+				slog.Debug("mcu configure progress",
 					"port", c.logPort,
 					"sent", i+1,
 					"total", len(finalized),
@@ -155,7 +155,7 @@ func (c *Conn) ConfigureWithInit(finalized []string, initCommands []string) erro
 			}
 		}
 	} else {
-		slog.Info("mcu configure skipped config lines (already configured)", "port", c.logPort)
+		slog.Debug("mcu configure skipped config lines (already configured)", "port", c.logPort)
 	}
 
 	deadline := time.Now().Add(configureWait(c.timeout))
@@ -178,7 +178,7 @@ func (c *Conn) ConfigureWithInit(finalized []string, initCommands []string) erro
 			break
 		}
 		if time.Since(lastWaitLog) >= 3*time.Second {
-			slog.Info("mcu configure waiting for is_config",
+			slog.Debug("mcu configure waiting for is_config",
 				"port", c.logPort,
 				"remaining_ms", time.Until(deadline).Milliseconds(),
 			)
@@ -195,7 +195,7 @@ func (c *Conn) ConfigureWithInit(finalized []string, initCommands []string) erro
 		return fmt.Errorf("configure timed out")
 	}
 
-	slog.Info("mcu configure sending init lines", "port", c.logPort, "lines", len(initCommands))
+	slog.Debug("mcu configure sending init lines", "port", c.logPort, "lines", len(initCommands))
 	for _, line := range initCommands {
 		if err := c.SendCommand(line); err != nil {
 			return fmt.Errorf("init %q: %w", line, err)
@@ -253,7 +253,7 @@ func (c *Conn) prepareForConfig(finalized []string) error {
 	}
 
 	if !status.IsShutdown {
-		slog.Info("mcu pre-config status",
+		slog.Debug("mcu pre-config status",
 			"port", c.logPort,
 			"is_shutdown", false,
 			"is_config", status.IsConfig,

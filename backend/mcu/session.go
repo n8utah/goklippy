@@ -320,7 +320,7 @@ func (s *Session) stepperJogMove(oid int, forward bool, speedHz float64, steps i
 	if err := s.failIfShutdown(); err != nil {
 		return err
 	}
-	slog.Info("stepper jog scheduled",
+	slog.Debug("stepper jog scheduled",
 		"port", s.Port,
 		"oid", oid,
 		"forward", forward,

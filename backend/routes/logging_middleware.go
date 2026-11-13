@@ -36,14 +36,14 @@ func SlogRequestLogger() gin.HandlerFunc {
 			path = c.Request.URL.Path
 		}
 
+		status := c.Writer.Status()
 		attrs := []any{
 			"request_id", c.GetString("request_id"),
 			"method", c.Request.Method,
 			"path", path,
-			"status", c.Writer.Status(),
+			"status", status,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"client_ip", c.ClientIP(),
-			"user_agent", c.Request.UserAgent(),
 		}
 
 		if claimsRaw, ok := c.Get("claims"); ok {
@@ -56,15 +56,20 @@ func SlogRequestLogger() gin.HandlerFunc {
 			attrs = append(attrs, "errors", c.Errors.String())
 		}
 
-		if c.Writer.Status() >= http.StatusInternalServerError {
-			slog.Error("http request completed", attrs...)
-			return
+		// Kept (Info and up): what was done (POST, PUT, DELETE) and what failed. Reads —
+		// the pages' polling, camera streams and pictures, many a second — and a read of
+		// something not there yet (a journey still being linked) are Debug, not kept.
+		read := c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead || c.Request.Method == http.MethodOptions
+		switch {
+		case status >= http.StatusInternalServerError:
+			slog.Error("http request failed", attrs...)
+		case status >= http.StatusBadRequest && !(read && status == http.StatusNotFound):
+			slog.Warn("http request refused", attrs...)
+		case read:
+			slog.Debug("http request completed", attrs...)
+		default:
+			slog.Info("http request completed", attrs...)
 		}
-		if c.Writer.Status() >= http.StatusBadRequest && path == "/api/v1/mcu/connect" {
-			slog.Warn("http request completed", attrs...)
-			return
-		}
-		slog.Info("http request completed", attrs...)
 	}
 }
 

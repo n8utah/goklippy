@@ -157,6 +157,12 @@ export const NAV_GROUPS = [
         about: 'Every picture and decision for recent pieces',
       },
       {
+        id: 'logs',
+        label: 'Logs',
+        path: '/diagnose/logs',
+        about: 'What the backend did over the last 24 hours, following live',
+      },
+      {
         id: 'bench',
         label: 'Motor bench',
         path: '/diagnose/bench',

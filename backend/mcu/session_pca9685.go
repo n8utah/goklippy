@@ -161,7 +161,7 @@ func (s *Session) CheckPCA9685Boards() []PCA9685Status {
 		status := s.checkPCA9685(obj.OID)
 		status.Board = obj.Meta["board"]
 		status.Address = obj.Meta["address"]
-		slog.Info("pca9685 check", "port", s.Port, "board", status.Board, "address", status.Address,
+		slog.Debug("pca9685 check", "port", s.Port, "board", status.Board, "address", status.Address,
 			"state", status.State, "mode1", status.Mode1, "prescale", status.Prescale)
 		statuses = append(statuses, status)
 	}

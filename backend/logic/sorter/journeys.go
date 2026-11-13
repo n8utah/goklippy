@@ -510,7 +510,7 @@ func (r *JourneyRecorder) claimWaiting(now time.Time, window time.Duration) {
 		id, decided := r.claim(n, window)
 		switch {
 		case decided && id != "":
-			slog.Info("piece linked to its journey", "piece", n.id, "journey", id)
+			slog.Debug("piece linked to its journey", "piece", n.id, "journey", id)
 		case !decided && now.Sub(n.at) <= window:
 			kept = append(kept, n)
 		}

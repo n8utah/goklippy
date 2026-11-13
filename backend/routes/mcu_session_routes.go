@@ -72,7 +72,7 @@ func ConnectMCU(c *gin.Context) {
 		return
 	}
 
-	slog.Info("mcu connect request received",
+	slog.Debug("mcu connect request received",
 		"request_id", requestID,
 		"port", req.Port,
 		"baud", req.Baud,
@@ -121,7 +121,7 @@ func ConnectMCU(c *gin.Context) {
 		cfgtranslate.MapObjectsToSlots(build.Objects, profile, f)
 	}
 
-	slog.Info("mcu connect config ready",
+	slog.Debug("mcu connect config ready",
 		"request_id", requestID,
 		"port", req.Port,
 		"sections", len(f.Sections),
@@ -133,7 +133,7 @@ func ConnectMCU(c *gin.Context) {
 	if baud == 0 {
 		baud = klipperconfig.MCUBaud(f)
 		if baud != 0 {
-			slog.Info("mcu connect using baud from config",
+			slog.Debug("mcu connect using baud from config",
 				"request_id", requestID,
 				"port", req.Port,
 				"baud", baud,

@@ -14,6 +14,7 @@ import ChutePage from './pages/ChutePage/ChutePage';
 import HomePage from './pages/HomePage/HomePage';
 import IncidentsPage from './pages/IncidentsPage/IncidentsPage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
+import LogsPage from './pages/LogsPage/LogsPage';
 import OverviewPage from './pages/OverviewPage/OverviewPage';
 import PiecesPage from './pages/PiecesPage/PiecesPage';
 import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
@@ -72,6 +73,7 @@ const App = () => (
               <Route path="diagnose">
                 <Route index element={<Navigate to="journeys" replace />} />
                 <Route path="journeys" element={<JourneysPage />} />
+                <Route path="logs" element={<LogsPage />} />
                 <Route path="bench/:part?" element={<BenchPage />} />
               </Route>
 
