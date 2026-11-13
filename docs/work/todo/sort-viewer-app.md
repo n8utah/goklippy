@@ -9,8 +9,10 @@ back: what's been found, how many, pictures, and how it's being grouped.
 
 ## What
 A separate web app on our own server (not part of the bench sorter):
-- Go backend, React frontend, SQLite, deployed with Harbor Keeper; people sign in through
-  Harbor Keeper's identity (Gangway OIDC).
+- Lives in this repo under `services/` (e.g. `services/sortviewer/`) with its own `go.mod`
+  and a mage deploy script that pushes it to Harbor Keeper, like our other projects.
+- Go backend, React frontend, SQLite; people sign in through Harbor Keeper's identity
+  (Gangway OIDC).
 - Receives updates from the sorter over an API authenticated with an API key. Keys are made
   and revoked in the site's admin.
 - For each shared collection, the people allowed to see it get:
@@ -38,6 +40,5 @@ Filled in when the item is claimed: approach, files touched, open questions.
 - Works with [sort-sharing-push](sort-sharing-push.md); needs [sorter-collections](sorter-collections.md).
 - Harbor Keeper deploy and Gangway sign-in: see how `charmingcharlees` does it (its `AGENTS.md`,
   Deploy section), and the `percy-hosted-app` / `fav-newproj` setups.
-- Open: does the code live in this repo (e.g. a `viewer/` folder) or its own repo? It's a
-  separate app, so its own repo is likely, with this item tracking it.
+- 2026-11-13, Nate: code lives in this repo under `services/`, with its own mage deploy. Go backend.
 - 2026-11-13, Nate: viewers only look. Photos stay until cleared by hand from the admin.

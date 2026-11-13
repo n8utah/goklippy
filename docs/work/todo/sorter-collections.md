@@ -24,7 +24,8 @@ Right now every piece goes into one shared pile of records, so there's no way to
 
 ## Done when
 - [ ] Collections can be created, renamed and archived.
-- [ ] Starting a sort requires (or defaults to) a chosen collection, shown while sorting.
+- [ ] Starting a sort requires a chosen collection, shown while sorting; it can't change
+      mid-run (stop and start a new run instead).
 - [ ] Each piece records its collection; existing test pieces, runs and photos are cleared.
 - [ ] Pieces page filters by collection; counts and unknowns show per collection.
 - [ ] A collection shows its current sorting plan (bins and their categories), and the plan
@@ -40,4 +41,5 @@ Filled in when the item is claimed: approach, files touched, open questions.
   their run. To decide when planned.
 - 2026-11-13, Nate: the plan can change during a collection's sort; the latest plan is the
   one shown and synced. Existing pieces/runs were all test data and can be cleared.
-- Open: is the collection set per run, or can it change mid-run? (Assumed per run.)
+- 2026-11-13, Nate: the collection is set per run. To switch collections, stop and start a
+  new run.
