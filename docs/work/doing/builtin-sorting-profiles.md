@@ -147,6 +147,11 @@ starting and commit in small steps.
   colour keeping full bins, change back with bins emptied). Left: back up and migrate the
   sorter's database (adds `collections.profile_id`, drops `sorting_profiles.active`; existing
   collections get the active profile), restart the backend, and look the pages over.
+- 2026-11-13, sorter database: backed up to
+  `private/backups/goklippy-before-builtin-profiles-20261113-143417.db`, then migrated by hand
+  (add `collections.profile_id`, drop `sorting_profiles.active` and its index; no collections
+  or profiles existed yet). Backend restarted; both built-ins are there. Left: look the pages
+  over, then `/task-done`.
 - 2026-11-13, Nate: no machine-wide active profile once collections choose their own.
 - 2026-11-13, Nate: changing a collection's profile asks whether the bins were emptied; if not,
   the new profile uses only the unused bins and the sort continues.
