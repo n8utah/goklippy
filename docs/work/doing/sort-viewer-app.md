@@ -103,11 +103,9 @@ with a fake provider. Then run it locally and push sample data with curl.
 - Register the Gangway OIDC client (redirect `https://lego.n8p.xyz/auth/callback`) and give
   me the client id; set the secret with `keeper vars set ... -secret`.
 
-**Questions**
-- Viewer usernames: a plain name ("sam") or their email? Plan assumes a plain name.
-- Should the site stop when idle (Dry Dock idle stop)? Live viewers keep it awake; the sorter's
-  pushes would start it again. Plan assumes always on while a sort is being shared, idle stop
-  30 min otherwise.
+**Decided** (Nate, 2026-11-13): viewers sign in with their email and a password; the app stays
+running (no idle stop). Claude sets up the Dry Dock app, the route and the Gangway OIDC client
+with the keeper CLI (`mage keeperSetup`).
 
 ## Notes
 - Works with [sort-sharing-push](sort-sharing-push.md); needs [sorter-collections](sorter-collections.md).
@@ -115,6 +113,15 @@ with a fake provider. Then run it locally and push sample data with curl.
   Deploy section), and the `percy-hosted-app` / `fav-newproj` setups.
 - 2026-11-13, Nate: code lives in this repo under `services/`, with its own mage deploy. Go backend.
 - 2026-11-13, Nate: viewers only look. Photos stay until cleared by hand from the admin.
+- 2026-11-13, progress: built in `4276417` (backend) and `0fef899` (pages, mage, README with
+  the push API). `mage keeperSetup` made the Dry Dock app `SortViewer` (always on) at
+  `lego.n8p.xyz`, its Gangway OIDC client and its settings; `mage deploy` shipped
+  `sortviewer-1`, live and answering. Tested: Go tests for the push API, access rules and
+  sign-in; a local run with pushed data and live events. Not tested: the real Gangway sign-in
+  (needs Nate to sign in) and the pages in a browser. Gangway sign-in is only covered by the
+  redirect check, not a test against a fake provider.
+- Left: Nate signs in as admin at https://lego.n8p.xyz ("Admin sign-in"), makes a viewer and a
+  sorter key; then [sort-sharing-push](../todo/sort-sharing-push.md) sends real data.
 - 2026-11-13, Nate: name `sortviewer`, at `lego.n8p.xyz`. Viewers get site-local
   username/password accounts; only the admin uses Harbor Keeper OIDC. Unknowns show as
   "unknown" for now.
