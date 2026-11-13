@@ -26,7 +26,12 @@ uses.
   Wedge in one bin).
 - Uploading Hive profiles keeps working as it does today.
 - A collection picks its profile. A run can't start without one: starting a run sorts by the
-  collection's profile.
+  collection's profile. There's no machine-wide "active" profile any more; anything that used it
+  (e.g. the "where would this go?" dry run) uses a collection's profile instead.
+- Changing a collection's profile partway through asks whether the bins were emptied:
+  - **Emptied:** every bin is marked emptied and the new profile starts a fresh bin layout.
+  - **Not emptied:** the bins already holding pieces are left alone; the new profile only gets
+    the unused bins, and sorting continues.
 
 ## Done when
 - [ ] A "by part type" and a "by colour" profile can be created from the Profiles page without
@@ -36,6 +41,9 @@ uses.
 - [ ] Bins can be assigned these categories on the Bins page like any other profile's.
 - [ ] A collection has a profile, chosen when it's created and changeable later.
 - [ ] Starting a run requires the collection to have a profile, and the run sorts by it.
+- [ ] The machine-wide active profile is gone; nothing depends on it.
+- [ ] Changing a collection's profile asks "bins emptied, or use the unused bins and continue?"
+      and does that.
 - [ ] Hive uploads still import, activate and route as before.
 
 ## Plan
@@ -50,7 +58,6 @@ Filled in when the item is claimed: approach, files touched, open questions.
   piece's Brickognize category.
 - Out of scope for now: exact (ungrouped) BrickLink category, part type + colour combined, a
   rule editor, Hive sync.
-- Open: once collections choose their profile, is there still a machine-wide "active" profile
-  (e.g. for the dry-run "where would this go?"), or does it go away?
-- Open: changing a collection's profile partway through: same as today's profile switch (each
-  profile keeps its own bins for that collection)?
+- 2026-11-13, Nate: no machine-wide active profile once collections choose their own.
+- 2026-11-13, Nate: changing a collection's profile asks whether the bins were emptied; if not,
+  the new profile uses only the unused bins and the sort continues.
