@@ -2,6 +2,8 @@
 
 Priority: medium
 Added: 2026-11-13 by Nate
+Owner: Nate + Claude
+Started: 2026-11-13
 
 ## Why
 The only way to get a sorting profile today is to build a `sorting_profile.json` in Hive and
