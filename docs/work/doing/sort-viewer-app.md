@@ -44,7 +44,70 @@ A separate web app on our own server (not part of the bench sorter):
 - [ ] Admin can clear a collection's photos (or the whole collection) by hand.
 
 ## Plan
-Filled in when the item is claimed: approach, files touched, open questions.
+
+Everything new lives in `services/sortviewer/`; nothing outside it changes (another agent is
+working in the sorter at the same time).
+
+**Layout** (the goklippy conventions, own module `goklippy/services/sortviewer`)
+- `backend/`: Go + Gin, `routes/` · `logic/` · `models/` split, `log/slog`, testify tests.
+  One binary that embeds the built frontend and serves UI and API on one origin.
+- `frontend/`: Vite + React, Tailwind v4 + shadcn, the same look as goklippy (dark, orange
+  accent), `PageName.js` / `.logic.js` pages. Phone-first: friends will mostly watch on phones.
+- `database/schema.sql`: SQLite (`modernc.org/sqlite` + `sqlx`), `IF NOT EXISTS`, applied on
+  start. Database and photos live in `DATA_DIR` (Dry Dock app data).
+- `mage.go` (own magefile, run from `services/sortviewer/`): `Dev`, `Test`, `Build` (frontend,
+  embed, linux/amd64 binary), `Deploy` (`keeper push SortViewer production -file … -activate`,
+  then checks `https://lego.n8p.xyz/api/health` reports the deployed commit), like
+  SimpleBudget and Webcutter.
+
+**Data**: `collections` (keyed by the sorter's collection id, name, plan JSON, current run,
+updated), `runs`, `pieces` (keyed by the sorter's piece id: part, colour, category, bin,
+virtual, unknown, scores, official image URL, photo path, seen/sorted times), `viewers`
+(username, bcrypt hash), `viewer_collections`, `api_keys` (name, SHA-256 of the key, last
+used, revoked), `sessions`.
+
+**Sorter push API** (`/api/push/...`, `Authorization: Bearer <key>`). Every call is an
+idempotent upsert keyed by the sorter's own ids, so the sorter's queue can retry and backfill
+safely; sort-sharing-push builds against this.
+- `PUT /api/push/collections/:id` `{name, plan}`: create/rename, replace its plan.
+- `PUT /api/push/runs/:id` `{collection_id, started_at, ended_at}`.
+- `PUT /api/push/pieces/:id` the piece record (also how review corrections arrive).
+- `PUT /api/push/pieces/:id/photo` JPEG body (the last C4 photo); shrunk on arrival.
+- `POST /api/push/collections/:id/clear-unknowns`: drops its unknown pieces and photos.
+- `GET /api/push/ping`: checks the URL and key (the sorter's "Test" button).
+
+**Sign-in**
+- Viewers: username + password made by the admin; an HttpOnly, Secure, SameSite=Lax session
+  cookie. Login attempts are rate-limited.
+- Admin: Gangway OIDC (code flow + PKCE, client secret, `openid email profile`), at
+  `/auth/login` → `/auth/callback`. Who may be admin = Gangway users with access to the app,
+  narrowed by an `ADMIN_EMAILS` setting. Admin also sees every collection.
+- Settings (keeper vars): `APP_URL`, `OIDC_ISSUER` (`https://login.n8p.xyz`), `OIDC_CLIENT_ID`,
+  `OIDC_CLIENT_SECRET`, `ADMIN_EMAILS`, `DATA_DIR`.
+
+**Pages**
+- Viewer: their collections → a collection with tabs **Live** (now sorting?, counts ticking,
+  newest pieces with photo + official picture, updating over server-sent events), **Plan**
+  (each bin and what it takes, pieces in it so far), **Parts** (by part and colour, with counts;
+  filter by colour/category), **Unknowns**.
+- Admin: collections (who can see each; clear photos; delete), viewers (create, reset
+  password, remove, pick collections), API keys (make one, shown once; revoke).
+
+**Tests**: push API (key checks, idempotent upserts, clear unknowns), access (a viewer can't
+read another's collection; push keys can't read; viewers can't push), sessions, OIDC callback
+with a fake provider. Then run it locally and push sample data with curl.
+
+**Needs Nate (Harbor Keeper, can't be done from here)**
+- Make the Dry Dock app `SortViewer` (environment `production`) and the Lighthouse route for
+  `lego.n8p.xyz`; or say so and `mage keeperSetup` does it with the keeper CLI.
+- Register the Gangway OIDC client (redirect `https://lego.n8p.xyz/auth/callback`) and give
+  me the client id; set the secret with `keeper vars set ... -secret`.
+
+**Questions**
+- Viewer usernames: a plain name ("sam") or their email? Plan assumes a plain name.
+- Should the site stop when idle (Dry Dock idle stop)? Live viewers keep it awake; the sorter's
+  pushes would start it again. Plan assumes always on while a sort is being shared, idle stop
+  30 min otherwise.
 
 ## Notes
 - Works with [sort-sharing-push](sort-sharing-push.md); needs [sorter-collections](sorter-collections.md).
