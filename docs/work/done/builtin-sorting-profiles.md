@@ -132,7 +132,7 @@ files (`collections.go`, `collections_store.go`, `CollectionsPage`), so I'll pul
 starting and commit in small steps.
 
 ## Notes
-- 2026-11-13, done: built-in By part type / By colour profiles, each collection sorts by its own profile (no machine-wide active profile), profile change asks emptied or continue, pre-assign on the Bins page. Commits 24f1543 (backend), 8284d34 (UI); sorter database migrated by hand. Closed by Nate after a look at the pages.
+- 2026-11-13, done: built-in By part type / By colour profiles, each collection sorts by its own profile (no machine-wide active profile), profile change asks emptied or continue, pre-assign on the Bins page. Commits 24f1543 (backend), 8284d34 (UI); sorter database migrated by hand. Closed by Nate.
 - Builds on [sorter-collections](../doing/sorter-collections.md) (collections and their
   per-collection bin layouts).
 - The plan already listed "local profiles without Hive" as not done yet
