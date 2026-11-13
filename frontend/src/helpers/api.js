@@ -332,6 +332,30 @@ export function fillSorterCatalog() {
   return postJSON('/api/v1/sorter/catalog/fill', {});
 }
 
+/** The picture kept of a channel when an incident opened. */
+export function sorterIncidentCameraURL(id, channel) {
+  return `${API_BASE_URL}/api/v1/sorter/incidents/${id}/cameras/${channel}`;
+}
+
+/** How many incident pictures are kept: { files, bytes }. */
+export function getSorterIncidentPictures() {
+  return getJSON('/api/v1/sorter/incidents/pictures');
+}
+
+/** Removes every incident's pictures; the incidents stay. */
+export async function clearSorterIncidentPictures() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/incidents/pictures`, {
+    method: 'DELETE',
+  });
+  return parseJSON(response);
+}
+
+/** Removes every resolved incident with its pictures; an open one stays. */
+export async function clearSorterIncidents() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/incidents`, { method: 'DELETE' });
+  return parseJSON(response);
+}
+
 export function resolveSorterIncident(action) {
   return postJSON('/api/v1/sorter/incident/resolve', { action });
 }

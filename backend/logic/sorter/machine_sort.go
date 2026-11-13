@@ -199,6 +199,7 @@ func (m *Machine) raiseIncident(inc Incident) {
 			slog.Warn("recording the incident failed", "kind", inc.Kind, "error", err)
 		}
 		inc.ID = id
+		m.captureIncident(id, inc.OpenedAt)
 	}
 	_ = m.hw.StopAll()
 	m.incident = &IncidentHold{Incident: inc, Actions: []string{ResolveDone}}
@@ -265,8 +266,11 @@ func (m *Machine) workAroundStuck(ch Channel, box vision.Box) bool {
 		store := st.deps.Records.Store()
 		if id, err := store.OpenIncident(context.Background(), inc); err != nil {
 			slog.Warn("recording the worked-around piece failed", "error", err)
-		} else if err := store.ResolveIncident(context.Background(), id, ResolveWorkedAround, now); err != nil {
-			slog.Warn("recording the worked-around piece failed", "error", err)
+		} else {
+			m.captureIncident(id, now)
+			if err := store.ResolveIncident(context.Background(), id, ResolveWorkedAround, now); err != nil {
+				slog.Warn("recording the worked-around piece failed", "error", err)
+			}
 		}
 	}
 	m.changed = true

@@ -154,6 +154,18 @@ CREATE TABLE IF NOT EXISTS incidents (
 
 CREATE INDEX IF NOT EXISTS idx_incidents_opened ON incidents(opened_at);
 
+-- Every channel at the moment an incident opened: its camera's picture (a file under the
+-- data folder; empty for C1, which has no camera) and its state as JSON (what it was
+-- doing, its summary, what its camera saw). Cleared on their own or with the incident.
+CREATE TABLE IF NOT EXISTS incident_cameras (
+  incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL,
+  path TEXT NOT NULL DEFAULT '',
+  taken_at DATETIME NOT NULL,
+  state TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(state)),
+  PRIMARY KEY (incident_id, channel)
+);
+
 -- When each bin was last emptied; its count is the pieces delivered since.
 CREATE TABLE IF NOT EXISTS bin_empties (
   layer INTEGER NOT NULL,

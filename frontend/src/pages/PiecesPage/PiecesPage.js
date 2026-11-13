@@ -27,11 +27,13 @@ import {
 import { PIECE_STATUS } from '@/helpers/sorterPieces';
 import { cn } from '@/lib/utils';
 
-import ConfirmClear from './components/ConfirmClear';
+import ConfirmClear from '@/components/ConfirmClear/ConfirmClear';
 import PartModal from './components/PartModal';
 import { PartGrid, PartList } from './components/PartViews';
 import { PieceGrid, PieceList } from './components/PieceViews';
-import { PAGE_SIZE, SORTS, formatBytes, usePiecesPageLogic } from './PiecesPage.logic';
+import { formatBytes } from '@/helpers/format';
+
+import { PAGE_SIZE, SORTS, usePiecesPageLogic } from './PiecesPage.logic';
 
 const TABS = ['parts', 'all'];
 const ANY = '__any__';

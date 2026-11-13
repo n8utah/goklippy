@@ -325,6 +325,34 @@ func TestSortStallRaisesAnIncident(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, incs, 1)
 	assert.Equal(t, sorter.ResolveDone, incs[0].Resolution)
+
+	// Every channel's picture and state from when it opened were kept with it.
+	require.Eventually(t, func() bool {
+		incs, err = store.ListIncidents(ctx, 5)
+		return err == nil && len(incs[0].Cameras) == 4
+	}, 5*time.Second, 10*time.Millisecond)
+	for _, cam := range incs[0].Cameras {
+		assert.Equal(t, cam.Channel != sorter.ChannelC1, cam.Image, "%s: a picture, but none for C1", cam.Channel)
+		assert.Equal(t, sorter.StateRunning, cam.State.MachineState)
+		assert.NotEmpty(t, cam.State.Doing, "%s: what it was doing", cam.Channel)
+		if cam.Channel == sorter.ChannelC4 {
+			require.NotNil(t, cam.State.Observation)
+			assert.NotEmpty(t, cam.State.Observation.Pieces, "the stuck piece, as C4 saw it")
+		}
+	}
+	path, err := store.IncidentCameraPath(ctx, incs[0].ID, sorter.ChannelC4)
+	require.NoError(t, err)
+	assert.NotEmpty(t, path)
+	_, err = store.IncidentCameraPath(ctx, incs[0].ID, sorter.ChannelC1)
+	assert.ErrorIs(t, err, sorter.ErrIncidentImageNotFound)
+
+	// Clearing: the incident goes, with its cameras (only one being held is kept).
+	ids, err := store.DeleteIncidentsExcept(ctx, 0)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{incs[0].ID}, ids)
+	incs, err = store.ListIncidents(ctx, 5)
+	require.NoError(t, err)
+	assert.Empty(t, incs)
 }
 
 func TestSortLandingHeldIsFreedByShaking(t *testing.T) {

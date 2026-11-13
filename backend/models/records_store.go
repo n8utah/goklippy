@@ -364,6 +364,9 @@ FROM incidents ORDER BY opened_at DESC, id DESC LIMIT ?`
 		}
 		out = append(out, inc)
 	}
+	if err := s.attachIncidentCameras(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

@@ -30,11 +30,16 @@ func (r *Records) photosDir() string {
 
 // Photos is how many piece photos are kept, and their size.
 func (r *Records) Photos() PhotoUsage {
-	var u PhotoUsage
 	if r.dataDir == "" {
-		return u
+		return PhotoUsage{}
 	}
-	_ = filepath.WalkDir(r.photosDir(), func(_ string, d fs.DirEntry, err error) error {
+	return dirUsage(r.photosDir())
+}
+
+// dirUsage is how many files are under dir, and their size.
+func dirUsage(dir string) PhotoUsage {
+	var u PhotoUsage
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}

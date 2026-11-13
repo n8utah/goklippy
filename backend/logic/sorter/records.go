@@ -146,6 +146,8 @@ type Incident struct {
 	OpenedAt   time.Time  `json:"opened_at"`
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
 	Resolution string     `json:"resolution,omitempty"`
+	// Cameras are every channel's picture and state when it opened (incident_cameras.go).
+	Cameras []IncidentCamera `json:"cameras,omitempty"`
 }
 
 // PieceFilter narrows the pieces list.
