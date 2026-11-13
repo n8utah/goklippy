@@ -318,6 +318,45 @@ func TestSortFinishesOnItsOwnWhenC2RunsDry(t *testing.T) {
 	assert.Equal(t, 2, runs[0].Distributed)
 }
 
+// A piece C3's camera misses (a white one on its rim) is found by C3's sweep while
+// finishing, rides onto C4 and is sorted, not left behind or cleared off.
+func TestFinishingSortsAPieceTheCameraMissed(t *testing.T) {
+	hidden := sorter.SimCatalog[1]
+	hidden.HiddenOn = sorter.ChannelC3
+	m, world, store := startSimSort(t, finishSoon, []sorter.SimPart{hidden}, nil)
+	require.Eventually(t, func() bool { return m.Snapshot().State == sorter.StateReady }, 90*time.Second, 20*time.Millisecond)
+
+	require.Len(t, world.Falls(), 1, "the hidden piece was sorted")
+	assert.NotZero(t, world.Falls()[0].Layer, "into its bin, identified: not swept to the bucket")
+	fin := m.Snapshot().Finish
+	require.NotNil(t, fin)
+	assert.Equal(t, "everything left was sorted", fin.Step)
+	assert.Equal(t, 1, fin.Sorted, "sorted while finishing")
+	pieces, _, err := store.ListPieces(context.Background(), sorter.PieceFilter{})
+	require.NoError(t, err)
+	require.Len(t, pieces, 1)
+	assert.Equal(t, hidden.ID, pieces[0].PartID)
+}
+
+// A piece on C4 it isn't tracking (it bounced into another sector) is brought back to
+// the drop sector while finishing, taken on as a new piece and sorted.
+func TestFinishingSortsAStrayOnC4(t *testing.T) {
+	m, world, store := startSimSort(t, finishSoon, nil, nil)
+	stray := sorter.SimCatalog[2]
+	world.Place(sorter.ChannelC4, stray, 302) // a sector past the drop zone, short of the exit
+	require.Eventually(t, func() bool { return m.Snapshot().State == sorter.StateReady }, 90*time.Second, 20*time.Millisecond)
+
+	require.Len(t, world.Falls(), 1, "the stray was sorted")
+	assert.NotZero(t, world.Falls()[0].Layer, "into its bin, identified")
+	fin := m.Snapshot().Finish
+	require.NotNil(t, fin)
+	assert.Equal(t, "everything left was sorted", fin.Step)
+	pieces, _, err := store.ListPieces(context.Background(), sorter.PieceFilter{})
+	require.NoError(t, err)
+	require.Len(t, pieces, 1)
+	assert.Equal(t, stray.ID, pieces[0].PartID)
+}
+
 // Keep feeding calls finishing off, and the run carries on as usual.
 func TestSortKeepFeedingCallsFinishingOff(t *testing.T) {
 	m, _, _ := startSimSort(t, finishSoon, nil, nil)

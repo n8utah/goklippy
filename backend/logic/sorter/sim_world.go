@@ -57,6 +57,9 @@ type SimPart struct {
 	HeldShakes int
 	// NoFall: on C4 it stops in the exit instead of falling, until C4 is shaken.
 	NoFall bool
+	// HiddenOn: that channel's camera doesn't see it (a white piece on a rim); it
+	// still rides the channel when it turns.
+	HiddenOn Channel
 }
 
 // SimFall is a piece dropping off C4, with where it went.
@@ -169,6 +172,19 @@ func (w *SimWorld) feedBulk() {
 	w.onRotor[ChannelC2] = append(w.onRotor[ChannelC2], newSimPiece(part, ChannelC2))
 }
 
+// Place puts a part on a channel at an angle (image degrees), for tests: a piece the
+// machine didn't see arrive (one that bounced into another sector of C4).
+func (w *SimWorld) Place(ch Channel, part SimPart, angle float64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	p := newSimPiece(part, ch)
+	p.angle = angle
+	w.onRotor[ch] = append(w.onRotor[ch], p)
+	if ch == ChannelC4 {
+		w.landedC4 = append(w.landedC4, part) // the pretend Brickognize knows it
+	}
+}
+
 // shaken frees a little the pieces held on a shaken channel.
 func (w *SimWorld) shaken(ch Channel) {
 	w.mu.Lock()
@@ -197,6 +213,11 @@ func (w *SimWorld) turn(ch Channel, deg float64) {
 		}
 		before := p.angle
 		p.angle += deg
+		if deg < 0 {
+			p.angle = math.Mod(p.angle+360, 360) // turned back: nothing falls
+			stay = append(stay, p)
+			continue
+		}
 		if before < simExitAngle && p.angle >= simExitAngle {
 			if ch == ChannelC4 && p.part.NoFall {
 				p.angle = simExitAngle // hangs in the exit
@@ -247,6 +268,9 @@ func (w *SimWorld) Observation(ch Channel) vision.Observation {
 	w.mu.Lock()
 	var boxes []vision.Box
 	for _, p := range w.onRotor[ch] {
+		if p.part.HiddenOn == ch {
+			continue // its camera misses it
+		}
 		boxes = append(boxes, simBox(p.angle))
 	}
 	boxes, ignored := w.ignores.filter(ch, boxes, simMergeGap, now)
@@ -313,6 +337,9 @@ func (w *SimWorld) frameLocked(ch Channel) (image.Image, time.Time) {
 		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 128, 128, 128, 255
 	}
 	for _, p := range w.onRotor[ch] {
+		if p.part.HiddenOn == ch {
+			continue
+		}
 		b := simBox(p.angle)
 		for y := max(0, b.Y1); y < min(480, b.Y2); y++ {
 			for x := max(0, b.X1); x < min(640, b.X2); x++ {

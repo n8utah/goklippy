@@ -182,6 +182,7 @@ func (m *Machine) stepSorting(now time.Time) {
 		PlatterReady: st.platter.Ready(now),
 		PlatterBusy:  st.platter.Busy(now),
 		Finishing:    st.finish != nil,
+		Sweep:        st.sweeping(),
 	}, settings)
 	if st.feeder.TakeSeveralFell(ChannelC3) {
 		st.platter.ExpectSeveral(now) // the next landing on C4 is a double

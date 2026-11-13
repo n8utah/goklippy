@@ -55,6 +55,19 @@ type FeederInput struct {
 	// Finishing: the run is finishing on its own (machine_finish.go), so C1 doesn't
 	// feed; the rest carry on.
 	Finishing bool
+	// Sweep: finishing is turning this channel round for pieces its camera missed. While
+	// it looks empty it carries on in carry pulses as if it had a piece (C2 only while
+	// C3 can take one, C3 only while C4 can), so a missed piece reaches the exit and
+	// drops onto the next channel like any other.
+	Sweep Channel
+}
+
+// Odometer is how far ch has turned forward under the feeder, ever.
+func (f *Feeder) Odometer(ch Channel) float64 {
+	if c, ok := f.channels[ch]; ok {
+		return c.odometer
+	}
+	return 0
 }
 
 // Feeder decides C1–C3's pulses. It keeps its own timers; feed it every tick.
@@ -301,6 +314,17 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 			continue
 		}
 		lead, ok := step.obs.Leading()
+		if !ok && in.Sweep == step.ch {
+			// Finishing's sweep: turn on as if carrying a piece, but only when whatever
+			// the turn uncovers can go on (the channel ahead taking pieces).
+			if step.ch == ChannelC3 && !in.PlatterReady || step.ch == ChannelC2 && !c3Accepting {
+				set(TimeWaiting, "turning round for pieces its camera missed; waiting: "+step.why())
+				continue
+			}
+			set(TimeMoving, "turning round for pieces its camera missed")
+			carry(step.ch, "sweep", fs.CarryPulseDeg, fs.DropPauseMs)
+			continue
+		}
 		if !ok {
 			set(TimeEmpty, "empty")
 			continue

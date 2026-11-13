@@ -100,6 +100,7 @@ type Platter struct {
 	lastProgress time.Time
 	stallRaised  bool
 	recent       []Piece // last pieces delivered, newest first
+	delivered    int     // pieces off C4 (into a bin or the bucket) since it was made
 	// checkFall: after a drop, a settled frame must show the exit clear by fallBy
 	// (Platter.FallWaitMs after it settled): a piece may still be sliding off.
 	checkFall bool
@@ -252,6 +253,9 @@ func (p *Platter) Aboard() []Piece {
 	}
 	return out
 }
+
+// Delivered counts the pieces C4 has sent off (into a bin or the bucket), ever.
+func (p *Platter) Delivered() int { return p.delivered }
 
 // Recent is the last pieces delivered, newest first.
 func (p *Platter) Recent() []Piece {
@@ -791,6 +795,7 @@ func (p *Platter) finishIndex(now time.Time, ps PlatterSettings) {
 	p.slots[0] = nil
 	p.slots[exit] = nil
 	if fallen != nil {
+		p.delivered++
 		fallen.piece.Status = PieceDistributed
 		fallen.piece.DistributedAt = &now
 		p.deps.Records.SavePiece(fallen.piece)
@@ -850,6 +855,7 @@ func (p *Platter) Sweep(now time.Time) int {
 		p.deps.Records.NoteCatalog(s.piece)
 		p.recent = append([]Piece{s.piece.Clone()}, p.recent...)
 		p.slots[i] = nil
+		p.delivered++
 		n++
 	}
 	if len(p.recent) > recentPieces {

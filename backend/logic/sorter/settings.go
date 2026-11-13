@@ -276,7 +276,8 @@ type FeederSettings struct {
 	// round once for any piece the cameras missed, and it stops (machine_finish.go).
 	// 0 never does.
 	AutoStopSec int `json:"autoStopSec"`
-	// FinishMaxSec: finishing stops the run after this long whatever is left.
+	// FinishMaxSec: finishing stops the run once nothing has happened this long (no
+	// piece sorted, nothing new left, no next step), whatever is left: a stuck piece.
 	FinishMaxSec int `json:"finishMaxSec"`
 	// ShakeBeforePush: shake a stuck piece first, and push only if that fails. Off, it's
 	// pushed straight away (shaking rarely frees one caught on a fixed part).

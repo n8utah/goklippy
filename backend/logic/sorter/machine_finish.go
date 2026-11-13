@@ -4,21 +4,29 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
+
+	"goklippy/backend/logic/vision"
 )
 
 // Finishing a run on its own. When C2 has had no piece for Feeder.AutoStopSec (the
-// hopper has run dry), the run finishes instead of turning an empty C1 for ever:
+// hopper has run dry), the run finishes instead of turning an empty C1 for ever, and
+// every piece still on the machine is sorted, not cleared off:
 //
-//  1. C1 stops feeding; C2, C3 and C4 carry on until every piece they can see is
-//     sorted and they've been empty a moment;
-//  2. C2 and C3 then turn round once together, bringing along any piece their cameras
-//     missed (a white one on a rim); what that turns up is sorted like any other;
-//  3. a piece C4 sees but isn't tracking (one that bounced into another sector) is
-//     turned off into the bucket;
-//  4. the run stops.
+//  1. sort: C1 stops feeding; C2, C3 and C4 carry on until every piece they can see
+//     is sorted;
+//  2. sweep C2, then C3: each turns round once in carry pulses, as the feeder moves
+//     a piece (C2 only while C3 can take one, C3 only while C4 can), so a piece its
+//     camera missed (a white one on a rim) rides to the exit and onto the next channel
+//     like any other, and is sorted;
+//  3. C4's strays: a piece C4 sees but isn't tracking (one that bounced into another
+//     sector) is brought back to the drop sector a sector at a time, where C4 takes it
+//     on as a new piece and sorts it;
+//  4. stop.
 //
-// It gives up and stops after Feeder.FinishMaxSec whatever is left. Keep feeding
+// Between steps everything must have been empty a moment. Finishing stops anyway once
+// nothing has happened for Feeder.FinishMaxSec (a stuck piece). Keep feeding
 // (Machine.KeepFeeding) goes back to sorting as usual, for a refilled hopper.
 
 // FinishStatus is the run finishing on its own, or how it last did (Done).
@@ -28,20 +36,36 @@ type FinishStatus struct {
 	Step   string    `json:"step"`
 	Done   bool      `json:"done,omitempty"`
 	At     time.Time `json:"at,omitzero"` // when it stopped
+	Sorted int       `json:"sorted"`      // pieces sorted while finishing
 }
+
+type finishPhase int
+
+const (
+	finishSort finishPhase = iota
+	finishSweepC2
+	finishSweepC3
+	finishStrays
+)
 
 type finishing struct {
 	FinishStatus
-	sweeps     int
-	clearedC4  bool
+	phase      finishPhase
+	sweepFrom  float64 // the sweeping channel's odometer when its sweep began
+	strayTurns int     // sectors C4 has turned back for strays
 	quietSince time.Time
+	// progressAt: when something last happened (a piece sorted, a step begun, what's
+	// left changed); FinishMaxSec counts from it.
+	progressAt time.Time
+	lastLeft   string
+	lastRecent int
 }
 
 // finishQuiet: everything must look empty this long before the next step.
 const finishQuiet = 2 * time.Second
 
-// finishSweeps: how many times C2 and C3 turn round for pieces their cameras missed.
-const finishSweeps = 1
+// sweepDeg: how far C2 and C3 each turn while sweeping.
+const sweepDeg = 360.0
 
 // checkAutoStop starts finishing once C2 has gone without a piece for AutoStopSec.
 func (m *Machine) checkAutoStop(now time.Time, fs FeederSettings) {
@@ -57,13 +81,31 @@ func (m *Machine) checkAutoStop(now time.Time, fs FeederSettings) {
 	if idle < time.Duration(fs.AutoStopSec)*time.Second {
 		return
 	}
-	st.finish = &finishing{FinishStatus: FinishStatus{
-		Since:  now.UTC(),
-		Reason: fmt.Sprintf("no new pieces on C2 for %s", roundDur(idle)),
-		Step:   "sorting what's left on C2–C4; C1 has stopped feeding",
-	}}
+	st.finish = &finishing{
+		FinishStatus: FinishStatus{
+			Since:  now.UTC(),
+			Reason: fmt.Sprintf("no new pieces on C2 for %s", roundDur(idle)),
+			Step:   "sorting what's left on C2–C4; C1 has stopped feeding",
+		},
+		progressAt: now,
+		lastRecent: st.platter.Delivered(),
+	}
 	m.changed = true
 	slog.Info("finishing the run: C2 has had no pieces", "idle", idle.Round(time.Second))
+}
+
+// sweeping is the channel finishing is turning round now, for the feeder ("" none).
+func (st *sortStations) sweeping() Channel {
+	if st.finish == nil {
+		return ""
+	}
+	switch st.finish.phase {
+	case finishSweepC2:
+		return ChannelC2
+	case finishSweepC3:
+		return ChannelC3
+	}
+	return ""
 }
 
 // stepFinish moves the finishing on, once the stations have had their tick.
@@ -73,18 +115,42 @@ func (m *Machine) stepFinish(now time.Time, settings MachineSettings) {
 	if f == nil || m.job != nil || m.incident != nil {
 		return
 	}
-	if limit := settings.Feeder.FinishMaxSec; limit > 0 && now.Sub(f.Since) >= time.Duration(limit)*time.Second {
-		result := fmt.Sprintf("stopped after %d s of finishing", limit)
-		if left := m.leftOver(now); left != "" {
-			result += ", with " + left
+	left := m.leftOver(now)
+	if delivered := st.platter.Delivered(); delivered != f.lastRecent {
+		f.Sorted += delivered - f.lastRecent
+		f.lastRecent = delivered
+		f.progressAt = now
+	}
+	if left != f.lastLeft {
+		f.lastLeft, f.progressAt = left, now
+	}
+	if limit := settings.Feeder.FinishMaxSec; limit > 0 && now.Sub(f.progressAt) >= time.Duration(limit)*time.Second {
+		result := fmt.Sprintf("stopped: nothing happened for %d s", limit)
+		if left != "" {
+			result += ", with " + left + " left"
 		}
 		m.finishRun(now, result)
 		return
 	}
-	left := m.leftOver(now)
+
+	// Sweeping: until the channel has turned round, with the feeder sorting whatever
+	// it turns up as it goes.
+	if ch := st.sweeping(); ch != "" {
+		turned := st.feeder.Odometer(ch) - f.sweepFrom
+		f.Step = fmt.Sprintf("turning %s round for pieces its camera missed (%.0f° of %.0f°)", upper(ch), min(turned, sweepDeg), sweepDeg)
+		if left != "" {
+			f.Step += "; sorting " + left
+		}
+		if turned < sweepDeg {
+			f.quietSince = time.Time{}
+			return
+		}
+	}
 	if left != "" {
 		f.quietSince = time.Time{}
-		f.Step = "sorting what's left: " + left
+		if st.sweeping() == "" {
+			f.Step = "sorting what's left: " + left
+		}
 		return
 	}
 	if f.quietSince.IsZero() {
@@ -93,16 +159,39 @@ func (m *Machine) stepFinish(now time.Time, settings MachineSettings) {
 	if now.Sub(f.quietSince) < finishQuiet {
 		return
 	}
-	switch {
-	case f.sweeps < finishSweeps:
-		f.sweeps++
-		m.finishSweep(settings)
-	case !f.clearedC4 && len(st.deps.Vision.Observation(ChannelC4).Pieces) > 0:
-		f.clearedC4 = true
-		m.finishClearC4(settings)
-	default:
-		m.finishRun(now, "everything left was sorted")
+	f.quietSince = time.Time{}
+	f.progressAt = now
+	switch f.phase {
+	case finishSort:
+		m.beginSweep(ChannelC2, finishSweepC2)
+	case finishSweepC2:
+		m.beginSweep(ChannelC3, finishSweepC3)
+	case finishSweepC3:
+		f.phase = finishStrays
+		fallthrough
+	case finishStrays:
+		// A stray takes a turn of at most a few sectors to reach the drop sector; allow
+		// a few tries.
+		sectors := max(2, settings.Platter.Sectors)
+		if obs := st.deps.Vision.Observation(ChannelC4); len(obs.Pieces) > 0 && f.strayTurns < 2*sectors {
+			back := strayBackSectors(settings, sectors, obs)
+			f.strayTurns += back
+			m.strayBack(settings, sectors, back)
+			return
+		}
+		result := "everything left was sorted"
+		if len(st.deps.Vision.Observation(ChannelC4).Pieces) > 0 {
+			result = "C4 still sees a piece it couldn't bring round to sort"
+		}
+		m.finishRun(now, result)
 	}
+}
+
+func (m *Machine) beginSweep(ch Channel, phase finishPhase) {
+	f := m.sort.finish
+	f.phase, f.sweepFrom = phase, m.sort.feeder.Odometer(ch)
+	f.Step = fmt.Sprintf("turning %s round for pieces its camera missed", upper(ch))
+	slog.Info("finishing: sweeping a channel", "channel", ch)
 }
 
 // leftOver says what's still to sort ("" when nothing is): pieces seen on C2 or C3,
@@ -113,89 +202,67 @@ func (m *Machine) leftOver(now time.Time) string {
 	for _, ch := range []Channel{ChannelC2, ChannelC3} {
 		obs := st.deps.Vision.Observation(ch)
 		if !obs.Valid {
-			parts = append(parts, "no picture of "+string(ch))
+			parts = append(parts, "no picture of "+upper(ch))
 		} else if n := len(obs.Pieces); n > 0 {
 			parts = append(parts, fmt.Sprintf("%d on %s", n, upper(ch)))
 		}
 	}
 	if n := len(st.platter.Aboard()); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d aboard C4", n))
-	} else if st.platter.Busy(now) {
+	} else if st.platter.Busy(time.Now()) {
 		parts = append(parts, "C4 still turning")
 	}
 	return joinAnd(parts)
 }
 
-// finishSweep turns C2 and C3 round once together, at their carry speed, for pieces
-// their cameras missed.
-func (m *Machine) finishSweep(settings MachineSettings) {
-	st := m.sort
-	st.finish.Step = "turning C2 and C3 round once for any piece the cameras missed"
-	err := m.startJob("Finishing: turn C2 and C3 round once", func(ctx context.Context, report reportFunc) error {
-		report(1, 1, "Turning C2 and C3 round for any piece the cameras missed")
-		var dones []<-chan error
-		for _, ch := range []Channel{ChannelC2, ChannelC3} {
-			done, err := m.hw.RampChannel(ch, 360, carryRpm(settings, ch), settings.Feeder.CarryAccel)
-			if err != nil {
-				return err
-			}
-			dones = append(dones, done)
-		}
-		for _, done := range dones {
-			if err := awaitDone(ctx, done); err != nil {
-				return err
-			}
-		}
-		return waitFor(ctx, time.Duration(settings.Platter.SettleMs)*time.Millisecond)
-	}, func(err error) {
-		if st.finish != nil {
-			st.finish.quietSince = time.Time{}
-			st.finish.Step = "sorting anything the turn brought along"
-		}
-		if err != nil {
-			slog.Warn("finishing: turning C2 and C3 failed", "error", err)
-		}
-	})
-	if err != nil {
-		slog.Warn("finishing: couldn't turn C2 and C3", "error", err)
+// strayBackSectors is how many whole sectors C4 turns back to bring the stray nearest
+// the drop zone into it. C4's camera only sees pieces between the drop zone and the
+// exit, so turning back never carries one past the exit. Whole sectors keep the walls
+// where the platter expects them. Without C4's zones, one at a time.
+func strayBackSectors(settings MachineSettings, sectors int, obs vision.Observation) int {
+	zones, ok := settings.Cameras.Zones[string(ChannelC4)]
+	if !ok || !zones.Valid() {
+		return 1
 	}
+	sector := 360 / float64(sectors)
+	drop := zones.Drop.Start + vision.ForwardDeg(zones.Drop.Start, zones.Drop.End)/2
+	best := 0
+	for _, p := range obs.Pieces {
+		k := int(math.Round(vision.ForwardDeg(drop, p.Angle) / sector))
+		if k >= 1 && k < sectors && (best == 0 || k < best) {
+			best = k
+		}
+	}
+	return max(1, best)
 }
 
-// finishClearC4 turns C4 round once with every layer closed, so a piece it isn't
-// tracking drops into the bucket.
-func (m *Machine) finishClearC4(settings MachineSettings) {
+// strayBack turns C4 back n sectors, so a piece it sees but isn't tracking comes to
+// the drop sector, where C4 takes it on as a newly landed piece and sorts it. Only
+// with nothing aboard: the sectors' pieces aren't followed backwards.
+func (m *Machine) strayBack(settings MachineSettings, sectors, n int) {
 	st := m.sort
-	st.finish.Step = "turning C4 round to drop a piece it isn't tracking into the bucket"
-	err := m.startJob("Finishing: clear C4", func(ctx context.Context, report reportFunc) error {
-		if !settings.Distributor.LeftOut {
-			report(1, 2, "Closing every layer, so it drops into the bucket")
-			if err := m.hw.SelectLayer(-1); err != nil {
-				return err
-			}
-			if err := waitFor(ctx, time.Duration(settings.Distributor.DoorSettleMs)*time.Millisecond); err != nil {
-				return err
-			}
-		}
-		report(2, 2, "Turning C4 round once")
-		done, err := m.hw.MoveChannel(ChannelC4, 360, settings.IndexRpm)
+	st.finish.Step = "turning C4 back to bring a piece it isn't tracking to where pieces land, to sort it"
+	err := m.startJob("Finishing: bring a piece on C4 round to be sorted", func(ctx context.Context, report reportFunc) error {
+		report(1, 1, fmt.Sprintf("Turning C4 back %d sector(s)", n))
+		done, err := m.hw.MoveChannel(ChannelC4, -360*float64(n)/float64(sectors), settings.IndexRpm)
 		if err != nil {
 			return err
 		}
 		if err := awaitDone(ctx, done); err != nil {
 			return err
 		}
-		return waitFor(ctx, time.Duration(settings.Platter.SettleMs)*time.Millisecond)
+		return waitFor(ctx, time.Duration(settings.Platter.SettleMs)*time.Millisecond+recoverySettle)
 	}, func(err error) {
-		st.platter.Sweep(time.Now().UTC())
+		if err != nil {
+			slog.Warn("finishing: turning C4 back failed", "error", err)
+		}
 		if st.finish != nil {
 			st.finish.quietSince = time.Time{}
 		}
-		if err != nil {
-			slog.Warn("finishing: clearing C4 failed", "error", err)
-		}
+		st.platter.progress(time.Now())
 	})
 	if err != nil {
-		slog.Warn("finishing: couldn't clear C4", "error", err)
+		slog.Warn("finishing: couldn't turn C4 back", "error", err)
 	}
 }
 
@@ -213,7 +280,7 @@ func (m *Machine) finishRun(now time.Time, result string) {
 		slog.Warn("finishing: motors did not all stop", "error", err)
 	}
 	m.setState(StateReady, "")
-	slog.Info("run finished on its own", "reason", f.Reason, "result", result)
+	slog.Info("run finished on its own", "reason", f.Reason, "result", result, "sorted_while_finishing", f.Sorted)
 }
 
 // KeepFeeding stops finishing and goes back to sorting as usual (C1 feeding), for a
