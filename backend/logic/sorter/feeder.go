@@ -79,9 +79,11 @@ type feederChannel struct {
 	doing string
 	// odometer: how far the channel has turned forward; watch: its leading piece
 	// against it, to tell a piece the channel can't move (feeder_held.go).
-	odometer float64
-	watch    heldWatch
-	stuck    bool
+	odometer  float64
+	watch     heldWatch
+	landWatch heldWatch // the newest piece where pieces land, when not the lead
+	stuck     bool
+	stuckBox  vision.Box // the piece that made it stuck
 	// One piece in the opening (feeder_held.go): back-offs and shakes made for the
 	// lead with this track id, and the forward half of a shake still owed.
 	exitTriesID int
@@ -122,7 +124,7 @@ func (f *Feeder) Stuck() []Channel {
 // Unstick lets a channel pulse again, after a recovery or the operator freed it.
 func (f *Feeder) Unstick(ch Channel) {
 	if c, ok := f.channels[ch]; ok {
-		c.stuck, c.watch = false, heldWatch{}
+		c.stuck, c.watch, c.landWatch, c.stuckBox = false, heldWatch{}, heldWatch{}, vision.Box{}
 	}
 }
 

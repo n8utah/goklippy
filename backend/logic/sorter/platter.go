@@ -406,7 +406,19 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 	}
 	lead, ok := dropPieceNear(obs, s.box)
 	if !ok {
-		return // not seen in this frame
+		// Not in the drop sector this frame: slid just past its edge, or briefly lost.
+		// Look for it nearby anywhere; failing that, once settleMax has passed take the
+		// photos where it was last seen rather than wait for it forever.
+		lead, ok = pieceNear(obs, s.box, 2*boxSize(s.box))
+		if !ok {
+			if s.state == slotSettling && now.Sub(s.landedAt) >= settleMax {
+				s.state = slotCapturing
+			}
+			if s.state != slotCapturing {
+				return
+			}
+			lead = vision.PieceObs{Box: s.box}
+		}
 	}
 	moved := centerDist(lead.Box, s.box) > stillTol(s.box) || !similarArea(lead.Box.Area(), s.box.Area())
 	s.box = lead.Box
@@ -511,6 +523,18 @@ func dropPieceNear(obs vision.Observation, box vision.Box) (vision.PieceObs, boo
 	found := false
 	for _, o := range dropPieces(obs) {
 		if !found || centerDist(o.Box, box) < centerDist(best.Box, box) {
+			best, found = o, true
+		}
+	}
+	return best, found
+}
+
+// pieceNear is the piece anywhere on C4 nearest box, within max pixels of it.
+func pieceNear(obs vision.Observation, box vision.Box, max float64) (vision.PieceObs, bool) {
+	var best vision.PieceObs
+	found := false
+	for _, o := range obs.Pieces {
+		if d := centerDist(o.Box, box); d <= max && (!found || d < centerDist(best.Box, box)) {
 			best, found = o, true
 		}
 	}

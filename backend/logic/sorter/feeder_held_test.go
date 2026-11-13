@@ -73,6 +73,26 @@ func TestHeldWhereItLandsWaitsForItToSettle(t *testing.T) {
 	assert.Equal(t, []Channel{ChannelC3}, f.Stuck())
 }
 
+// A piece stuck where pieces land, behind a lead that rides on, is found too, and the
+// recovery is told which piece it is.
+func TestHeldWhereItLandsBehindAMovingLead(t *testing.T) {
+	f := NewFeeder()
+	now := time.Now()
+	stuck := vision.PieceObs{Zone: vision.ZoneDrop, ForwardToExit: 200, TrackID: 9, Box: vision.Box{X1: 300, Y1: 20, X2: 340, Y2: 60}}
+	fwd := 120.0
+	c2 := func(at time.Time) vision.Observation {
+		fwd -= 10 // the lead rides
+		return obs(at, vision.PieceObs{Zone: vision.ZoneNone, ForwardToExit: fwd, TrackID: 1}, stuck)
+	}
+	stepEvery(f, &now, 3, c2, empty, true)
+	assert.Empty(t, f.Stuck(), "not long enough yet")
+	stepEvery(f, &now, 3, c2, empty, true)
+	require.Equal(t, []Channel{ChannelC2}, f.Stuck())
+	box, ok := f.StuckBox(ChannelC2)
+	require.True(t, ok)
+	assert.Equal(t, stuck.Box, box, "the one where pieces land, not the lead")
+}
+
 func TestAPieceAtThePictureEdgeIsNotWatched(t *testing.T) {
 	f := NewFeeder()
 	now := time.Now()

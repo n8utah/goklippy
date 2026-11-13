@@ -236,17 +236,18 @@ func (m *Machine) recovery() recoveryRunner {
 	return recoveryRunner{hw: m.hw, vision: m.sort.deps.Vision, settings: m.settings}
 }
 
-// workAroundStuck leaves a stuck piece out of the channel's camera, notes it, and lets
-// the sort carry on (Feeder.WorkAroundStuck). It reports false when it can't: the
-// setting is off, the vision can't ignore a spot, or the piece isn't in view.
-func (m *Machine) workAroundStuck(ch Channel) bool {
+// workAroundStuck leaves a stuck piece (last seen at box) out of the channel's camera,
+// notes it, and lets the sort carry on (Feeder.WorkAroundStuck). It reports false when
+// it can't: the setting is off, the vision can't ignore a spot, or the piece isn't in
+// view.
+func (m *Machine) workAroundStuck(ch Channel, box vision.Box) bool {
 	st := m.sort
 	ign, ok := st.deps.Vision.(SpotIgnorer)
 	if !ok || !m.settings().Feeder.WorkAroundStuck {
 		return false
 	}
 	obs := st.deps.Vision.Observation(ch)
-	lead, ok := obs.Leading()
+	lead, ok := pieceNearIn(obs, box)
 	if !ok || obs.Clump(lead.Box) {
 		return false // a pile isn't worked around: it would swallow every piece landing on it
 	}

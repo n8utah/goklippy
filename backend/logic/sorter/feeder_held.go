@@ -50,13 +50,65 @@ const (
 	heldFreeTurn             // turn the channel below to pull it off the exit
 )
 
-// checkHeld watches ch's leading piece against the channel's travel.
+// checkHeld watches ch's leading piece, and the newest piece where pieces land, against
+// the channel's travel. A piece stuck where pieces land behind the lead (on the rim
+// where the channel above drops them) blocks the channel above for good while the
+// lead rides on, so it's watched too. The piece found stuck is kept (StuckBox) for the
+// recovery to work on.
 func (f *Feeder) checkHeld(ch Channel, c *feederChannel, obs vision.Observation, now time.Time) heldVerdict {
 	lead, ok := obs.Leading()
 	if !ok {
-		c.watch = heldWatch{}
+		c.watch, c.landWatch = heldWatch{}, heldWatch{}
 		return heldNot
 	}
+	v := f.checkLead(ch, c, obs, lead, now)
+	if v == heldStuck {
+		c.stuckBox = lead.Box
+	}
+	if v != heldNot {
+		return v
+	}
+	land, ok := landingPiece(obs)
+	if !ok || atPictureEdge(land.Box, obs.FrameW, obs.FrameH) {
+		c.landWatch = heldWatch{}
+		return heldNot
+	}
+	w := &c.landWatch
+	if w.since.IsZero() || w.id != land.TrackID || math.Abs(land.ForwardToExit-w.gap) >= heldMovedDeg {
+		*w = heldWatch{id: land.TrackID, gap: land.ForwardToExit, odometer: c.odometer, since: now}
+		return heldNot
+	}
+	if c.odometer-w.odometer >= heldAfterDeg && now.Sub(w.since) >= heldLandingFor {
+		c.stuckBox = land.Box
+		return heldStuck
+	}
+	return heldNot
+}
+
+// landingPiece is the newest piece where pieces land (furthest from the exit), when
+// it isn't the leading piece.
+func landingPiece(obs vision.Observation) (vision.PieceObs, bool) {
+	var best vision.PieceObs
+	found := false
+	for _, p := range obs.Pieces[min(1, len(obs.Pieces)):] {
+		if p.Zone == vision.ZoneDrop && (!found || p.ForwardToExit > best.ForwardToExit) {
+			best, found = p, true
+		}
+	}
+	return best, found
+}
+
+// StuckBox is where the piece that made ch stuck was seen, for the recovery.
+func (f *Feeder) StuckBox(ch Channel) (vision.Box, bool) {
+	c, ok := f.channels[ch]
+	if !ok || !c.stuck || c.stuckBox == (vision.Box{}) {
+		return vision.Box{}, false
+	}
+	return c.stuckBox, true
+}
+
+// checkLead watches the leading piece.
+func (f *Feeder) checkLead(ch Channel, c *feederChannel, obs vision.Observation, lead vision.PieceObs, now time.Time) heldVerdict {
 	if atPictureEdge(lead.Box, obs.FrameW, obs.FrameH) {
 		return heldNot
 	}

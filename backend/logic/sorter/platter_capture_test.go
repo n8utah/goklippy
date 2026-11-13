@@ -116,6 +116,23 @@ func TestPlatterStartsOverWhenThePieceIsBumped(t *testing.T) {
 	assert.Equal(t, slotSettling, s.state)
 }
 
+// A landed piece that slides just out of the drop sector is still photographed, at
+// worst where it was last seen once settleMax has passed: C4 never waits for it forever.
+func TestPlatterDoesntWaitForeverForAPieceOutOfTheDropSector(t *testing.T) {
+	p, v := captureTestPlatter(t)
+	now := time.Now()
+	p.settleUntil = now
+	step(p, v, &now, dropAt(100))
+	s := p.slots[0]
+	require.NotNil(t, s)
+	far := vision.PieceObs{Zone: vision.ZoneNone, Box: vision.Box{X1: 500, Y1: 400, X2: 540, Y2: 440}}
+	for range 25 { // 2.5 s with it nowhere near
+		step(p, v, &now, far)
+	}
+	assert.NotEqual(t, slotSettling, s.state, "photographed anyway after settleMax")
+	assert.NotEmpty(t, s.shots)
+}
+
 func TestPlatterCallsASecondPieceInTheDropSectorADouble(t *testing.T) {
 	p, v := captureTestPlatter(t)
 	now := time.Now()

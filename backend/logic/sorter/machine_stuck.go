@@ -75,7 +75,15 @@ func (m *Machine) recoverLanding(ch Channel) {
 	settings := m.settings()
 	obs := st.deps.Vision.Observation(ch)
 	lead, seen := obs.Leading()
-	box, area := lead.Box, pieceArea(obs, lead.Box)
+	box := lead.Box
+	if b, ok := st.feeder.StuckBox(ch); ok {
+		// The piece the feeder found stuck: the lead, or one stuck where pieces land
+		// behind it.
+		if p, ok := pieceNearIn(obs, b); ok {
+			box, seen = p.Box, true
+		}
+	}
+	area := pieceArea(obs, box)
 	// Too big to be one piece: a pile of them, jammed. It's cleared off the end (no
 	// bump: more pieces are the last thing it needs), and never worked around.
 	pile := seen && obs.Clump(box)
@@ -131,7 +139,7 @@ func (m *Machine) recoverLanding(ch Channel) {
 			})
 			return
 		}
-		if m.workAroundStuck(ch) {
+		if m.workAroundStuck(ch, box) {
 			return
 		}
 		m.raiseIncident(Incident{
@@ -186,6 +194,19 @@ func (m *Machine) pushPast(ctx context.Context, ch Channel, settings MachineSett
 	}
 	// Look again once the channels have stopped and the camera has a still frame.
 	return waitFor(ctx, time.Duration(settings.Platter.SettleMs)*time.Millisecond+recoverySettle)
+}
+
+// pieceNearIn is the piece in obs nearest box (within twice its size): where the stuck
+// piece is now.
+func pieceNearIn(obs vision.Observation, box vision.Box) (vision.PieceObs, bool) {
+	var best vision.PieceObs
+	found := false
+	for _, p := range obs.Pieces {
+		if d := centerDist(p.Box, box); d <= 2*boxSize(box) && (!found || d < centerDist(best.Box, box)) {
+			best, found = p, true
+		}
+	}
+	return best, found
 }
 
 // anyClump reports a pile still on the channel.
