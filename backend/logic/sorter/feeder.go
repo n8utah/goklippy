@@ -84,6 +84,13 @@ type feederChannel struct {
 	landWatch heldWatch // the newest piece where pieces land, when not the lead
 	stuck     bool
 	stuckBox  vision.Box // the piece that made it stuck
+	// Its landing area: occupied since when, and the channel's travel then. Still
+	// occupied after it has turned well under it, the piece isn't riding: it hangs off
+	// the channel above, which may then nudge to drop it (hanging).
+	dropSince time.Time
+	dropOdo   float64
+	dropID    int
+	dropGap   float64
 	// One piece in the opening (feeder_held.go): back-offs and shakes made for the
 	// lead with this track id, and the forward half of a shake still owed.
 	exitTriesID int
@@ -207,13 +214,15 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 	if in.C2.Valid && len(in.C2.Pieces) > 0 {
 		f.c2SeenAt = in.Now
 	}
+	c2Hanging := f.noteLanding(ChannelC2, in.C2, in.Now)
+	c3Hanging := f.noteLanding(ChannelC3, in.C3, in.Now)
 
 	// Back-pressure, downstream first: C3 waits on the platter, C2 on C3, C1 on C2.
 	// The short hold after a fall is pacing, not a hold-up, so it doesn't count.
 	c3BackedUp := f.noteWaiting(ChannelC3, in.C3, in.PlatterReady, in.Now, fs)
 	// C3 can take pieces: seen lately, its drop zone clear, not backed up. (Mid-move
 	// or holding after a fall it's busy, not held up.)
-	c3Accepting := in.C3.Valid && in.Now.Sub(in.C3.At) <= stale(fs) && !in.C3.InDrop && !c3BackedUp &&
+	c3Accepting := in.C3.Valid && in.Now.Sub(in.C3.At) <= stale(fs) && (!in.C3.InDrop || c3Hanging) && !c3BackedUp &&
 		!full(fs, ChannelC3, in.C3)
 	c2BackedUp := f.noteWaiting(ChannelC2, in.C2, c3Accepting, in.Now, fs)
 
@@ -328,6 +337,10 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		}
 	case !in.C2.Valid || in.Now.Sub(in.C2.At) > stale(fs):
 		set1(TimeEmpty, "no picture of C2 to go on")
+	case in.C2.InDrop && c2Hanging && !c2BackedUp && !full(fs, ChannelC2, in.C2):
+		// C2 turned under it and it stayed: it hangs off C1, so nudge C1 to drop it.
+		add(ChannelC1, "bulk", fs.BulkPulseDeg, fs.BulkPauseMs)
+		set1(TimeMoving, "a piece hangs off C1 into C2: nudging C1 to drop it")
 	case in.C2.InDrop:
 		set1(TimeWaiting, "waiting: a piece is landing on C2")
 	case c2BackedUp:
@@ -343,6 +356,38 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		set1(TimeMoving, "feeding C2")
 	}
 	return moves
+}
+
+// hangingAfter: a landing area still occupied this long, while its channel turned
+// hangingAfterDeg under it, holds a piece that isn't riding: it hangs off the channel
+// above, and only that one moving will drop it.
+const (
+	hangingAfter    = 3 * time.Second
+	hangingAfterDeg = 20.0
+)
+
+// noteLanding follows ch's landing area and reports a piece hanging into it from the
+// channel above.
+func (f *Feeder) noteLanding(ch Channel, obs vision.Observation, now time.Time) bool {
+	c := f.channels[ch]
+	// The newest piece where pieces land: one in a stream of pieces each riding off
+	// replaces the last, so only the same piece, staying put, counts.
+	var p vision.PieceObs
+	found := false
+	for _, q := range obs.Pieces {
+		if q.Zone == vision.ZoneDrop && (!found || q.ForwardToExit > p.ForwardToExit) {
+			p, found = q, true
+		}
+	}
+	if !obs.Valid || !found {
+		c.dropSince = time.Time{}
+		return false
+	}
+	if c.dropSince.IsZero() || p.TrackID != c.dropID || math.Abs(p.ForwardToExit-c.dropGap) >= heldMovedDeg {
+		c.dropSince, c.dropOdo, c.dropID, c.dropGap = now, c.odometer, p.TrackID, p.ForwardToExit
+		return false
+	}
+	return now.Sub(c.dropSince) >= hangingAfter && c.odometer-c.dropOdo >= hangingAfterDeg
 }
 
 // Doing is what ch is doing now, in a few words ("carrying a piece to the exit",

@@ -93,6 +93,31 @@ func TestHeldWhereItLandsBehindAMovingLead(t *testing.T) {
 	assert.Equal(t, stuck.Box, box, "the one where pieces land, not the lead")
 }
 
+// A piece hanging off C1 into C2's landing area (cut off at the picture's edge, so not
+// watched as held) stays put while C2 turns under it: C1 nudges to drop it, instead of
+// both waiting on each other forever.
+func TestC1NudgesAPieceHangingIntoC2(t *testing.T) {
+	f := NewFeeder()
+	now := time.Now()
+	hanging := vision.PieceObs{Zone: vision.ZoneDrop, ForwardToExit: 230, TrackID: 13, Box: vision.Box{X1: 300, Y1: 0, X2: 340, Y2: 60}}
+	fwd := 120.0
+	c2 := func(at time.Time) vision.Observation {
+		fwd -= 10 // C2 carries its lead on, turning under the hanging piece
+		o := obs(at, vision.PieceObs{Zone: vision.ZoneNone, ForwardToExit: fwd, TrackID: 1}, hanging)
+		o.FrameW, o.FrameH = 640, 480
+		return o
+	}
+	var c1 []FeederMove
+	for _, moves := range stepEvery(f, &now, 6, c2, empty, true) {
+		if mv, ok := movesByChannel(moves)[ChannelC1]; ok {
+			c1 = append(c1, mv)
+		}
+	}
+	require.NotEmpty(t, c1, "C1 nudged")
+	assert.Contains(t, f.Doing(ChannelC1), "hangs off C1")
+	assert.Empty(t, f.Stuck(), "cut off at the edge: not taken for stuck")
+}
+
 func TestAPieceAtThePictureEdgeIsNotWatched(t *testing.T) {
 	f := NewFeeder()
 	now := time.Now()
