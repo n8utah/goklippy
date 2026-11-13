@@ -12,7 +12,20 @@ Each piece of work is one Markdown file, and the folder it sits in is its status
 Bigger reference docs (PRDs, specs, hardware notes) stay in `docs/` and `docs/prds/`;
 an item links to them rather than copying them.
 
-## Working with items
+## Skills
+
+Claude Code has project skills for the board (`.claude/skills/`). Type them, or just ask in plain words:
+
+| Skill         | Does                                                                 |
+| ------------- | -------------------------------------------------------------------- |
+| `/tasks`      | Lists doing, to do (by priority) and recently done; or one item's status. |
+| `/task-add`   | Writes a new item into `todo/`.                                      |
+| `/task-start` | Moves an item to `doing/` and writes its plan; waits for approval before coding. |
+| `/task-done`  | Checks the done-when boxes, dates the item and moves it to `done/`; also drops items. |
+
+None of them commit; commit board changes when you want to.
+
+## Working with items by hand
 
 - **Add:** copy the template below into `todo/<short-name>.md` (kebab-case, e.g. `todo/servo-sweep-routine.md`).
 - **Start:** `git mv docs/work/todo/<item>.md docs/work/doing/`, then fill in the plan.
