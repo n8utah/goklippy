@@ -12,8 +12,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-import { useCollectionsList } from './CollectionsPage.logic';
+import { useCollectionsList, useSharing } from './CollectionsPage.logic';
 import CollectionDetail from './components/CollectionDetail';
+import SharingPanel from './components/SharingPanel';
 
 const when = (t) => (t ? new Date(t).toLocaleString() : '—');
 
@@ -30,6 +31,7 @@ const CollectionsPage = () => {
 
 function CollectionsList() {
   const logic = useCollectionsList();
+  const sharing = useSharing();
   const navigate = useNavigate();
   const open = (id) => navigate(`/run/collections/${id}`);
 
@@ -49,6 +51,8 @@ function CollectionsList() {
           onPicked={logic.reload}
         />
       </section>
+
+      <SharingPanel sharing={sharing} />
 
       {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
 
@@ -84,6 +88,7 @@ function CollectionsList() {
                     </button>{' '}
                     {c.current && <Badge variant="running">Current</Badge>}
                     {c.archived_at && <Badge variant="idle">Archived</Badge>}
+                    {c.shared && <Badge variant="secondary">Shared</Badge>}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
                     {c.profile_name || <span className="text-muted-foreground">No profile</span>}

@@ -331,6 +331,21 @@ export function updateSorterCollection(id, changes) {
   return patchJSON(`/api/v1/sorter/collections/${id}`, changes);
 }
 
+/** Sharing to the sort viewer site: { url, key_set, waiting, connected, last_error, last_sent }. */
+export function getSorterSharing() {
+  return getJSON('/api/v1/sorter/sharing');
+}
+
+/** An empty apiKey keeps the saved key. */
+export function putSorterSharing(url, apiKey) {
+  return putJSON('/api/v1/sorter/sharing', { url, api_key: apiKey });
+}
+
+/** Checks the site answers and takes the key. */
+export function testSorterSharing() {
+  return postJSON('/api/v1/sorter/sharing/test', {});
+}
+
 /** Makes it the collection the next run sorts into; another one starts the bins afresh. */
 export function selectSorterCollection(id) {
   return postJSON(`/api/v1/sorter/collections/${id}/select`, {});

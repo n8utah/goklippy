@@ -4,14 +4,79 @@ import { toast } from 'sonner';
 import {
   clearSorterCollectionUnknowns,
   getSorterCollectionPlan,
+  getSorterSharing,
   listSorterCollections,
   listSorterPieces,
   listSorterRuns,
+  putSorterSharing,
+  testSorterSharing,
   updateSorterCollection,
 } from '../../helpers/api';
 import { useSorterState } from '../../helpers/sorterState';
 
 const UNKNOWNS_SHOWN = 60;
+const SHARING_POLL_MS = 5000;
+
+/**
+ * Sharing to the sort viewer site: where it sends, and how it's going (polled, since
+ * sending runs on its own). `siteHost` is the site's name for labels ("lego.n8p.xyz").
+ */
+export function useSharing() {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(
+    () =>
+      getSorterSharing().then(
+        (s) => setStatus(s),
+        () => {},
+      ),
+    [],
+  );
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, SHARING_POLL_MS);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  let siteHost = '';
+  try {
+    siteHost = status?.url ? new URL(status.url).host : '';
+  } catch {
+    siteHost = '';
+  }
+
+  return {
+    status,
+    busy,
+    siteHost,
+    ready: Boolean(status?.url && status?.key_set),
+    save: async (url, apiKey) => {
+      setBusy(true);
+      try {
+        setStatus(await putSorterSharing(url, apiKey));
+        toast.success('Saved');
+        return true;
+      } catch (err) {
+        toast.error(err.message);
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    test: async () => {
+      setBusy(true);
+      try {
+        await testSorterSharing();
+        toast.success(`${siteHost || 'The site'} answers and takes the key`);
+      } catch (err) {
+        toast.error(err.message);
+      } finally {
+        setBusy(false);
+        load();
+      }
+    },
+  };
+}
 
 /** Run › Collections: every collection with its totals. */
 export function useCollectionsList() {
@@ -115,6 +180,12 @@ export function useCollectionDetail(id) {
       act(
         () => updateSorterCollection(id, { archived }),
         () => (archived ? 'Archived' : 'Unarchived'),
+      ),
+    /** Shares it to the sort viewer site (sending everything in it so far), or stops. */
+    setShared: (shared) =>
+      act(
+        () => updateSorterCollection(id, { shared }),
+        () => (shared ? 'Shared: sending what’s sorted so far' : 'No longer shared'),
       ),
     /** bins: "emptied" or "continue" for the current collection; undefined otherwise. */
     changeProfile: (profileId, bins) =>

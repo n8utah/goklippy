@@ -2,6 +2,7 @@ import {
   Archive,
   ArchiveRestore,
   ChevronLeft,
+  ExternalLink,
   Pencil,
   SlidersHorizontal,
   Trash2,
@@ -15,6 +16,7 @@ import PieceCard from '@/components/PieceCard/PieceCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -24,8 +26,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-import { useCollectionDetail } from '../CollectionsPage.logic';
+import { useCollectionDetail, useSharing } from '../CollectionsPage.logic';
 import ChangeProfileDialog from './ChangeProfileDialog';
+import { SharingStatus } from './SharingPanel';
 
 const when = (t) => (t ? new Date(t).toLocaleString() : '—');
 
@@ -161,6 +164,7 @@ function PlanSection({ plan, canChange, onChange }) {
 /** One collection (/run/collections/<id>). */
 export default function CollectionDetail({ id }) {
   const logic = useCollectionDetail(id);
+  const sharing = useSharing();
   const journey = useJourneyModal();
   const navigate = useNavigate();
   const [changing, setChanging] = useState(false);
@@ -205,6 +209,51 @@ export default function CollectionDetail({ id }) {
                 {col.archived_at ? 'Unarchive' : 'Archive'}
               </Button>
             </div>
+          </section>
+
+          <section className="flex flex-col gap-2 rounded-xl border border-border bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-center gap-3">
+              <Switch
+                checked={col.shared}
+                disabled={logic.busy || (!col.shared && !sharing.ready)}
+                onCheckedChange={logic.setShared}
+              />
+              <span>
+                <span className="block font-medium">
+                  Share to {sharing.siteHost || 'the sort viewer site'}
+                </span>
+                <span className="block text-sm text-muted-foreground">
+                  {!sharing.ready && !col.shared ? (
+                    <>
+                      Set up sharing on{' '}
+                      <Link to="/run/collections" className="text-primary-text hover:underline">
+                        Run › Collections
+                      </Link>{' '}
+                      first.
+                    </>
+                  ) : col.shared ? (
+                    'Sent as it sorts, so its owner can watch. Viewers are given it on the site.'
+                  ) : (
+                    'Turning it on sends everything sorted into it so far, then keeps up.'
+                  )}
+                </span>
+              </span>
+            </label>
+            {col.shared && (
+              <div className="flex flex-col gap-1 text-sm sm:items-end">
+                <SharingStatus status={sharing.status} />
+                {sharing.status?.url && (
+                  <a
+                    href={`${sharing.status.url}/c/${col.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 font-medium text-primary-text hover:underline"
+                  >
+                    Open on {sharing.siteHost} <ExternalLink className="size-3.5" />
+                  </a>
+                )}
+              </div>
+            )}
           </section>
 
           <section aria-label="Totals" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
