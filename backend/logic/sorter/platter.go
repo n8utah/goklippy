@@ -201,6 +201,47 @@ func (p *Platter) TimeState(now time.Time) string {
 	}
 }
 
+// Doing is what C4 is doing now in a few words, for the status on Run › Sort.
+func (p *Platter) Doing(now time.Time) string {
+	if p.indexDone != nil {
+		return "turning to the next sector"
+	}
+	if p.checkFall && now.Before(p.fallBy) {
+		return "watching a piece fall off"
+	}
+	if p.aimDone != nil {
+		return "waiting for the chute to aim"
+	}
+	if s := p.slots[0]; s != nil {
+		switch s.state {
+		case slotSettling:
+			return "a piece landed: waiting for it to lie still"
+		case slotCapturing:
+			return "photographing a piece"
+		}
+	}
+	identifying, aboard := 0, 0
+	for _, s := range p.slots {
+		if s == nil {
+			continue
+		}
+		aboard++
+		if s.state == slotIdentifying {
+			identifying++
+		}
+	}
+	switch {
+	case identifying > 0:
+		return "asking Brickognize what it is"
+	case aboard == 0:
+		return "empty: waiting for C3 to drop a piece"
+	}
+	if s := p.slots[p.exitIndex(p.deps.Settings())-1]; s != nil && s.routed {
+		return "about to drop a piece"
+	}
+	return "waiting for the next piece"
+}
+
 // Aboard lists the pieces on the platter, nearest the exit first.
 func (p *Platter) Aboard() []Piece {
 	var out []Piece

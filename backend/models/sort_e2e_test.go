@@ -370,6 +370,12 @@ func TestSortWorksAroundAStuckPiece(t *testing.T) {
 	require.NotNil(t, m.Snapshot().LastJob)
 	assert.Contains(t, m.Snapshot().LastJob.Name, "push a stuck piece past", "pushed straight away, no shaking first")
 
+	// Each channel says what it's doing while the run is on.
+	doing := m.Snapshot().Doing
+	for _, ch := range []sorter.Channel{sorter.ChannelC1, sorter.ChannelC2, sorter.ChannelC3, sorter.ChannelC4} {
+		assert.NotEmpty(t, doing[ch], "%s says what it's doing", ch)
+	}
+
 	// Where the time went: the push shows as stuck time, and the channels moved.
 	spent := m.Snapshot().TimeMs
 	assert.Positive(t, spent[sorter.ChannelC3][sorter.TimeStuck])

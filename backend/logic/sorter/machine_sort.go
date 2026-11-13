@@ -6,6 +6,7 @@ import (
 	"image"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 
 	"goklippy/backend/logic/vision"
@@ -458,6 +459,7 @@ func (m *Machine) sortSnapshot(snap *Snapshot) {
 	if st.spent != nil {
 		snap.TimeMs = st.spent.snapshot()
 	}
+	snap.Doing = m.channelsDoing(time.Now())
 	snap.Aboard = append(snap.Aboard, st.platter.Aboard()...)
 	snap.Recent = append(snap.Recent, st.platter.Recent()...)
 	now := time.Now()
@@ -470,6 +472,40 @@ func (m *Machine) sortSnapshot(snap *Snapshot) {
 		}
 		snap.Channels[ch] = sum
 	}
+}
+
+// channelsDoing says what each channel is doing, while a run is on: a stop or a
+// recovery first (the recovering channel says which step; the others that they wait
+// for it), else the feeder's and the platter's own words.
+func (m *Machine) channelsDoing(now time.Time) map[Channel]string {
+	st := m.sort
+	if st == nil || (m.state != StateRunning && m.state != StatePaused) {
+		return nil
+	}
+	out := make(map[Channel]string, len(timeChannels))
+	for _, ch := range timeChannels {
+		switch {
+		case m.incident != nil:
+			out[ch] = "stopped: " + m.incident.Title
+		case m.job != nil && ch == m.recovering:
+			what := m.job.status.Name
+			if d := m.job.status.Detail; d != "" {
+				what += ": " + d
+			}
+			out[ch] = what
+		case m.job != nil && m.recovering != "":
+			out[ch] = fmt.Sprintf("paused while %s is recovered", strings.ToUpper(string(m.recovering)))
+		case m.job != nil:
+			out[ch] = "paused: " + m.job.status.Name
+		case m.state == StatePaused:
+			out[ch] = "paused"
+		case ch == ChannelC4:
+			out[ch] = st.platter.Doing(now)
+		default:
+			out[ch] = st.feeder.Doing(ch)
+		}
+	}
+	return out
 }
 
 // NoVision is the vision source when no cameras are set up: every channel reports

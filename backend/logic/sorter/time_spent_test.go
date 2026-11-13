@@ -44,6 +44,10 @@ func TestFeederSaysWhatEachChannelIsDoing(t *testing.T) {
 	assert.Equal(t, TimeWaiting, f.State(ChannelC1), "C2's drop zone is busy")
 	assert.Equal(t, TimeMoving, f.State(ChannelC2), "carrying its piece on")
 	assert.Equal(t, TimeWaiting, f.State(ChannelC3), "the platter can't take it")
+	// And in words, with why.
+	assert.Equal(t, "waiting: a piece is landing on C2", f.Doing(ChannelC1))
+	assert.Equal(t, "carrying a piece to the exit", f.Doing(ChannelC2))
+	assert.Equal(t, "a piece is at the exit; waiting: C4 can't take a piece yet", f.Doing(ChannelC3))
 
 	f.Step(FeederInput{Now: now.Add(10 * time.Millisecond), C2: obs(now), C3: obs(now, piece(vision.ZonePrecise, 4))}, s)
 	assert.Equal(t, TimeMoving, f.State(ChannelC2), "mid-pulse")

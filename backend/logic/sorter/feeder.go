@@ -73,8 +73,10 @@ type feederChannel struct {
 	falls       int
 	// severalFell: the last exit pulse sent more than one piece off at once.
 	severalFell bool
-	// state: what it was doing at the last Step, for the time spent (time_spent.go).
+	// state: what it was doing at the last Step, for the time spent (time_spent.go);
+	// doing: the same in a few words, with why (Doing).
 	state string
+	doing string
 	// odometer: how far the channel has turned forward; watch: its leading piece
 	// against it, to tell a piece the channel can't move (feeder_held.go).
 	odometer float64
@@ -216,38 +218,58 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 	// C3 into the platter, then C2 into C3.
 	c3Ready := c3Accepting && f.fresh(in.C3, ChannelC3, in.Now, fs) &&
 		!in.Now.Before(f.channels[ChannelC3].holdUntil)
+	// Why the channel ahead can't take a piece, for the status line.
+	c3Why := func() string {
+		switch {
+		case !in.C3.Valid || in.Now.Sub(in.C3.At) > stale(fs):
+			return "no picture of C3"
+		case in.C3.InDrop:
+			return "a piece is landing on C3"
+		case full(fs, ChannelC3, in.C3):
+			return "C3 is full"
+		case c3BackedUp:
+			return "C3 is backed up"
+		}
+		return "C3 is busy"
+	}
 	for _, step := range []struct {
 		ch         Channel
 		obs        vision.Observation
 		downstream bool // its exit may push now
 		accepting  bool // the channel ahead is taking pieces: carry further
+		why        func() string
 	}{
-		{ChannelC3, in.C3, in.PlatterReady, !c3BackedUp},
-		{ChannelC2, in.C2, c3Ready, c3Accepting},
+		{ChannelC3, in.C3, in.PlatterReady, !c3BackedUp, func() string { return "C4 can't take a piece yet" }},
+		{ChannelC2, in.C2, c3Ready, c3Accepting, c3Why},
 	} {
 		c := f.channels[step.ch]
+		set := func(state, doing string) { c.state, c.doing = state, doing }
 		switch {
 		case c.stuck:
-			c.state = TimeStuck
+			set(TimeStuck, "stuck: a piece won't ride")
 			continue
 		case !f.fresh(step.obs, step.ch, in.Now, fs):
 			// Mid-move, or waiting for a picture taken after it: moving. No picture
 			// at all: nothing to go on.
-			c.state = TimeEmpty
 			if step.obs.Valid && (in.Now.Before(c.busyUntil) || step.obs.At.Before(c.busyUntil)) {
-				c.state = TimeMoving
+				if c.state != TimeMoving {
+					set(TimeMoving, "moving")
+				}
+			} else {
+				set(TimeEmpty, "no picture from its camera")
 			}
 			continue
 		}
 		f.noteFall(c, step.obs, in.Now, fs)
 		switch f.checkHeld(step.ch, c, step.obs, in.Now) {
 		case heldStuck:
-			c.stuck, c.state = true, TimeStuck
+			c.stuck = true
+			set(TimeStuck, "stuck: its channel turns but the piece doesn't")
 			continue
 		case heldFreeTurn:
 			// C2's lead hangs onto C3: turn C3 a little to pull it off, unless that
 			// would push C3's own lead onto a platter that can't take it.
-			c.state = TimeBusy
+			set(TimeBusy, "a piece hangs on the exit: turning C3 to pull it off")
 			c3Lead, c3Has := in.C3.Leading()
 			c3AtExit := c3Has && (c3Lead.Zone == vision.ZonePrecise || c3Lead.Zone == vision.ZoneExit)
 			if !in.Now.Before(f.channels[ChannelC3].busyUntil) && (!c3AtExit || in.PlatterReady) {
@@ -259,18 +281,17 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		}
 		lead, ok := step.obs.Leading()
 		if !ok {
-			c.state = TimeEmpty
+			set(TimeEmpty, "empty")
 			continue
 		}
 		if lead.Zone == vision.ZonePrecise || lead.Zone == vision.ZoneExit {
 			switch {
 			case in.Now.Before(c.holdUntil):
-				c.state = TimeBusy // pacing after a fall
+				set(TimeBusy, "a piece just dropped: letting it land")
 			case step.downstream:
-				f.exitMove(step.ch, c, step.obs, lead, fs, add)
-				c.state = TimeMoving
+				set(TimeMoving, f.exitMove(step.ch, c, step.obs, lead, fs, add))
 			default:
-				c.state = TimeWaiting
+				set(TimeWaiting, "a piece is at the exit; waiting: "+step.why())
 			}
 			continue
 		}
@@ -283,7 +304,7 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		if step.ch == ChannelC3 && in.PlatterBusy && fs.C3BusyStandoffDeg > 0 {
 			clearance -= fs.C3BusyStandoffDeg
 			if clearance <= 0 {
-				c.state = TimeWaiting // as close as it may come for now
+				set(TimeWaiting, "holding short of the exit while C4 is busy")
 				continue
 			}
 		}
@@ -291,28 +312,44 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		if step.accepting {
 			reach = max(reach, fs.CarryPulseDeg)
 		}
-		c.state = TimeMoving
+		set(TimeMoving, "carrying a piece to the exit")
 		carry(step.ch, "drop", math.Max(math.Min(reach, clearance), fs.ExitPulseDeg), fs.DropPauseMs)
 	}
 
 	// C1, blind: feed while C2's drop zone is clear and C2 isn't backed up.
 	c1 := f.channels[ChannelC1]
+	set1 := func(state, doing string) { c1.state, c1.doing = state, doing }
 	switch {
 	case in.Now.Before(c1.busyUntil):
-		c1.state = TimeMoving
+		if c1.state != TimeMoving {
+			set1(TimeMoving, "feeding C2")
+		}
 	case !in.C2.Valid || in.Now.Sub(in.C2.At) > stale(fs):
-		c1.state = TimeEmpty // no picture of C2 to go on
-	case in.C2.InDrop || c2BackedUp || full(fs, ChannelC2, in.C2):
-		c1.state = TimeWaiting
+		set1(TimeEmpty, "no picture of C2 to go on")
+	case in.C2.InDrop:
+		set1(TimeWaiting, "waiting: a piece is landing on C2")
+	case c2BackedUp:
+		set1(TimeWaiting, "waiting: C2 is backed up")
+	case full(fs, ChannelC2, in.C2):
+		set1(TimeWaiting, "waiting: C2 is full")
 	case fs.StarveMs > 0 && in.Now.Sub(f.c2SeenAt) >= time.Duration(fs.StarveMs)*time.Millisecond:
 		// C2 has had nothing for a while: bigger, faster nudges until it does.
 		carry(ChannelC1, "bulk", max(fs.BulkPulseDeg, fs.StarveBulkDeg), fs.BulkPauseMs/2)
-		c1.state = TimeMoving
+		set1(TimeMoving, "feeding C2 harder: it has been empty")
 	default:
 		add(ChannelC1, "bulk", fs.BulkPulseDeg, fs.BulkPauseMs)
-		c1.state = TimeMoving
+		set1(TimeMoving, "feeding C2")
 	}
 	return moves
+}
+
+// Doing is what ch is doing now, in a few words ("carrying a piece to the exit",
+// "a piece is at the exit; waiting: C3 is full"), for the status on Run › Sort.
+func (f *Feeder) Doing(ch Channel) string {
+	if c, ok := f.channels[ch]; ok {
+		return c.doing
+	}
+	return ""
 }
 
 // full reports ch holding Feeder.MaxPieces pieces, or pieces covering Feeder.MaxCover
@@ -369,9 +406,10 @@ func (f *Feeder) noteFall(c *feederChannel, obs vision.Observation, now time.Tim
 }
 
 // exitMove is the exit's next move for a lead in the opening: the forward half of a
-// shake still owed, or exitStep's push, back-off or shake (feeder_held.go).
+// shake still owed, or exitStep's push, back-off or shake (feeder_held.go). It says
+// which, for the status line.
 func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, lead vision.PieceObs,
-	fs FeederSettings, add func(Channel, string, float64, int)) {
+	fs FeederSettings, add func(Channel, string, float64, int)) string {
 	push := func(deg float64) {
 		c.atExit, c.leadForward, c.exitPending = atExitCount(obs), lead.ForwardToExit, true
 		add(ch, "exit", deg, fs.ExitPauseMs)
@@ -380,7 +418,7 @@ func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, 
 		deg := c.shakeOwed
 		c.shakeOwed = 0
 		push(deg)
-		return
+		return "shaking the piece at the exit loose (forward)"
 	}
 	if c.exitTriesID != lead.TrackID {
 		c.exitTriesID, c.exitTries = lead.TrackID, 0
@@ -395,13 +433,18 @@ func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, 
 	case exitStepBack:
 		c.exitTries++
 		add(ch, "back", -st.deg, fs.ExitPauseMs)
+		return "backing off: the next piece is too close behind"
 	case exitStepShake:
 		c.exitTries++
 		c.shakeOwed = st.deg
 		add(ch, "back", -st.deg, 0)
-	default:
-		push(st.deg)
+		return "shaking the piece at the exit loose (back)"
 	}
+	push(st.deg)
+	if lead.ForwardToExit > 0 {
+		return "bringing a piece up to the exit"
+	}
+	return "pushing a piece off the exit"
 }
 
 // TakeSeveralFell reports, once, that ch's last exit pulse sent more than one piece

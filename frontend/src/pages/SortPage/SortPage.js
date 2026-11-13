@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { CAMERA_CHANNELS, useSortPageLogic } from './SortPage.logic';
 import CameraTile from './components/CameraTile';
 import ChannelControls from './components/ChannelControls';
+import ChannelsNow from './components/ChannelsNow';
 import TimeSpent from './components/TimeSpent';
 
 /** What the machine is doing, in a sentence, for the top of the page. */
@@ -157,6 +158,8 @@ const SortPage = () => {
           }
         />
       </section>
+
+      <ChannelsNow doing={state?.doing} />
 
       {/* Cameras. */}
       <section aria-label="Cameras" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

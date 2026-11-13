@@ -56,6 +56,9 @@ type Snapshot struct {
 	// TimeMs: the current (or last) run's time per channel per state, in ms
 	// (time_spent.go): where the time goes.
 	TimeMs map[Channel]map[string]int64 `json:"time_ms,omitempty"`
+	// Doing is what each channel (C1–C4) is doing right now, in a few words with why,
+	// while a run is on.
+	Doing map[Channel]string `json:"doing,omitempty"`
 }
 
 // JobStatus is a task the machine runs off the loop: homing, aiming, sending to a bin.
