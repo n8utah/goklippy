@@ -29,7 +29,7 @@ what's happening.
 - [ ] Shared collections push run and piece updates, with the piece's last C4 photo and the
       official part picture, while sorting.
 - [ ] Turning sharing on for a collection sends everything already sorted into it.
-- [ ] Plan changes and review corrections are synced to the site.
+- [ ] Plan changes, review corrections and cleared unknowns are synced to the site.
 - [ ] Sorting carries on at full speed with the site down, and catches up after.
 - [ ] Sorter shows sharing status (connected, queued count, last error).
 

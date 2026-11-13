@@ -19,6 +19,8 @@ Right now every piece goes into one shared pile of records, so there's no way to
 - A collection has a sorting plan (the profile's bins and which categories go in each), so we
   can say what groups it will come back in. The plan can change partway through; the
   collection always shows its current plan, and a change is synced to the viewer site.
+- Unknowns can be cleared from a collection. The unknown bin usually gets fed back through for
+  another try; clearing its unknowns first means the re-run doesn't count them twice.
 - Existing pieces and runs are test data and get cleared out, so nothing exists without a
   collection.
 
@@ -28,6 +30,7 @@ Right now every piece goes into one shared pile of records, so there's no way to
       mid-run (stop and start a new run instead).
 - [ ] Each piece records its collection; existing test pieces, runs and photos are cleared.
 - [ ] Pieces page filters by collection; counts and unknowns show per collection.
+- [ ] A collection's unknowns can be cleared before re-running the unknown bin.
 - [ ] A collection shows its current sorting plan (bins and their categories), and the plan
       can be changed partway through.
 
