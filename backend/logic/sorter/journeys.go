@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"goklippy/backend/logic/vision"
@@ -154,6 +155,9 @@ type JourneyRecorder struct {
 	dir      string
 	settings func() MachineSettings
 
+	// paused: no sort is running, so no new journeys are started (SetRecording).
+	paused atomic.Bool
+
 	mu     sync.Mutex
 	open   map[trackKey]*journeyState
 	recent []*Journey            // finished, oldest first
@@ -200,6 +204,10 @@ func NewJourneyRecorder(dir string, settings func() MachineSettings) *JourneyRec
 	return r
 }
 
+// SetRecording starts or stops following pieces; the machine records only while a sort
+// runs. A new recorder records (for tests and tools that drive it directly).
+func (r *JourneyRecorder) SetRecording(on bool) { r.paused.Store(!on) }
+
 // save is a picture to write once the lock is released.
 type save struct {
 	path string
@@ -213,6 +221,11 @@ type save struct {
 func (r *JourneyRecorder) Observe(ch Channel, img image.Image, z vision.ChannelZones, obs vision.Observation) {
 	if !obs.Valid || img == nil {
 		return
+	}
+	if r.paused.Load() {
+		// Not sorting: nothing new is followed (a piece left on a channel overnight
+		// would start journey after journey), and the open ones finish as they time out.
+		obs.Pieces = nil
 	}
 	ps := r.settings().Pictures.withDefaults()
 	now := obs.At
@@ -793,18 +806,26 @@ func (r *JourneyRecorder) File(id, name string) (string, error) {
 
 // load reads the saved journeys, oldest first.
 func (r *JourneyRecorder) load() {
-	paths, _ := filepath.Glob(filepath.Join(r.dir, "*", "journey.json"))
-	for _, path := range paths {
-		raw, err := os.ReadFile(path)
-		if err != nil {
+	entries, _ := os.ReadDir(r.dir)
+	for _, e := range entries {
+		if !e.IsDir() {
 			continue
 		}
+		dir := filepath.Join(r.dir, e.Name())
+		raw, err := os.ReadFile(filepath.Join(dir, "journey.json"))
 		var j Journey
-		if json.Unmarshal(raw, &j) == nil && j.ID != "" {
-			r.recent = append(r.recent, &j)
+		if err != nil || json.Unmarshal(raw, &j) != nil || j.ID == "" {
+			// A journey still open when the backend stopped never got its journey.json:
+			// its pictures can't be shown, so they go rather than pile up.
+			_ = os.RemoveAll(dir)
+			continue
 		}
+		r.recent = append(r.recent, &j)
 	}
 	sort.Slice(r.recent, func(a, b int) bool { return r.recent[a].Started.Before(r.recent[b].Started) })
+	for _, id := range r.prune(r.settings().Pictures.withDefaults().KeepJourneys) {
+		_ = os.RemoveAll(filepath.Join(r.dir, id))
+	}
 }
 
 // moveJourneyFiles moves a journey's pictures into the journey it turned out to carry

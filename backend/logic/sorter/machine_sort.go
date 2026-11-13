@@ -60,6 +60,7 @@ func (m *Machine) AttachSorting(deps SortDeps) {
 		OnDidntFall: m.onDidntFall,
 	})
 	if deps.Journeys != nil {
+		deps.Journeys.SetRecording(m.state == StateRunning) // standby: not yet
 		st.platter.deps.Upstream = deps.Journeys.UpstreamCrops
 		st.platter.deps.OnLanded = func(pieceID string, at time.Time) {
 			if id := deps.Journeys.NotePiece(pieceID, at); id != "" {

@@ -756,6 +756,11 @@ func (m *Machine) setState(next State, errMsg string) {
 	m.err = errMsg
 	m.since = time.Now().UTC()
 	m.changed = true
+	// Pieces' pictures are recorded only while sorting: left on overnight, the cameras
+	// would follow a piece left on a channel over and over.
+	if m.sort != nil && m.sort.deps.Journeys != nil {
+		m.sort.deps.Journeys.SetRecording(next == StateRunning)
+	}
 }
 
 func (m *Machine) snapshot() Snapshot {
