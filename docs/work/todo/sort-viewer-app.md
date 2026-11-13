@@ -20,7 +20,8 @@ A separate web app on our own server (not part of the bench sorter):
   - **Pieces:** browse and search what's been found, with pictures.
   - **Sorting plan:** the groups their collection is being sorted into (each bin and its
     categories) and what's landed in each so far, i.e. what they'll be handed back.
-- Admin (Nate): collections, who can see which, API keys.
+- Viewers can only look; there's nothing for them to change.
+- Admin (Nate): collections, who can see which, API keys, and clearing out old photos by hand.
 
 ## Done when
 - [ ] Deployed on Harbor Keeper; sign-in through Gangway works.
@@ -28,6 +29,7 @@ A separate web app on our own server (not part of the bench sorter):
 - [ ] Viewers see only collections they've been given.
 - [ ] Live view updates while the sorter runs.
 - [ ] Counts, unknowns, pieces with photos and the sorting plan are viewable per collection.
+- [ ] Admin can clear a collection's photos (or the whole collection) by hand.
 
 ## Plan
 Filled in when the item is claimed: approach, files touched, open questions.
@@ -38,5 +40,4 @@ Filled in when the item is claimed: approach, files touched, open questions.
   Deploy section), and the `percy-hosted-app` / `fav-newproj` setups.
 - Open: does the code live in this repo (e.g. a `viewer/` folder) or its own repo? It's a
   separate app, so its own repo is likely, with this item tracking it.
-- Open: can viewers do anything beyond watching (flag a piece, ask for a part)? Assumed no.
-- Open: how long are photos kept on the server?
+- 2026-11-13, Nate: viewers only look. Photos stay until cleared by hand from the admin.
