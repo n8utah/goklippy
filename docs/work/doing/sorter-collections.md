@@ -2,6 +2,8 @@
 
 Priority: medium
 Added: 2026-11-13 by Nate
+Owner: Nate + Claude
+Started: 2026-11-13
 
 ## Why
 We sort LEGO for other people (first up: a friend's collection) and hand it back sorted.
@@ -35,7 +37,63 @@ Right now every piece goes into one shared pile of records, so there's no way to
       can be changed partway through.
 
 ## Plan
-Filled in when the item is claimed: approach, files touched, open questions.
+
+**Data** (`database/schema.sql`, applied with `mage atlasPush` after the clear-out below)
+- New `collections (id, name UNIQUE, archived_at NULL, created_at)`.
+- `sort_runs.collection_id INTEGER NOT NULL REFERENCES collections(id)`. Pieces stay linked to
+  their run, so a piece's collection is its run's; no column on `pieces`.
+- `bin_categories` gains `collection_id` in its key: `(collection_id, profile_id, layer, bin,
+  category_id)`. Bins fill up as categories arrive, so today a second collection sorted with
+  the same profile would inherit the first one's bin layout. Keying by collection gives each
+  collection its own layout (its sorting plan), and switching profile partway through keeps
+  each profile's layout for that collection.
+- A collection's **current plan** = the profile of its latest run + that collection/profile's
+  `bin_categories`.
+- **Unknown** = a piece in the collection with no part (`part_id = ''`): unidentified, ID
+  failed, or lost before identification.
+
+**Clearing the test data** (one-off, on the sorter's `private/goklippy.db`, after a backup):
+delete runs, pieces, piece photos (files too), reviews, catalog counts, bin assignments and
+bin empties. Incidents are kept. Done by hand once, not shipped as code.
+
+**Backend**
+- `models/collections_store.go`: create, rename, archive/unarchive, list with counts
+  (runs, pieces, identified, unknowns), get one, clear unknowns (deletes those pieces, their
+  reviews, and returns photo paths so logic removes the files).
+- `models/records_store.go`: `StartRun` takes the collection; `ListRuns` returns it;
+  `PieceFilter` and catalog filters gain `CollectionID` (join through `sort_runs`); `Stats`,
+  `KitPieces` take an optional collection.
+- `models/sorting_store.go`: `BinCategories`/`ReplaceBinCategories`/`SetBinCategories` take the
+  collection as well as the profile.
+- `logic/sorter`: Start needs a collection id (`ErrNoCollection` without one, archived ones
+  refused); the running run's collection is kept on the sort state and loaded with its own bin
+  layout; the snapshot carries `collection {id, name}`. Clearing a collection's unknowns is
+  refused while that collection is being sorted.
+- `routes/sorter_collection_routes.go`: `GET/POST /sorter/collections`,
+  `GET/PATCH /sorter/collections/:id` (rename, archive), `GET /sorter/collections/:id/plan`,
+  `POST /sorter/collections/:id/clear-unknowns`. `POST /sorter/commands` takes
+  `collection_id` with `start`. `?collection=` on pieces, runs, catalog and stats.
+
+**Frontend**
+- New `CollectionsPage`: list (name, runs, pieces, unknowns, last sorted), create, rename,
+  archive; a collection's detail shows counts, unknowns (with photos, and Clear unknowns), and
+  its current plan (each bin and its categories, with how many pieces landed there).
+- `SortPage`: a collection picker beside Start (remembers the last one; Start disabled until
+  one is picked); the running collection's name shown while sorting, picker locked.
+- `PiecesPage`: collection filter on both tabs, alongside run (runs list limited to that
+  collection); exports name the collection.
+- `RecordsPage` runs list and `BinsPage` show / follow the collection.
+
+**Tests**: models tests for collections, filtering, unknown clearing and per-collection bin
+layouts; sorter tests that Start needs a collection and loads its layout; update
+`sort_e2e_test.go`. Then try it on the bench with the simulator: two collections, a profile
+switch, clear unknowns.
+
+**Questions for Nate**
+- Per-collection bin layouts (above): right? The alternative is one layout per profile shared
+  by every collection, which only works if bins are reset between collections.
+- Bins page counts "since emptied" stay machine-wide (they describe what's physically in the
+  bins). OK?
 
 ## Notes
 - Needed before [sort-sharing-push](sort-sharing-push.md) and [sort-viewer-app](sort-viewer-app.md).
