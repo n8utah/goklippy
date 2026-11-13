@@ -89,11 +89,12 @@ layouts; sorter tests that Start needs a collection and loads its layout; update
 `sort_e2e_test.go`. Then try it on the bench with the simulator: two collections, a profile
 switch, clear unknowns.
 
-**Questions for Nate**
-- Per-collection bin layouts (above): right? The alternative is one layout per profile shared
-  by every collection, which only works if bins are reset between collections.
-- Bins page counts "since emptied" stay machine-wide (they describe what's physically in the
-  bins). OK?
+**Switching collections** (Nate, 2026-11-13): starting a run for a different collection than
+the last run's means the bins were emptied and we start over; nothing is added to bins left
+from another collection. So on Start, when the collection differs from the previous run's:
+every bin is marked emptied (`bin_empties`), and the collection's bin layout for that profile
+is cleared, so it builds a fresh one. Consecutive runs of the same collection carry on with
+its layout. Bins page counts stay machine-wide (they describe what's physically in the bins).
 
 ## Notes
 - Needed before [sort-sharing-push](sort-sharing-push.md) and [sort-viewer-app](sort-viewer-app.md).
