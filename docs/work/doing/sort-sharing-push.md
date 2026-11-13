@@ -2,6 +2,8 @@
 
 Priority: medium
 Added: 2026-11-13 by Nate
+Owner: Nate + Claude
+Started: 2026-11-13
 
 ## Why
 The collection's owner wants to watch their LEGO being sorted from home. The sorter runs on
