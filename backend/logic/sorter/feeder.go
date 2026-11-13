@@ -192,9 +192,10 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		moves = append(moves, FeederMove{Channel: ch, Degrees: deg, Rpm: rpm, Accel: accel, Kind: kind})
 	}
 	// add moves at the channel's own speed (exit pulses, careful); carry at its carry
-	// speed with a ramp (taking pieces along).
+	// speed (taking pieces along). Both ramp up and down: a sudden start makes pieces
+	// slide and bounce on the rotor instead of riding it.
 	add := func(ch Channel, kind string, deg float64, pauseMs int) {
-		move(ch, kind, deg, pauseMs, settings.FeederRpm[string(ch)], 0)
+		move(ch, kind, deg, pauseMs, settings.FeederRpm[string(ch)], fs.ExitAccel)
 	}
 	carry := func(ch Channel, kind string, deg float64, pauseMs int) {
 		move(ch, kind, deg, pauseMs, carryRpm(settings, ch), fs.CarryAccel)

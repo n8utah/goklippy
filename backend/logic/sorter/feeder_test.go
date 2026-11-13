@@ -10,8 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// feederSettings are the defaults with the exit pinned as these tests were written
+// for: halfway approach, no ramp on careful moves, both exits keeping the next piece
+// back. TestFeederDefaultsAreSmooth checks the shipped defaults.
 func feederSettings() MachineSettings {
 	s := DefaultMachineSettings()
+	s.Feeder.ExitApproach, s.Feeder.ExitAccel = 0.5, 0
+	s.Feeder.ExitClearDeg = map[string]float64{"c2": 2, "c3": 2}
 	s.Cameras.Zones = map[string]vision.ChannelZones{
 		"c2": {PreciseWidth: 15},
 		"c3": {PreciseWidth: 15},
@@ -124,6 +129,21 @@ func TestFeederExitPulseClosesTheGapThenNudges(t *testing.T) {
 	f := NewFeeder()
 	moves := movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now), C3: obs(now, piece(vision.ZonePrecise, 12)), PlatterReady: true}, feederSettings()))
 	assert.InDelta(t, 6, moves[ChannelC3].Degrees, 1e-9)
+}
+
+// Every move ramps (a sudden start makes pieces slide rather than ride), a piece is
+// brought nearly to the exit in one move, and C3 doesn't jerk to part pieces.
+func TestFeederDefaultsAreSmooth(t *testing.T) {
+	s := DefaultMachineSettings()
+	s.Cameras.Zones = feederSettings().Cameras.Zones
+	now := time.Now()
+	moves := movesByChannel(NewFeeder().Step(FeederInput{Now: now, C2: obs(now), C3: obs(now, piece(vision.ZonePrecise, 10)), PlatterReady: true}, s))
+	exit := moves[ChannelC3]
+	assert.Equal(t, "exit", exit.Kind)
+	assert.InDelta(t, 9, exit.Degrees, 1e-9, "90% of the way in one move")
+	assert.Positive(t, exit.Accel, "ramped")
+	assert.Positive(t, moves[ChannelC1].Accel, "C1's nudge too")
+	assert.Zero(t, s.Feeder.ExitClearDeg["c3"])
 }
 
 func TestFeederHoldsAfterAFall(t *testing.T) {

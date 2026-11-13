@@ -214,6 +214,10 @@ type FeederSettings struct {
 	// ExitApproach: short of the exit zone, an exit pulse covers this share of the way
 	// there (at least ExitPulseDeg); 0 nudges ExitPulseDeg all the way.
 	ExitApproach float64 `json:"exitApproach"`
+	// ExitAccel: exit pulses, C1's nudges and back-offs ramp up and down at this many
+	// rpm per second (0 starts them at full speed): smooth moves carry pieces, jerky
+	// ones make them slide.
+	ExitAccel float64 `json:"exitAccel"`
 	// ExitClearDeg: while a channel's lead is in its exit, the next piece is kept this
 	// far short of the opening, so two don't drop together (feeder_held.go); keyed
 	// "c2", "c3"; 0 off.
@@ -433,8 +437,10 @@ func DefaultMachineSettings() MachineSettings {
 		// Sorter V2's defaults ("Conservative" exit pulses).
 		Feeder: FeederSettings{
 			DropPulseDeg: 30, DropPauseMs: 100,
-			ExitPulseDeg: 2, ExitPauseMs: 100, ExitApproach: 0.5,
-			ExitClearDeg:      map[string]float64{"c2": 2, "c3": 2},
+			ExitPulseDeg: 2, ExitPauseMs: 100, ExitApproach: 0.9, ExitAccel: 30,
+			// Off for C3, as Sorter V2: on the machine its shakes and back-offs couldn't
+			// part two pieces riding together, only jerk them.
+			ExitClearDeg:      map[string]float64{"c2": 2, "c3": 0},
 			C3BusyStandoffDeg: 6,
 			HoldAfterFallMs:   800,
 			MinMoveDeg:        0.1, MaxMoveDeg: 120,

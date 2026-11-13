@@ -115,6 +115,16 @@ export const SETTING_SECTIONS = [
         keywords: 'standoff stand off c3 c4 busy lip',
       },
       {
+        key: 'feeder.exitAccel',
+        label: 'Exit speed-up',
+        unit: 'rpm/s',
+        step: 5,
+        min: 0,
+        max: 200,
+        help: 'Exit pulses, C1’s nudges and back-offs ramp up and down this quickly. Smooth moves carry pieces along; sudden starts make them slide and bounce. 0 starts at full speed.',
+        keywords: 'exit ramp accel smooth jerk jitter',
+      },
+      {
         key: 'feeder.exitApproach',
         label: 'Exit approach',
         step: 0.05,
