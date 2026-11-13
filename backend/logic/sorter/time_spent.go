@@ -24,6 +24,10 @@ const maxTickGap = time.Second
 type timeSpent struct {
 	last time.Time
 	ms   map[Channel]map[string]int64
+	// mark is the time spent as of the last piece seen on C2 (markActive). When the
+	// run finishes because C2 has had none for a while, the time since is turning an
+	// empty hopper, not sorting, and is dropped (rewind).
+	mark map[Channel]map[string]int64
 }
 
 func newTimeSpent() *timeSpent {
@@ -54,6 +58,32 @@ func (t *timeSpent) addAll(state string, dt time.Duration) {
 	for _, ch := range timeChannels {
 		t.add(ch, state, dt)
 	}
+}
+
+// markActive notes the time spent so far as sorting: C2 has a piece now.
+func (t *timeSpent) markActive() { t.mark = t.snapshot() }
+
+// rewind drops the time spent since the last mark (none at all if C2 never had a
+// piece), and returns how much, per channel at most.
+func (t *timeSpent) rewind() time.Duration {
+	var dropped int64
+	for ch, states := range t.ms {
+		var now, then int64
+		for k, v := range states {
+			now += v
+			then += t.mark[ch][k]
+		}
+		dropped = max(dropped, now-then)
+	}
+	t.ms = make(map[Channel]map[string]int64, len(t.mark))
+	for ch, states := range t.mark {
+		cp := make(map[string]int64, len(states))
+		for k, v := range states {
+			cp[k] = v
+		}
+		t.ms[ch] = cp
+	}
+	return time.Duration(dropped) * time.Millisecond
 }
 
 // snapshot is a copy for the dashboard.

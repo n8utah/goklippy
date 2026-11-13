@@ -135,6 +135,9 @@ type Run struct {
 	EndedAt     *time.Time `json:"ended_at,omitempty"`
 	Pieces      int        `json:"pieces"`
 	Distributed int        `json:"distributed"`
+	// LastPieceAt is when its last piece was sorted: where its sorting really ended,
+	// whatever ran on after (an empty hopper turning until it was stopped).
+	LastPieceAt *time.Time `json:"last_piece_at,omitempty"`
 }
 
 type Incident struct {

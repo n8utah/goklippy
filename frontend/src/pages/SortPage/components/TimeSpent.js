@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatDuration } from '@/helpers/sorterRuns';
 import { cn } from '@/lib/utils';
 
 /** The states, in the series order their colours follow (backend time_spent.go). */
@@ -48,7 +49,7 @@ function busiest(timeMs) {
  * next channel, empty and stuck, with the shares written out under it. The busiest
  * channel is named as the likely bottleneck.
  */
-export default function TimeSpent({ timeMs, current }) {
+export default function TimeSpent({ timeMs, current, idleDroppedMs }) {
   if (!timeMs || !Object.keys(timeMs).length) return null;
   const top = busiest(timeMs);
 
@@ -60,6 +61,8 @@ export default function TimeSpent({ timeMs, current }) {
         </h3>
         <span className="text-sm text-muted-foreground">
           {current ? 'This run' : 'Last run'}
+          {idleDroppedMs >= 1000 &&
+            ` · leaves out ${formatDuration(idleDroppedMs)} of C1 turning an empty hopper`}
           {top &&
             ` · busiest: ${top.ch.toUpperCase()} (${Math.round(top.share * 100)}% moving or busy)`}
         </span>

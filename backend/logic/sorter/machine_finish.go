@@ -37,6 +37,8 @@ type FinishStatus struct {
 	Done   bool      `json:"done,omitempty"`
 	At     time.Time `json:"at,omitzero"` // when it stopped
 	Sorted int       `json:"sorted"`      // pieces sorted while finishing
+	// IdleDroppedMs: the empty-hopper time left out of the time spent.
+	IdleDroppedMs int64 `json:"idle_dropped_ms"`
 }
 
 type finishPhase int
@@ -89,6 +91,11 @@ func (m *Machine) checkAutoStop(now time.Time, fs FeederSettings) {
 		},
 		progressAt: now,
 		lastRecent: st.platter.Delivered(),
+	}
+	// The time since C2's last piece was C1 turning an empty hopper: not sorting, so
+	// it's taken out of where the run's time went.
+	if st.spent != nil {
+		st.finish.IdleDroppedMs = st.spent.rewind().Milliseconds()
 	}
 	m.changed = true
 	slog.Info("finishing the run: C2 has had no pieces", "idle", idle.Round(time.Second))

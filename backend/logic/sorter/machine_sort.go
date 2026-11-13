@@ -197,6 +197,9 @@ func (m *Machine) stepSorting(now time.Time) {
 			st.spent.add(ch, st.feeder.State(ch), dt)
 		}
 		st.spent.add(ChannelC4, st.platter.TimeState(now), dt)
+		if st.finish == nil && !st.feeder.C2SeenAt().Before(now) {
+			st.spent.markActive() // C2 has a piece: sorting, as of now
+		}
 	}
 	m.stepFinish(now, settings)
 }

@@ -316,6 +316,13 @@ func TestSortFinishesOnItsOwnWhenC2RunsDry(t *testing.T) {
 	require.Len(t, runs, 1)
 	assert.NotNil(t, runs[0].EndedAt, "the run was ended")
 	assert.Equal(t, 2, runs[0].Distributed)
+
+	// Its sorting ended with its last piece, before the idle wait and the sweeps.
+	require.NotNil(t, runs[0].LastPieceAt)
+	assert.True(t, runs[0].LastPieceAt.Before(*runs[0].EndedAt))
+	assert.True(t, runs[0].LastPieceAt.After(runs[0].StartedAt))
+	// The empty-hopper wait was taken out of where the time went.
+	assert.GreaterOrEqual(t, fin.IdleDroppedMs, int64(1500), "about AutoStopSec (2 s) of C1 turning empty")
 }
 
 // A piece C3's camera misses (a white one on its rim) is found by C3's sweep while

@@ -49,7 +49,9 @@ func (s *RecordsStore) ListRuns(ctx context.Context, limit int) ([]sorter.Run, e
 	const query = `
 SELECT r.id, r.profile_id, r.profile_name, r.started_at, r.ended_at,
   (SELECT COUNT(*) FROM pieces p WHERE p.run_id = r.id) AS pieces,
-  (SELECT COUNT(*) FROM pieces p WHERE p.run_id = r.id AND p.status = 'distributed') AS distributed
+  (SELECT COUNT(*) FROM pieces p WHERE p.run_id = r.id AND p.status = 'distributed') AS distributed,
+  (SELECT p.distributed_at FROM pieces p WHERE p.run_id = r.id AND p.distributed_at IS NOT NULL
+   ORDER BY p.distributed_at DESC LIMIT 1) AS last_piece_at
 FROM sort_runs r
 ORDER BY r.started_at DESC, r.id DESC
 LIMIT ?
@@ -62,6 +64,7 @@ LIMIT ?
 		EndedAt     sql.NullTime  `db:"ended_at"`
 		Pieces      int           `db:"pieces"`
 		Distributed int           `db:"distributed"`
+		LastPieceAt any           `db:"last_piece_at"` // a subquery's column: time or text
 	}
 	if err := s.db.SelectContext(ctx, &rows, query, clampLimit(limit)); err != nil {
 		return nil, err
@@ -69,6 +72,9 @@ LIMIT ?
 	out := make([]sorter.Run, 0, len(rows))
 	for _, r := range rows {
 		run := sorter.Run{ID: r.ID, ProfileName: r.ProfileName, StartedAt: r.StartedAt, Pieces: r.Pieces, Distributed: r.Distributed}
+		if t, ok := timeOf(r.LastPieceAt); ok {
+			run.LastPieceAt = &t
+		}
 		if r.ProfileID.Valid {
 			id := r.ProfileID.Int64
 			run.ProfileID = &id
@@ -391,6 +397,35 @@ func (s *RecordsStore) Stats(ctx context.Context) (sorter.Stats, error) {
 		return stats, err
 	}
 	return stats, nil
+}
+
+// timeOf reads a DATETIME a subquery returned: the driver gives a time when it knows
+// the column's type, else the stored text.
+func timeOf(v any) (time.Time, bool) {
+	switch t := v.(type) {
+	case time.Time:
+		return t, true
+	case string:
+		return parseStoredTime(t)
+	case []byte:
+		return parseStoredTime(string(t))
+	}
+	return time.Time{}, false
+}
+
+func parseStoredTime(s string) (time.Time, bool) {
+	for _, layout := range []string{
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05.999999999 -0700 MST",
+		time.RFC3339Nano,
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02T15:04:05.999999999",
+	} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
 
 func clampLimit(limit int) int {

@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useJourneyModal } from '@/components/JourneyModal/JourneyModal.logic';
 import PieceCard from '@/components/PieceCard/PieceCard';
 import { Button } from '@/components/ui/button';
+import { formatDuration } from '@/helpers/sorterRuns';
 
 import { CAMERA_CHANNELS, useSortPageLogic } from './SortPage.logic';
 import CameraFullscreen from './components/CameraFullscreen';
@@ -178,7 +179,11 @@ const SortPage = () => {
         <Stat
           label="Per minute"
           value={run ? numbers.perMinute.toFixed(1) : '—'}
-          detail={numbers.current ? 'Since the run started' : 'Over the last run'}
+          detail={
+            run
+              ? `Over ${formatDuration(numbers.sortingMs)} of sorting${run.ended_at || !numbers.current ? ', to the last piece' : ''}`
+              : 'No runs yet'
+          }
         />
         <Stat
           label="Bins full"
@@ -216,6 +221,7 @@ const SortPage = () => {
       <TimeSpent
         timeMs={state?.time_ms}
         current={state?.state === 'running' || state?.state === 'paused'}
+        idleDroppedMs={state?.finish?.idle_dropped_ms}
       />
 
       {/* On C4 now. */}

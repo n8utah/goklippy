@@ -14,6 +14,7 @@ import {
   shakeSorterChannel,
   sorterCommand,
 } from '../../helpers/api';
+import { perMinute, sortingMs } from '../../helpers/sorterRuns';
 import { useMachineSettings } from '../../helpers/sorterSettings';
 import { useSorterState } from '../../helpers/sorterState';
 
@@ -25,8 +26,9 @@ export const CAMERA_CHANNELS = [
   { id: 'c4', label: 'C4', name: 'Classification' },
 ];
 
-/** The run's numbers and the bins, refreshed every few seconds. */
-function useRunNumbers(runId) {
+/** The run's numbers and the bins, refreshed every few seconds. finishing: the run is
+ * finishing on its own now, so its sorting ended with its last piece. */
+function useRunNumbers(runId, finishing) {
   const [runs, setRuns] = useState([]);
   const [bins, setBins] = useState(null);
 
@@ -51,20 +53,17 @@ function useRunNumbers(runId) {
 
   // This run while sorting, else the last one.
   const run = (runId && runs.find((r) => r.id === runId)) || runs[0] || null;
-  const minutes = run
-    ? Math.max(
-        1 / 60,
-        ((run.ended_at ? new Date(run.ended_at) : new Date()) - new Date(run.started_at)) / 60000,
-      )
-    : 0;
+  const current = Boolean(runId && run?.id === runId);
   const allBins = (bins?.layers ?? [])
     .filter((l) => !l.disabled)
     .flatMap((l) => l.sections.filter((s) => !s.disabled).flatMap((s) => s.bins));
 
   return {
     run,
-    current: Boolean(runId && run?.id === runId),
-    perMinute: run ? run.distributed / minutes : 0,
+    current,
+    perMinute: perMinute(run, current && finishing),
+    /** How long it really sorted (to its last piece once done or finishing). */
+    sortingMs: sortingMs(run, current && finishing),
     binsFull: allBins.filter((b) => b.full).length,
     binsTotal: allBins.length,
     profile: bins?.profile ?? null,
@@ -100,7 +99,7 @@ export function useSortPageLogic() {
   const [busy, setBusy] = useState(false);
   const [shakes, setShakes] = useState([]);
   const [fullscreen, setFullscreen] = useState(null); // the camera channel shown full screen
-  const numbers = useRunNumbers(state?.run_id || 0);
+  const numbers = useRunNumbers(state?.run_id || 0, Boolean(state?.finish && !state.finish.done));
 
   useEffect(() => {
     let cancelled = false;

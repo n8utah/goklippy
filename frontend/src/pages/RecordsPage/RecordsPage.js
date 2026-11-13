@@ -10,6 +10,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+import { formatDuration, perMinute, sortingMs } from '@/helpers/sorterRuns';
+
 import { useRecordsPageLogic } from './RecordsPage.logic';
 
 const when = (t) => (t ? new Date(t).toLocaleString() : '—');
@@ -58,7 +60,9 @@ const RecordsPage = () => {
                 <TableHead className="hidden sm:table-cell">Started</TableHead>
                 <TableHead className="hidden md:table-cell">Ended</TableHead>
                 <TableHead className="text-right">Pieces</TableHead>
-                <TableHead className="pr-5 text-right">Sorted</TableHead>
+                <TableHead className="text-right">Sorted</TableHead>
+                <TableHead className="hidden text-right lg:table-cell">Sorting time</TableHead>
+                <TableHead className="pr-5 text-right">Per min</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -75,7 +79,16 @@ const RecordsPage = () => {
                     {r.ended_at ? when(r.ended_at) : <Badge variant="running">Running</Badge>}
                   </TableCell>
                   <TableCell className="text-right font-mono">{r.pieces}</TableCell>
-                  <TableCell className="pr-5 text-right font-mono">{r.distributed}</TableCell>
+                  <TableCell className="text-right font-mono">{r.distributed}</TableCell>
+                  <TableCell
+                    className="hidden text-right font-mono lg:table-cell"
+                    title="From the start to its last piece sorted"
+                  >
+                    {r.last_piece_at ? formatDuration(sortingMs(r)) : '—'}
+                  </TableCell>
+                  <TableCell className="pr-5 text-right font-mono">
+                    {r.distributed ? perMinute(r).toFixed(1) : '—'}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

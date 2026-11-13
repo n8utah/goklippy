@@ -52,3 +52,25 @@ func TestFeederSaysWhatEachChannelIsDoing(t *testing.T) {
 	f.Step(FeederInput{Now: now.Add(10 * time.Millisecond), C2: obs(now), C3: obs(now, piece(vision.ZonePrecise, 4))}, s)
 	assert.Equal(t, TimeMoving, f.State(ChannelC2), "mid-pulse")
 }
+
+// Rewinding drops the time since the last mark (C2's last piece) and nothing before.
+func TestTimeSpentRewindDropsTheIdleTail(t *testing.T) {
+	ts := newTimeSpent()
+	ts.add(ChannelC1, TimeMoving, 10*time.Second)
+	ts.add(ChannelC4, TimeBusy, 4*time.Second)
+	ts.markActive()
+	ts.add(ChannelC1, TimeMoving, 90*time.Second) // turning an empty hopper
+	ts.add(ChannelC2, TimeEmpty, 90*time.Second)
+
+	assert.Equal(t, 90*time.Second, ts.rewind())
+	got := ts.snapshot()
+	assert.Equal(t, int64(10_000), got[ChannelC1][TimeMoving])
+	assert.Equal(t, int64(4_000), got[ChannelC4][TimeBusy])
+	assert.Zero(t, got[ChannelC2][TimeEmpty])
+
+	// Never a piece at all: everything goes.
+	empty := newTimeSpent()
+	empty.add(ChannelC1, TimeMoving, time.Minute)
+	assert.Equal(t, time.Minute, empty.rewind())
+	assert.Empty(t, empty.snapshot())
+}
