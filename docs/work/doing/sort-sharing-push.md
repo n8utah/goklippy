@@ -89,6 +89,20 @@ the sent piece, photo shrunk. Then a simulator sort pushing to a locally run sor
 
 **Questions**: none blocking. Assumed: a reviewed "wrong part" shows as unknown on the site.
 
+**As built** (2026-11-13): `50e2263` (backend), `fc0d164` (UI). Two changes from the plan:
+- A record the site refuses as bad (a 4xx) is dropped at once and logged, not after 5 tries:
+  retrying can't make it valid, and backing off on it held up everything behind it.
+- The hooks wrap the record and sorting stores at wiring (`backend/sharing_wiring.go`)
+  instead of editing each call site, so every save that matters marks the outbox.
+- Sorter database: `collections.shared` added (backup `private/backups/goklippy-before-sharing-20261113.db`).
+
+**Tested**: Go tests for the outbox and sender (shared-only marking, backfill order, site
+down then catching up, refused records dropped, reviews applied, unknowns cleared, unsharing,
+photo shrunk to 800 px, settings keep the key); whole backend suite passes. End to end: a
+simulated sort sharing to a locally run sort viewer: 6 pieces, plan and bin counts (Tile 3,
+Plate 1, Brick 1), 6 photos and the run's end all matched on the site. Not yet: the Sharing
+panel and switch looked at in a browser, and sharing to the live lego.n8p.xyz.
+
 ## Notes
 - Depends on [sorter-collections](sorter-collections.md). The API itself is defined in
   [sort-viewer-app](sort-viewer-app.md); plan the two together.
