@@ -2,6 +2,8 @@
 
 Priority: medium
 Added: 2026-11-13 by Nate
+Owner: Nate + Claude
+Started: 2026-11-13
 
 ## Why
 When sorting a friend's LEGO, they should be able to watch it live and see what they'll get
