@@ -6,6 +6,7 @@ import PieceCard from '@/components/PieceCard/PieceCard';
 import { Button } from '@/components/ui/button';
 
 import { CAMERA_CHANNELS, useSortPageLogic } from './SortPage.logic';
+import CameraFullscreen from './components/CameraFullscreen';
 import CameraTile from './components/CameraTile';
 import ChannelControls from './components/ChannelControls';
 import ChannelsNow from './components/ChannelsNow';
@@ -170,10 +171,12 @@ const SortPage = () => {
             summary={state?.channels?.[ch.id]}
             camera={logic.cameras[ch.id]}
             onForgetIgnored={() => logic.forgetIgnored(ch.id)}
+            onOpen={() => logic.openFullscreen(ch.id)}
             simulated={state?.hardware?.simulated}
           />
         ))}
       </section>
+      <CameraFullscreen channel={logic.fullscreen} onClose={logic.closeFullscreen} />
 
       <TimeSpent
         timeMs={state?.time_ms}
@@ -202,7 +205,7 @@ const SortPage = () => {
           <h3 id="sort-recent" className="font-display text-lg font-semibold">
             Recently sorted
           </h3>
-          <Link to="/run/records" className="text-sm font-medium text-primary-text hover:underline">
+          <Link to="/pieces/all" className="text-sm font-medium text-primary-text hover:underline">
             All pieces
           </Link>
         </div>

@@ -258,10 +258,13 @@ export async function identifySorterPiece(files, pieceMm) {
   return parseJSON(response);
 }
 
-export function listSorterPieces({ run, status, q, limit = 50, offset = 0 } = {}) {
+/** category is the part's Brickognize category. */
+export function listSorterPieces({ run, status, color, category, q, limit = 50, offset = 0 } = {}) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (run) params.set('run', String(run));
   if (status) params.set('status', status);
+  if (color) params.set('color', color);
+  if (category) params.set('category', category);
   if (q) params.set('q', q);
   return getJSON(`/api/v1/sorter/pieces?${params}`);
 }
@@ -290,6 +293,43 @@ export function listSorterIncidents() {
 
 export function getSorterStats() {
   return getJSON('/api/v1/sorter/stats');
+}
+
+/** The catalog of every part and colour found. filters: { q, color, category, run, sort, dir } */
+export function listSorterCatalog(filters = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => v && params.set(k, v));
+  return getJSON(`/api/v1/sorter/catalog?${params}`);
+}
+
+/** One part and colour with every kept photo of it and its pieces. */
+export function getSorterCatalogPart(part, color) {
+  return getJSON(`/api/v1/sorter/catalog/part?${new URLSearchParams({ part, color })}`);
+}
+
+/** How many piece photos are kept: { files, bytes }. */
+export function getSorterPhotos() {
+  return getJSON('/api/v1/sorter/photos');
+}
+
+/** Removes every piece photo; the records and the catalog stay. */
+export async function clearSorterPhotos() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/photos`, { method: 'DELETE' });
+  return parseJSON(response);
+}
+
+export function getSorterCatalogFacets() {
+  return getJSON('/api/v1/sorter/catalog/facets');
+}
+
+export async function clearSorterCatalog() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/sorter/catalog`, { method: 'DELETE' });
+  return parseJSON(response);
+}
+
+/** Adds the identified pieces in the records not in the catalog yet. */
+export function fillSorterCatalog() {
+  return postJSON('/api/v1/sorter/catalog/fill', {});
 }
 
 export function resolveSorterIncident(action) {

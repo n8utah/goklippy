@@ -18,13 +18,15 @@ func InitRecords(records *sorter.Records) {
 	sorterRecords = records
 }
 
-// ListSorterPieces GET /sorter/pieces?run=&status=&q=&limit=&offset=
+// ListSorterPieces GET /sorter/pieces?run=&status=&color=&category=&q=&limit=&offset=
+// (category is the part's Brickognize category).
 func ListSorterPieces(c *gin.Context) {
 	runID, _ := strconv.ParseInt(c.Query("run"), 10, 64)
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	pieces, total, err := sorterRecords.Store().ListPieces(c.Request.Context(), sorter.PieceFilter{
-		RunID: runID, Status: c.Query("status"), Search: c.Query("q"), Limit: limit, Offset: offset,
+		RunID: runID, Status: c.Query("status"), ColorID: c.Query("color"), PartCategory: c.Query("category"),
+		Search: c.Query("q"), Limit: limit, Offset: offset,
 	})
 	if err != nil {
 		sorterError(c, err)

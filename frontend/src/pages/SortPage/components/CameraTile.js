@@ -1,3 +1,4 @@
+import { Expand } from 'lucide-react';
 import { Link } from 'react-router';
 
 import CameraView from '@/components/CameraView/CameraView';
@@ -8,7 +9,14 @@ import { Badge } from '@/components/ui/badge';
  * running shows its picture even when it can't see pieces yet, with the reason (no
  * zones, empty-channel pictures to capture again, …) and where to fix it.
  */
-export default function CameraTile({ channel, summary, camera, simulated, onForgetIgnored }) {
+export default function CameraTile({
+  channel,
+  summary,
+  camera,
+  simulated,
+  onForgetIgnored,
+  onOpen,
+}) {
   const live = summary?.valid && summary.age_ms < 2000;
   const running = Boolean(camera?.camera?.running);
   const zones = [
@@ -30,9 +38,18 @@ export default function CameraTile({ channel, summary, camera, simulated, onForg
         </Badge>
       </div>
       {simulated || summary?.valid || running ? (
-        <div className="overflow-hidden rounded-lg bg-media">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="group relative block w-full cursor-zoom-in overflow-hidden rounded-lg bg-media text-left"
+          aria-label={`Show ${channel.label}'s camera full screen`}
+        >
           <CameraView channel={channel.id} compact />
-        </div>
+          {/* Over the photo, so it reads the same in both themes. */}
+          <span className="pointer-events-none absolute right-2 bottom-2 flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-xs text-white opacity-70 transition-opacity group-hover:opacity-100">
+            <Expand className="size-3.5" aria-hidden /> Full screen
+          </span>
+        </button>
       ) : (
         // Fills the tile beside a live camera; stays short when stacked on a phone.
         <div className="flex min-h-32 flex-1 items-center justify-center rounded-lg bg-muted px-6 py-6 text-center text-sm text-muted-foreground">

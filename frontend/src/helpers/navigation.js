@@ -1,4 +1,4 @@
-import { Activity, House, ListFilter, Play, Settings2, Wrench } from 'lucide-react';
+import { Activity, Blocks, House, ListFilter, Play, Settings2, Wrench } from 'lucide-react';
 
 import { SETTING_SECTIONS } from './settingsRegistry';
 
@@ -33,11 +33,27 @@ export const NAV_GROUPS = [
         id: 'records',
         label: 'Records',
         path: '/run/records',
-        about: 'Every piece, run and incident',
+        about: 'Every run and incident',
         parts: [
-          { id: 'pieces', label: 'Pieces' },
           { id: 'runs', label: 'Runs' },
           { id: 'incidents', label: 'Incidents' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'pieces',
+    label: 'Pieces',
+    icon: Blocks,
+    pages: [
+      {
+        id: 'pieces',
+        label: 'Pieces',
+        path: '/pieces',
+        about: 'Every part found across runs, and every piece seen, with their pictures',
+        parts: [
+          { id: 'parts', label: 'Parts' },
+          { id: 'all', label: 'Every piece' },
         ],
       },
     ],

@@ -135,6 +135,7 @@ func (r pieceRow) piece() sorter.Piece {
 	}
 	if r.Prediction.Valid && r.Prediction.String != "" {
 		p.Prediction = json.RawMessage(r.Prediction.String)
+		p.PartImgURL = sorter.PartImage(p.Prediction, p.PartID)
 	}
 	return p
 }
@@ -203,10 +204,18 @@ func (s *RecordsStore) ListPieces(ctx context.Context, f sorter.PieceFilter) ([]
 		where = append(where, "status = ?")
 		args = append(args, f.Status)
 	}
+	if f.ColorID != "" {
+		where = append(where, "color_id = ?")
+		args = append(args, f.ColorID)
+	}
+	if f.PartCategory != "" {
+		where = append(where, "part_category = ?")
+		args = append(args, f.PartCategory)
+	}
 	if q := strings.TrimSpace(f.Search); q != "" {
-		where = append(where, "(part_id = ? OR id LIKE ? OR category_name LIKE ? OR part_name LIKE ?)")
+		where = append(where, "(part_id LIKE ? OR id LIKE ? OR category_name LIKE ? OR part_name LIKE ? OR color_name LIKE ?)")
 		like := "%" + q + "%"
-		args = append(args, q, q+"%", like, like)
+		args = append(args, q+"%", q+"%", like, like, like)
 	}
 	clause := ""
 	if len(where) > 0 {

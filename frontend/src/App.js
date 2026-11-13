@@ -14,6 +14,7 @@ import ChutePage from './pages/ChutePage/ChutePage';
 import HomePage from './pages/HomePage/HomePage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
 import OverviewPage from './pages/OverviewPage/OverviewPage';
+import PiecesPage from './pages/PiecesPage/PiecesPage';
 import ProfilesPage from './pages/ProfilesPage/ProfilesPage';
 import RecordsPage from './pages/RecordsPage/RecordsPage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
@@ -48,6 +49,8 @@ const App = () => (
                 <Route path="sort" element={<SortPage />} />
                 <Route path="records/:part?" element={<RecordsPage />} />
               </Route>
+
+              <Route path="pieces/:part?" element={<PiecesPage />} />
 
               <Route path="rules">
                 <Route index element={<Navigate to="profiles" replace />} />

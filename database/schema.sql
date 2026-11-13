@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS pieces (
 
 CREATE INDEX IF NOT EXISTS idx_pieces_run ON pieces(run_id, seen_at);
 CREATE INDEX IF NOT EXISTS idx_pieces_seen ON pieces(seen_at);
+CREATE INDEX IF NOT EXISTS idx_pieces_part ON pieces(part_id, color_id, seen_at);
 
 -- Photos of a piece, as files under the data folder. used marks the ones sent to
 -- Brickognize.
@@ -107,6 +108,36 @@ CREATE TABLE IF NOT EXISTS piece_reviews (
   color_id TEXT NOT NULL DEFAULT '',
   issues TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(issues)),
   reviewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- The catalog: every part and colour identified, across all runs, with Brickognize's
+-- picture of the part. Kept apart from pieces (whose records and photos can be pruned)
+-- and cleared on its own. catalog_runs counts each one per run; catalog_counted is the
+-- pieces already counted, so filling it from the records never counts one twice.
+CREATE TABLE IF NOT EXISTS catalog_parts (
+  part_id TEXT NOT NULL,
+  color_id TEXT NOT NULL DEFAULT '',
+  part_name TEXT NOT NULL DEFAULT '',
+  color_name TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  img_url TEXT NOT NULL DEFAULT '',
+  seen INTEGER NOT NULL DEFAULT 0,
+  best_score REAL NOT NULL DEFAULT 0,
+  first_seen DATETIME NOT NULL,
+  last_seen DATETIME NOT NULL,
+  PRIMARY KEY (part_id, color_id)
+);
+
+CREATE TABLE IF NOT EXISTS catalog_runs (
+  part_id TEXT NOT NULL,
+  color_id TEXT NOT NULL DEFAULT '',
+  run_id INTEGER NOT NULL,
+  seen INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (part_id, color_id, run_id)
+);
+
+CREATE TABLE IF NOT EXISTS catalog_counted (
+  piece_id TEXT PRIMARY KEY
 );
 
 -- Problems the machine stopped for, and how each was dealt with.

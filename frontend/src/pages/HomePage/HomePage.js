@@ -21,7 +21,7 @@ const TASKS = [
     text: 'Choose a profile, and see which bin each kind of piece goes to.',
   },
   {
-    to: '/run/records',
+    to: '/pieces',
     icon: Search,
     title: 'Look into a piece',
     text: 'Find a piece, its photos and what Brickognize made of it.',

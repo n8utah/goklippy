@@ -98,6 +98,7 @@ export function useSortPageLogic() {
   const [settings] = useMachineSettings();
   const [busy, setBusy] = useState(false);
   const [shakes, setShakes] = useState([]);
+  const [fullscreen, setFullscreen] = useState(null); // the camera channel shown full screen
   const numbers = useRunNumbers(state?.run_id || 0);
 
   useEffect(() => {
@@ -131,6 +132,10 @@ export function useSortPageLogic() {
     numbers,
     shakes,
     cameras,
+    /** The channel whose camera fills the screen, or null. */
+    fullscreen: CAMERA_CHANNELS.find((ch) => ch.id === fullscreen) ?? null,
+    openFullscreen: setFullscreen,
+    closeFullscreen: () => setFullscreen(null),
     command: (name) => run(() => sorterCommand(name)),
     resolve: (action) => run(() => resolveSorterIncident(action)),
     /** Turn by hand at the channel's own speed. */

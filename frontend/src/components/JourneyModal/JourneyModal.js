@@ -133,7 +133,7 @@ function Journey({ pieceId, onClose }) {
                   <>
                     {' · '}
                     <Link
-                      to={`/run/records/pieces?run=${piece.run_id}`}
+                      to={`/pieces/all?run=${piece.run_id}`}
                       onClick={onClose}
                       className="font-medium text-primary-text hover:underline"
                     >

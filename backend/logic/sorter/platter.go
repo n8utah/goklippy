@@ -794,6 +794,7 @@ func (p *Platter) finishIndex(now time.Time, ps PlatterSettings) {
 		fallen.piece.Status = PieceDistributed
 		fallen.piece.DistributedAt = &now
 		p.deps.Records.SavePiece(fallen.piece)
+		p.deps.Records.NoteCatalog(fallen.piece)
 		if fallen.piece.BinLayer > 0 {
 			p.deps.Sorting.NoteDelivered(BinKey{fallen.piece.BinLayer, fallen.piece.BinNumber})
 		}
@@ -846,6 +847,7 @@ func (p *Platter) Sweep(now time.Time) int {
 		s.piece.BinLayer, s.piece.BinNumber, s.piece.RouteReason = 0, 0, RouteMisc
 		s.piece.AddProblem(ProblemSweptOff, "The classification channel stopped making progress, so it was turned with every layer closed; the piece went to the bucket.", now)
 		p.deps.Records.SavePiece(s.piece)
+		p.deps.Records.NoteCatalog(s.piece)
 		p.recent = append([]Piece{s.piece.Clone()}, p.recent...)
 		p.slots[i] = nil
 		n++

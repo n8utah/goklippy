@@ -63,9 +63,11 @@ type Piece struct {
 	PartName     string  `json:"part_name,omitempty"`
 	PartCategory string  `json:"part_category,omitempty"`
 	PartScore    float64 `json:"part_score,omitempty"`
-	ColorID      string  `json:"color_id,omitempty"`
-	ColorName    string  `json:"color_name,omitempty"`
-	ColorScore   float64 `json:"color_score,omitempty"`
+	// PartImgURL is Brickognize's picture of the part (read from Prediction; not saved).
+	PartImgURL string  `json:"part_img_url,omitempty"`
+	ColorID    string  `json:"color_id,omitempty"`
+	ColorName  string  `json:"color_name,omitempty"`
+	ColorScore float64 `json:"color_score,omitempty"`
 
 	Category     string `json:"category,omitempty"`
 	CategoryName string `json:"category_name,omitempty"`
@@ -148,11 +150,13 @@ type Incident struct {
 
 // PieceFilter narrows the pieces list.
 type PieceFilter struct {
-	RunID  int64
-	Status string
-	Search string // a part id, category name or piece id prefix
-	Limit  int
-	Offset int
+	RunID        int64
+	Status       string
+	ColorID      string
+	PartCategory string // Brickognize's category of the part ("Brick", "Plate", …)
+	Search       string // a part id, category name or piece id prefix
+	Limit        int
+	Offset       int
 }
 
 // Stats are lifetime totals.

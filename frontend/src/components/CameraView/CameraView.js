@@ -42,7 +42,14 @@ const CURSORS = { center: 'move', radius: 'ew-resize', rotate: 'grab', end: 'col
  * to stretch it; the wheel sizes the nearest circle (Shift: all of them); double-click
  * puts the center there.
  */
-const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange, compact }) => {
+const CameraView = ({
+  channel,
+  zonesOverride,
+  showOverlay = true,
+  onZonesChange,
+  compact,
+  onFrameSize,
+}) => {
   const [observation, setObservation] = useState(null);
   const [savedZones, setSavedZones] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -101,6 +108,11 @@ const CameraView = ({ channel, zonesOverride, showOverlay = true, onZonesChange,
       clearInterval(timer);
     };
   }, [channel, showOverlay]);
+
+  // Whoever sizes the view (the full-screen viewer) is told the frame's shape.
+  useEffect(() => {
+    if (size) onFrameSize?.(size);
+  }, [size, onFrameSize]);
 
   const zones = zonesOverride ?? savedZones;
   // Draw in the frame's pixels; zones saved for another frame size are scaled.
