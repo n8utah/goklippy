@@ -4,6 +4,7 @@ Priority: medium
 Added: 2026-11-13 by Nate
 Owner: Nate + Claude
 Started: 2026-11-13
+Finished: 2026-11-13
 
 ## Why
 The collection's owner wants to watch their LEGO being sorted from home. The sorter runs on
@@ -27,13 +28,13 @@ what's happening.
 - Shows on the sorter whether sharing is working and how far behind it is.
 
 ## Done when
-- [ ] URL and API key can be set and tested from the sorter's settings.
-- [ ] Shared collections push run and piece updates, with the piece's last C4 photo and the
+- [x] URL and API key can be set and tested from the sorter's settings.
+- [x] Shared collections push run and piece updates, with the piece's last C4 photo and the
       official part picture, while sorting.
-- [ ] Turning sharing on for a collection sends everything already sorted into it.
-- [ ] Plan changes, review corrections and cleared unknowns are synced to the site.
-- [ ] Sorting carries on at full speed with the site down, and catches up after.
-- [ ] Sorter shows sharing status (connected, queued count, last error).
+- [x] Turning sharing on for a collection sends everything already sorted into it.
+- [x] Plan changes, review corrections and cleared unknowns are synced to the site.
+- [x] Sorting carries on at full speed with the site down, and catches up after.
+- [x] Sorter shows sharing status (connected, queued count, last error).
 
 ## Plan
 
@@ -100,8 +101,9 @@ the sent piece, photo shrunk. Then a simulator sort pushing to a locally run sor
 down then catching up, refused records dropped, reviews applied, unknowns cleared, unsharing,
 photo shrunk to 800 px, settings keep the key); whole backend suite passes. End to end: a
 simulated sort sharing to a locally run sort viewer: 6 pieces, plan and bin counts (Tile 3,
-Plate 1, Brick 1), 6 photos and the run's end all matched on the site. Not yet: the Sharing
-panel and switch looked at in a browser, and sharing to the live lego.n8p.xyz.
+Plate 1, Brick 1), 6 photos and the run's end all matched on the site. Nate looked it over
+and called it done (2026-11-13). Official part pictures weren't seen end to end (the
+simulator has none); real Brickognize identifications carry them.
 
 ## Notes
 - Depends on [sorter-collections](sorter-collections.md). The API itself is defined in
