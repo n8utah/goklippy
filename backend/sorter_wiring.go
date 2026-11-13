@@ -27,13 +27,16 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 	if cfg.Simulate {
 		machineSettings = simSettings(settings.Machine)
 	}
-	sorting := sorter.NewSortingService(ctx, models.NewSortingStore(db), machineSettings)
+	// Shared collections go to the sort viewer site: the stores mark what changes.
+	share := sorter.NewSharing(models.NewShareStore(db))
+	sortingStore := models.NewSortingStore(db)
+	sorting := sorter.NewSortingService(ctx, sharingPlans{sortingStore, share}, machineSettings)
 
 	dataDir := filepath.Clean(cfg.DataDir)
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, err
 	}
-	records := sorter.NewRecords(models.NewRecordsStore(db), dataDir)
+	records := sorter.NewRecords(sharingRecords{models.NewRecordsStore(db), share}, dataDir)
 	go records.Run(ctx)
 
 	var hw sorter.Hardware
@@ -71,6 +74,9 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 		return nil, err
 	}
 	routes.InitCollections(collections)
+	share.Attach(records.Store(), collections, records.ImagePath, sortingStore.ColorNames)
+	go share.Run(ctx)
+	routes.InitSharing(share)
 	slog.Info("sorter data folder", "path", dataDir)
 	return machine, nil
 }

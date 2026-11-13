@@ -34,6 +34,8 @@ type collectionRequest struct {
 	// Bins, with profile_id on the current collection: "emptied" (the bins were
 	// emptied) or "continue" (keep what's in them; use the unused ones).
 	Bins string `json:"bins"`
+	// Shared turns sending it to the sort viewer site on or off.
+	Shared *bool `json:"shared"`
 }
 
 // CreateSorterCollection POST /sorter/collections {"name": "Sam's LEGO", "profile_id": 1}
@@ -70,8 +72,8 @@ func GetSorterCollection(c *gin.Context) {
 }
 
 // UpdateSorterCollection PATCH /sorter/collections/:id {"name": "...", "archived": true,
-// "profile_id": 2, "bins": "emptied|continue"}: renames, archives (or unarchives) and/or
-// changes the profile it sorts by.
+// "profile_id": 2, "bins": "emptied|continue", "shared": true}: renames, archives (or
+// unarchives), changes the profile it sorts by, and/or shares it to the sort viewer.
 func UpdateSorterCollection(c *gin.Context) {
 	id, ok := collectionID(c)
 	if !ok {
@@ -98,6 +100,11 @@ func UpdateSorterCollection(c *gin.Context) {
 	}
 	if err == nil && req.Archived != nil {
 		col, err = sorterCollections.Archive(ctx, id, *req.Archived)
+	}
+	if err == nil && req.Shared != nil {
+		if err = sorterSharing.SetShared(ctx, id, *req.Shared); err == nil {
+			col, err = sorterCollections.Get(ctx, id)
+		}
 	}
 	if err != nil {
 		collectionError(c, err)

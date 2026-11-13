@@ -15,7 +15,7 @@ import (
 // either, so they're left out.
 const unknownPiece = `part_id = '' AND status NOT IN ('tracking', 'identifying')`
 
-const collectionColumns = `c.id, c.name, c.current, c.bins_started_at, c.archived_at, c.created_at,
+const collectionColumns = `c.id, c.name, c.current, c.bins_started_at, c.archived_at, c.shared, c.created_at,
   c.profile_id, COALESCE((SELECT sp.name FROM sorting_profiles sp WHERE sp.id = c.profile_id), '') AS profile_name,
   (SELECT COUNT(*) FROM sort_runs r WHERE r.collection_id = c.id) AS runs,
   (SELECT COUNT(*) FROM pieces p JOIN sort_runs r ON r.id = p.run_id WHERE r.collection_id = c.id) AS pieces,
@@ -24,24 +24,25 @@ const collectionColumns = `c.id, c.name, c.current, c.bins_started_at, c.archive
   (SELECT MAX(COALESCE(r.ended_at, r.started_at)) FROM sort_runs r WHERE r.collection_id = c.id) AS last_sorted_at`
 
 type collectionRow struct {
-	ID            int64        `db:"id"`
-	Name          string       `db:"name"`
-	Current       bool         `db:"current"`
-	BinsStartedAt sql.NullTime `db:"bins_started_at"`
-	ArchivedAt    sql.NullTime `db:"archived_at"`
+	ID            int64         `db:"id"`
+	Name          string        `db:"name"`
+	Current       bool          `db:"current"`
+	BinsStartedAt sql.NullTime  `db:"bins_started_at"`
+	ArchivedAt    sql.NullTime  `db:"archived_at"`
+	Shared        bool          `db:"shared"`
 	CreatedAt     time.Time     `db:"created_at"`
 	ProfileID     sql.NullInt64 `db:"profile_id"`
 	ProfileName   string        `db:"profile_name"`
-	Runs          int          `db:"runs"`
-	Pieces        int          `db:"pieces"`
-	Identified    int          `db:"identified"`
-	Unknown       int          `db:"unknown"`
-	LastSortedAt  any          `db:"last_sorted_at"` // a subquery's column: time or text
+	Runs          int           `db:"runs"`
+	Pieces        int           `db:"pieces"`
+	Identified    int           `db:"identified"`
+	Unknown       int           `db:"unknown"`
+	LastSortedAt  any           `db:"last_sorted_at"` // a subquery's column: time or text
 }
 
 func (r collectionRow) collection() sorter.Collection {
 	c := sorter.Collection{
-		ID: r.ID, Name: r.Name, Current: r.Current, CreatedAt: r.CreatedAt,
+		ID: r.ID, Name: r.Name, Current: r.Current, Shared: r.Shared, CreatedAt: r.CreatedAt,
 		Runs: r.Runs, Pieces: r.Pieces, Identified: r.Identified, Unknown: r.Unknown,
 		ProfileName: r.ProfileName,
 	}

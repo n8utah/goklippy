@@ -33,7 +33,9 @@ type Collection struct {
 	// BinsStartedAt is when it last became current: its bins started afresh then.
 	BinsStartedAt *time.Time `json:"bins_started_at,omitempty"`
 	ArchivedAt    *time.Time `json:"archived_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
+	// Shared: sent to the sort viewer site as it sorts (sharing.go).
+	Shared    bool      `json:"shared"`
+	CreatedAt time.Time `json:"created_at"`
 	// ProfileID is the profile it sorts by; nil only for collections made before
 	// collections had profiles.
 	ProfileID   *int64 `json:"profile_id"`

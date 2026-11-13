@@ -57,10 +57,27 @@ CREATE TABLE IF NOT EXISTS collections (
   current BOOLEAN NOT NULL DEFAULT FALSE,
   bins_started_at DATETIME NULL,
   archived_at DATETIME NULL,
+  -- shared: sent to the sort viewer site as it sorts (sharing.go).
+  shared BOOLEAN NOT NULL DEFAULT FALSE,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_one_current ON collections(current) WHERE current;
+
+-- What's waiting to be sent to the sort viewer site: one mark per thing (kind
+-- 'collection', 'run', 'piece', 'photo' or 'clear_unknowns', ref its id). The sender
+-- reads the thing as it is when it sends, so many changes make one send; marks are sent
+-- in the order they were first made (seq).
+CREATE TABLE IF NOT EXISTS share_outbox (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  ref TEXT NOT NULL,
+  queued_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT ''
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_share_outbox_thing ON share_outbox(kind, ref);
 
 -- A sort run: from Start to Stop, sorting into one collection.
 CREATE TABLE IF NOT EXISTS sort_runs (
