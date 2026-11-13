@@ -4,6 +4,7 @@ Priority: medium
 Added: 2026-11-13 by Nate
 Owner: Nate + Claude
 Started: 2026-11-13
+Finished: 2026-11-13
 
 ## Why
 The only way to get a sorting profile today is to build a `sorting_profile.json` in Hive and
@@ -36,19 +37,19 @@ uses.
     the unused bins, and sorting continues.
 
 ## Done when
-- [ ] "By part type" and "By colour" are always on the Profiles page, with nothing to upload,
+- [x] "By part type" and "By colour" are always on the Profiles page, with nothing to upload,
       alongside uploaded ones.
-- [ ] Sorting with them routes each piece by its Brickognize part type (grouped) or its colour;
+- [x] Sorting with them routes each piece by its Brickognize part type (grouped) or its colour;
       pieces without one go to misc.
-- [ ] Bins can be given these categories on the Bins page, and pre-assigned from them.
-- [ ] A collection has a profile, chosen when it's created and changeable later.
-- [ ] Starting a run requires the collection to have a profile, and the run sorts by it.
-- [ ] The machine-wide active profile is gone (no Activate, no `active` column); the Bins page,
+- [x] Bins can be given these categories on the Bins page, and pre-assigned from them.
+- [x] A collection has a profile, chosen when it's created and changeable later.
+- [x] Starting a run requires the collection to have a profile, and the run sorts by it.
+- [x] The machine-wide active profile is gone (no Activate, no `active` column); the Bins page,
       dry run, plan and home page follow the current collection's profile.
-- [ ] Changing the current collection's profile asks "bins emptied, or use the unused bins and
+- [x] Changing the current collection's profile asks "bins emptied, or use the unused bins and
       continue?" and does that; bins holding pieces get no new categories in the second case.
-- [ ] A profile a collection uses can't be deleted.
-- [ ] Hive uploads still import and route as before.
+- [x] A profile a collection uses can't be deleted.
+- [x] Hive uploads still import and route as before.
 
 ## Plan
 
@@ -131,6 +132,7 @@ files (`collections.go`, `collections_store.go`, `CollectionsPage`), so I'll pul
 starting and commit in small steps.
 
 ## Notes
+- 2026-11-13, done: built-in By part type / By colour profiles, each collection sorts by its own profile (no machine-wide active profile), profile change asks emptied or continue, pre-assign on the Bins page. Commits 24f1543 (backend), 8284d34 (UI); sorter database migrated by hand. Closed by Nate after a look at the pages.
 - Builds on [sorter-collections](../doing/sorter-collections.md) (collections and their
   per-collection bin layouts).
 - The plan already listed "local profiles without Hive" as not done yet
