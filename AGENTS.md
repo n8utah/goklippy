@@ -64,6 +64,7 @@ This is the single source of truth; tool-specific files (e.g. `CLAUDE.md`, `.git
 ## Docs and Planning
 - Use `docs/` for all PRDs, implementation plans, and mockups.
 - Treat docs as development artifacts and keep them in sync with code changes.
+- `docs/work/` is the work board: one Markdown file per item in `todo/`, `doing/` or `done/` (see `docs/work/README.md`). When asked what to work on, check `doing/` first; move an item's file as its status changes.
 
 ## Private Assets
 - `private/` is for local secrets, local logs, and private config.
