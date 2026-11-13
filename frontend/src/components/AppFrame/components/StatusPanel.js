@@ -169,9 +169,25 @@ export function StatusDetails({ logic, onNavigate }) {
           {hw?.connected ? (
             `${hw.simulated ? 'Simulated' : 'Connected'}${hw.port ? ` · ${hw.port}` : ''}`
           ) : (
-            <Link to="/machine/board" onClick={onNavigate} className="text-primary-text underline">
-              Not connected
-            </Link>
+            <span className="flex items-center gap-2">
+              <Link
+                to="/machine/board"
+                onClick={onNavigate}
+                className="text-primary-text underline"
+              >
+                Not connected
+              </Link>
+              {(logic.canConnect || logic.connecting) && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={logic.connectBoard}
+                  disabled={logic.connecting}
+                >
+                  {logic.connecting ? 'Connecting…' : 'Connect'}
+                </Button>
+              )}
+            </span>
           )}
         </Row>
         <Row label="Motor power">

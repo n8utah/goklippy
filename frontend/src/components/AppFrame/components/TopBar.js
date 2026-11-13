@@ -1,4 +1,4 @@
-import { CircleStop, Search } from 'lucide-react';
+import { CircleStop, Loader2, Plug, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -74,6 +74,23 @@ export default function TopBar({ logic }) {
               </SheetContent>
             </Sheet>
           </>
+        )}
+
+        {(logic.canConnect || logic.connecting) && (
+          <Button
+            variant="outline"
+            onClick={logic.connectBoard}
+            disabled={logic.connecting}
+            title="Connect the board on the port it was last connected on"
+            className="shrink-0"
+          >
+            {logic.connecting ? (
+              <Loader2 className="animate-spin" aria-hidden />
+            ) : (
+              <Plug aria-hidden />
+            )}
+            <span className="max-sm:sr-only">{logic.connecting ? 'Connecting…' : 'Connect'}</span>
+          </Button>
         )}
 
         <Button

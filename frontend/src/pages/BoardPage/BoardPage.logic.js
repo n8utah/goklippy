@@ -3,9 +3,8 @@ import { toast } from 'sonner';
 
 import { useMCUSession } from '../../context/MCUSessionContext';
 import { getMCUPorts, scanMCUPorts } from '../../helpers/api';
+import { lastBoardPort, rememberBoardPort } from '../../helpers/boardPort';
 import { BOARD_PROFILE_ID, useKlipperWorkspace } from '../../helpers/useKlipperWorkspace';
-
-const LAST_PORT_KEY = 'goklippy_last_mcu_port';
 
 /** Machine › Board: the connection, the wiring and the config file, on one workspace. */
 export function useBoardPageLogic() {
@@ -53,7 +52,7 @@ export function useBoardPageLogic() {
     async (port) => {
       try {
         await mcu.connect(port, { useWorkspace: true, profileId: BOARD_PROFILE_ID });
-        localStorage.setItem(LAST_PORT_KEY, port);
+        rememberBoardPort(port);
         toast.success(`Connected to ${port}`);
       } catch {
         // the session's error says why
@@ -104,12 +103,6 @@ export function useBoardPageLogic() {
     resetting,
     selectedHotspot,
     selectHotspot,
-    lastPort: (() => {
-      try {
-        return localStorage.getItem(LAST_PORT_KEY);
-      } catch {
-        return null;
-      }
-    })(),
+    lastPort: lastBoardPort(),
   };
 }

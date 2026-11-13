@@ -6,9 +6,12 @@ import { useMCUSession } from '../../context/MCUSessionContext';
 import {
   blinkSorterLights,
   cancelSorterJob,
+  getMCUPorts,
   setSorterLights,
   sorterCommand,
 } from '../../helpers/api';
+import { pickBoardPort, rememberBoardPort } from '../../helpers/boardPort';
+import { BOARD_PROFILE_ID } from '../../helpers/useKlipperWorkspace';
 import { findLocation } from '../../helpers/navigation';
 import { pushRecent } from '../../helpers/recent';
 import { useSorterState } from '../../helpers/sorterState';
@@ -151,6 +154,39 @@ export function useAppFrameLogic() {
   const canStop = !busy && (sorting || Boolean(job) || handMoving);
   const lightsOK = connected && !state?.lights?.message;
   const boardConnected = Boolean(state?.hardware?.connected);
+  // The top bar's Connect: shown while the backend answers but has no board.
+  const canConnect = connected && !boardConnected && !mcu.connected;
+
+  /**
+   * Connects the board in one click: on the port it was last connected on, else the only
+   * one found. When it isn't clear which port, Machine › Board lists them to choose.
+   */
+  const connectBoard = async () => {
+    if (mcu.connecting) return;
+    let port;
+    try {
+      port = pickBoardPort((await getMCUPorts()).ports || []);
+    } catch (err) {
+      toast.error(err.message);
+      return;
+    }
+    if (!port) {
+      toast('Choose the board’s port');
+      navigate('/machine/board/connection');
+      return;
+    }
+    const id = toast.loading(`Connecting to ${port}…`);
+    try {
+      await mcu.connect(port, { useWorkspace: true, profileId: BOARD_PROFILE_ID });
+      rememberBoardPort(port);
+      toast.success(`Connected to ${port}`, { id });
+    } catch (err) {
+      toast.error(`Couldn’t connect to ${port}: ${err.message}`, {
+        id,
+        action: { label: 'Board', onClick: () => navigate('/machine/board/connection') },
+      });
+    }
+  };
 
   /**
    * What search can do, in order of how likely it's wanted: the first allowed ones are the
@@ -169,8 +205,9 @@ export function useAppFrameLogic() {
       id: 'connect-board',
       label: 'Connect the board',
       keywords: 'board serial port usb ramps',
-      allowed: true,
-      run: () => navigate('/machine/board'),
+      allowed: canConnect && !mcu.connecting,
+      why: mcu.connecting ? 'Connecting now' : 'No backend',
+      run: connectBoard,
     },
     {
       id: 'start',
@@ -258,6 +295,9 @@ export function useAppFrameLogic() {
     setStatusOpen,
     stop,
     canStop,
+    canConnect,
+    connecting: mcu.connecting,
+    connectBoard,
     command,
     cancelJob,
     toggleLights,
