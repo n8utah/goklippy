@@ -34,8 +34,11 @@ func testSettings() sorter.MachineSettings {
 
 func newSortingService(t *testing.T) (*sorter.SortingService, *SortingStore) {
 	t.Helper()
-	store := NewSortingStore(openTestDB(t))
-	return sorter.NewSortingService(context.Background(), store, testSettings), store
+	db := openTestDB(t)
+	store := NewSortingStore(db)
+	svc := sorter.NewSortingService(context.Background(), store, testSettings)
+	pickCollection(t, db, svc, "Test")
+	return svc, store
 }
 
 func TestSortingRoutesAndRemembersBins(t *testing.T) {
@@ -56,7 +59,7 @@ func TestSortingRoutesAndRemembersBins(t *testing.T) {
 	assert.Equal(t, "r-bricks", res.Category)
 	assert.Equal(t, "Bricks", res.CategoryName)
 	assert.Equal(t, sorter.RouteNewBin, res.Choice.Reason)
-	saved, err := store.BinCategories(ctx, p.ID)
+	saved, err := store.BinCategories(ctx, testCollectionID, p.ID)
 	require.NoError(t, err)
 	assert.Empty(t, saved)
 
@@ -77,7 +80,7 @@ func TestSortingRoutesAndRemembersBins(t *testing.T) {
 	assert.Equal(t, "misc", res.Category)
 	assert.Nil(t, res.Choice.Bin, "misc goes to the bucket")
 
-	saved, err = store.BinCategories(ctx, p.ID)
+	saved, err = store.BinCategories(ctx, testCollectionID, p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, sorter.Assignments{{Layer: 1, Bin: 1}: {"r-bricks"}, {Layer: 1, Bin: 2}: {"r-plates"}}, saved)
 

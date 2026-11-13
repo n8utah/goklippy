@@ -32,7 +32,8 @@ type StoredProfile struct {
 	Summary   profile.Summary `json:"summary"`
 }
 
-// SortingStore keeps profiles and each profile's bin assignments.
+// SortingStore keeps profiles, the current collection, and each collection's bin
+// assignments under each profile.
 type SortingStore interface {
 	ListProfiles(ctx context.Context) ([]StoredProfile, error)
 	// ProfileData returns ErrProfileNotFound for an unknown id.
@@ -41,9 +42,13 @@ type SortingStore interface {
 	DeleteProfile(ctx context.Context, id int64) error
 	ActivateProfile(ctx context.Context, id int64) error
 	ActiveProfileID(ctx context.Context) (int64, bool, error)
-	BinCategories(ctx context.Context, profileID int64) (Assignments, error)
-	ReplaceBinCategories(ctx context.Context, profileID int64, bins Assignments) error
-	SetBinCategories(ctx context.Context, profileID int64, bin BinKey, categories []string) error
+	CurrentCollection(ctx context.Context) (CollectionRef, bool, error)
+	// SelectCollection makes the collection current and clears its bin assignments
+	// under every profile, as of at.
+	SelectCollection(ctx context.Context, id int64, at time.Time) error
+	BinCategories(ctx context.Context, collectionID, profileID int64) (Assignments, error)
+	ReplaceBinCategories(ctx context.Context, collectionID, profileID int64, bins Assignments) error
+	SetBinCategories(ctx context.Context, collectionID, profileID int64, bin BinKey, categories []string) error
 }
 
 // Activation says what happens to the bins when a profile is activated.
@@ -63,7 +68,9 @@ type SortingService struct {
 
 	mu     sync.Mutex
 	active *activeProfile
-	rng    *rand.Rand
+	// collection is the current collection: whose bins these are. nil until one is picked.
+	collection *CollectionRef
+	rng        *rand.Rand
 	// What's in each bin, when AttachCounts was called.
 	counts    CountsStore
 	binCounts BinCounts
@@ -81,9 +88,12 @@ type CountsStore interface {
 	// BinCounts is the pieces delivered to each bin since it was last emptied.
 	BinCounts(ctx context.Context) (BinCounts, error)
 	EmptyBin(ctx context.Context, bin BinKey, at time.Time) error
-	// KitPieces lists the pieces delivered under a profile into its kit categories,
-	// oldest first, to count kits up again after a restart.
-	KitPieces(ctx context.Context, profileID int64, categories []string) ([]KitPiece, error)
+	// EmptyAllBins records every bin emptied at at.
+	EmptyAllBins(ctx context.Context, at time.Time) error
+	// KitPieces lists the pieces delivered into a profile's kit categories for the
+	// collection since its bins last started afresh, oldest first, to count kits up
+	// again after a restart.
+	KitPieces(ctx context.Context, collectionID, profileID int64, categories []string) ([]KitPiece, error)
 }
 
 // KitPiece is one delivered piece a kit took.
@@ -149,6 +159,11 @@ func (s *SortingService) KitProgress() []KitProgress {
 // is logged and left inactive, so the backend still starts.
 func NewSortingService(ctx context.Context, store SortingStore, settings func() MachineSettings) *SortingService {
 	s := &SortingService{store: store, settings: settings, rng: rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))}
+	if col, ok, err := store.CurrentCollection(ctx); err != nil {
+		slog.Warn("current collection not loaded", "error", err)
+	} else if ok {
+		s.collection = &col
+	}
 	id, ok, err := store.ActiveProfileID(ctx)
 	if err != nil {
 		slog.Warn("sorting profiles not loaded", "error", err)
@@ -162,29 +177,41 @@ func NewSortingService(ctx context.Context, store SortingStore, settings func() 
 	return s
 }
 
-func (s *SortingService) load(ctx context.Context, id int64) error {
+// parse reads a saved profile.
+func (s *SortingService) parse(ctx context.Context, id int64) (StoredProfile, *profile.Profile, error) {
 	stored, data, err := s.store.ProfileData(ctx, id)
 	if err != nil {
-		return err
+		return StoredProfile{}, nil, err
 	}
 	p, err := profile.Parse(data)
 	if err != nil {
-		return err
+		return StoredProfile{}, nil, err
 	}
-	bins, err := s.store.BinCategories(ctx, id)
+	return stored, p, nil
+}
+
+// load makes a profile the active one, with the current collection's bins under it.
+func (s *SortingService) load(ctx context.Context, id int64) error {
+	stored, p, err := s.parse(ctx, id)
 	if err != nil {
 		return err
 	}
-	kits := newKitTracker(p.Kits())
 	s.mu.Lock()
-	counts := s.counts
+	counts, col := s.counts, s.collection
 	s.mu.Unlock()
-	if counts != nil && len(p.Kits()) > 0 {
+	bins := Assignments{}
+	if col != nil {
+		if bins, err = s.store.BinCategories(ctx, col.ID, id); err != nil {
+			return err
+		}
+	}
+	kits := newKitTracker(p.Kits())
+	if counts != nil && col != nil && len(p.Kits()) > 0 {
 		categories := make([]string, 0, len(p.Kits()))
 		for c := range p.Kits() {
 			categories = append(categories, c)
 		}
-		taken, err := counts.KitPieces(ctx, id, categories)
+		taken, err := counts.KitPieces(ctx, col.ID, id, categories)
 		if err != nil {
 			return err
 		}
@@ -249,22 +276,22 @@ func (s *SortingService) Activate(ctx context.Context, id int64, mode Activation
 	default:
 		return ErrInvalidActivation
 	}
-	_, data, err := s.store.ProfileData(ctx, id)
+	_, p, err := s.parse(ctx, id)
 	if err != nil {
 		return err
 	}
-	p, err := profile.Parse(data)
-	if err != nil {
-		return err
+	col := s.Collection()
+	if col == nil && mode != ActivateKeep {
+		return ErrNoCollection // the bins being reset or preassigned are a collection's
 	}
 	if err := s.store.ActivateProfile(ctx, id); err != nil {
 		return err
 	}
 	switch mode {
 	case ActivateReset:
-		err = s.store.ReplaceBinCategories(ctx, id, Assignments{})
+		err = s.store.ReplaceBinCategories(ctx, col.ID, id, Assignments{})
 	case ActivatePreassign:
-		err = s.store.ReplaceBinCategories(ctx, id, s.preassign(p))
+		err = s.store.ReplaceBinCategories(ctx, col.ID, id, s.preassign(p))
 	}
 	if err != nil {
 		return err
@@ -314,9 +341,11 @@ type LayerView struct {
 	Sections   []SectionView `json:"sections"`
 }
 
-// BinsView is the tower with each bin's categories under the active profile.
+// BinsView is the tower with each bin's categories: the current collection's bins
+// under the active profile.
 type BinsView struct {
-	Profile *StoredProfile `json:"profile"`
+	Collection *CollectionRef `json:"collection"`
+	Profile    *StoredProfile `json:"profile"`
 	// Categories are the ones a bin can be given: the profile's, then misc.
 	Categories []CategoryRef `json:"categories"`
 	SharedBins bool          `json:"shared_bins"`
@@ -338,7 +367,7 @@ func (s *SortingService) Bins() BinsView {
 	}
 	s.mu.Unlock()
 
-	view := BinsView{SharedBins: d.SharedBins, Categories: []CategoryRef{}, Layers: []LayerView{}}
+	view := BinsView{Collection: s.Collection(), SharedBins: d.SharedBins, Categories: []CategoryRef{}, Layers: []LayerView{}}
 	if active != nil {
 		stored := active.stored
 		view.Profile = &stored
@@ -399,6 +428,9 @@ func (s *SortingService) SetBin(ctx context.Context, key BinKey, categories []st
 	if s.active == nil {
 		return ErrNoActiveProfile
 	}
+	if s.collection == nil {
+		return ErrNoCollection
+	}
 	known := s.knownCategoriesLocked()
 	byColor := s.active.profile.Summary().FallbackColor
 	var cats []string
@@ -423,7 +455,7 @@ func (s *SortingService) SetBin(ctx context.Context, key BinKey, categories []st
 	} else {
 		delete(bins, key)
 	}
-	if err := s.store.ReplaceBinCategories(ctx, s.active.stored.ID, bins); err != nil {
+	if err := s.store.ReplaceBinCategories(ctx, s.collection.ID, s.active.stored.ID, bins); err != nil {
 		return err
 	}
 	s.active.bins = bins
@@ -446,14 +478,17 @@ func (s *SortingService) knownCategoriesLocked() map[string]bool {
 	return known
 }
 
-// ResetBins unassigns every bin of the active profile.
+// ResetBins unassigns every bin of the current collection under the active profile.
 func (s *SortingService) ResetBins(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.active == nil {
 		return ErrNoActiveProfile
 	}
-	if err := s.store.ReplaceBinCategories(ctx, s.active.stored.ID, Assignments{}); err != nil {
+	if s.collection == nil {
+		return ErrNoCollection
+	}
+	if err := s.store.ReplaceBinCategories(ctx, s.collection.ID, s.active.stored.ID, Assignments{}); err != nil {
 		return err
 	}
 	s.active.bins = Assignments{}
@@ -504,8 +539,11 @@ func (s *SortingService) routeLocked(ctx context.Context, category string, piece
 	if !commit || !choice.Assigned {
 		return result, nil
 	}
+	if s.collection == nil {
+		return RouteResult{}, ErrNoCollection
+	}
 	key := BinKey{choice.Bin.Layer, choice.Bin.Bin}
-	if err := s.store.SetBinCategories(ctx, s.active.stored.ID, key, newCats); err != nil {
+	if err := s.store.SetBinCategories(ctx, s.collection.ID, s.active.stored.ID, key, newCats); err != nil {
 		return RouteResult{}, fmt.Errorf("save the bin for %s: %w", category, err)
 	}
 	s.active.bins[key] = newCats

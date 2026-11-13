@@ -22,12 +22,12 @@ func NewRecordsStore(db *sqlx.DB) *RecordsStore {
 	return &RecordsStore{db: db}
 }
 
-func (s *RecordsStore) StartRun(ctx context.Context, profileID *int64, profileName string, at time.Time) (int64, error) {
+func (s *RecordsStore) StartRun(ctx context.Context, collectionID int64, profileID *int64, profileName string, at time.Time) (int64, error) {
 	if s.db == nil {
 		return 0, ErrDBNotConfigured
 	}
-	res, err := s.db.ExecContext(ctx, `INSERT INTO sort_runs (profile_id, profile_name, started_at) VALUES (?, ?, ?)`,
-		profileID, profileName, at.UTC())
+	res, err := s.db.ExecContext(ctx, `INSERT INTO sort_runs (collection_id, profile_id, profile_name, started_at) VALUES (?, ?, ?, ?)`,
+		collectionID, profileID, profileName, at.UTC())
 	if err != nil {
 		return 0, err
 	}
@@ -42,36 +42,40 @@ func (s *RecordsStore) EndRun(ctx context.Context, id int64, at time.Time) error
 	return err
 }
 
-func (s *RecordsStore) ListRuns(ctx context.Context, limit int) ([]sorter.Run, error) {
+func (s *RecordsStore) ListRuns(ctx context.Context, collectionID int64, limit int) ([]sorter.Run, error) {
 	if s.db == nil {
 		return nil, ErrDBNotConfigured
 	}
 	const query = `
-SELECT r.id, r.profile_id, r.profile_name, r.started_at, r.ended_at,
+SELECT r.id, r.collection_id, c.name AS collection_name, r.profile_id, r.profile_name, r.started_at, r.ended_at,
   (SELECT COUNT(*) FROM pieces p WHERE p.run_id = r.id) AS pieces,
   (SELECT COUNT(*) FROM pieces p WHERE p.run_id = r.id AND p.status = 'distributed') AS distributed,
   (SELECT p.distributed_at FROM pieces p WHERE p.run_id = r.id AND p.distributed_at IS NOT NULL
    ORDER BY p.distributed_at DESC LIMIT 1) AS last_piece_at
-FROM sort_runs r
+FROM sort_runs r JOIN collections c ON c.id = r.collection_id
+WHERE ? = 0 OR r.collection_id = ?
 ORDER BY r.started_at DESC, r.id DESC
 LIMIT ?
 `
 	var rows []struct {
-		ID          int64         `db:"id"`
-		ProfileID   sql.NullInt64 `db:"profile_id"`
-		ProfileName string        `db:"profile_name"`
-		StartedAt   time.Time     `db:"started_at"`
-		EndedAt     sql.NullTime  `db:"ended_at"`
-		Pieces      int           `db:"pieces"`
-		Distributed int           `db:"distributed"`
-		LastPieceAt any           `db:"last_piece_at"` // a subquery's column: time or text
+		ID             int64         `db:"id"`
+		CollectionID   int64         `db:"collection_id"`
+		CollectionName string        `db:"collection_name"`
+		ProfileID      sql.NullInt64 `db:"profile_id"`
+		ProfileName    string        `db:"profile_name"`
+		StartedAt      time.Time     `db:"started_at"`
+		EndedAt        sql.NullTime  `db:"ended_at"`
+		Pieces         int           `db:"pieces"`
+		Distributed    int           `db:"distributed"`
+		LastPieceAt    any           `db:"last_piece_at"` // a subquery's column: time or text
 	}
-	if err := s.db.SelectContext(ctx, &rows, query, clampLimit(limit)); err != nil {
+	if err := s.db.SelectContext(ctx, &rows, query, collectionID, collectionID, clampLimit(limit)); err != nil {
 		return nil, err
 	}
 	out := make([]sorter.Run, 0, len(rows))
 	for _, r := range rows {
-		run := sorter.Run{ID: r.ID, ProfileName: r.ProfileName, StartedAt: r.StartedAt, Pieces: r.Pieces, Distributed: r.Distributed}
+		run := sorter.Run{ID: r.ID, CollectionID: r.CollectionID, CollectionName: r.CollectionName,
+			ProfileName: r.ProfileName, StartedAt: r.StartedAt, Pieces: r.Pieces, Distributed: r.Distributed}
 		if t, ok := timeOf(r.LastPieceAt); ok {
 			run.LastPieceAt = &t
 		}
@@ -107,6 +111,7 @@ type pieceRow struct {
 	BinLayer      int            `db:"bin_layer"`
 	BinNumber     int            `db:"bin_number"`
 	RouteReason   string         `db:"route_reason"`
+	VirtualBin    bool           `db:"virtual_bin"`
 	PieceMm       float64        `db:"piece_mm"`
 	Problems      string         `db:"problems"`
 	Prediction    sql.NullString `db:"prediction"`
@@ -114,7 +119,7 @@ type pieceRow struct {
 
 const pieceColumns = `id, run_id, status, seen_at, identified_at, distributed_at, part_id, part_name,
   part_category, part_score, color_id, color_name, color_score, category, category_name,
-  bin_layer, bin_number, route_reason, piece_mm, problems, prediction`
+  bin_layer, bin_number, route_reason, virtual_bin, piece_mm, problems, prediction`
 
 func (r pieceRow) piece() sorter.Piece {
 	p := sorter.Piece{
@@ -122,7 +127,7 @@ func (r pieceRow) piece() sorter.Piece {
 		PartID: r.PartID, PartName: r.PartName, PartCategory: r.PartCategory, PartScore: r.PartScore,
 		ColorID: r.ColorID, ColorName: r.ColorName, ColorScore: r.ColorScore,
 		Category: r.Category, CategoryName: r.CategoryName,
-		BinLayer: r.BinLayer, BinNumber: r.BinNumber, RouteReason: r.RouteReason, PieceMm: r.PieceMm,
+		BinLayer: r.BinLayer, BinNumber: r.BinNumber, RouteReason: r.RouteReason, VirtualBin: r.VirtualBin, PieceMm: r.PieceMm,
 	}
 	if r.RunID.Valid {
 		p.RunID = r.RunID.Int64
@@ -167,20 +172,20 @@ func (s *RecordsStore) SavePiece(ctx context.Context, p sorter.Piece) error {
 	}
 	const query = `
 INSERT INTO pieces (` + pieceColumns + `)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
   run_id = excluded.run_id, status = excluded.status, identified_at = excluded.identified_at,
   distributed_at = excluded.distributed_at, part_id = excluded.part_id, part_name = excluded.part_name,
   part_category = excluded.part_category, part_score = excluded.part_score, color_id = excluded.color_id,
   color_name = excluded.color_name, color_score = excluded.color_score, category = excluded.category,
   category_name = excluded.category_name, bin_layer = excluded.bin_layer, bin_number = excluded.bin_number,
-  route_reason = excluded.route_reason, piece_mm = excluded.piece_mm, problems = excluded.problems,
+  route_reason = excluded.route_reason, virtual_bin = excluded.virtual_bin, piece_mm = excluded.piece_mm, problems = excluded.problems,
   prediction = excluded.prediction
 `
 	_, err = s.db.ExecContext(ctx, query,
 		p.ID, runID, string(p.Status), p.SeenAt.UTC(), utcOrNil(p.IdentifiedAt), utcOrNil(p.DistributedAt),
 		p.PartID, p.PartName, p.PartCategory, p.PartScore, p.ColorID, p.ColorName, p.ColorScore,
-		p.Category, p.CategoryName, p.BinLayer, p.BinNumber, p.RouteReason, p.PieceMm, string(problems), prediction)
+		p.Category, p.CategoryName, p.BinLayer, p.BinNumber, p.RouteReason, p.VirtualBin, p.PieceMm, string(problems), prediction)
 	return err
 }
 
@@ -202,9 +207,16 @@ func (s *RecordsStore) ListPieces(ctx context.Context, f sorter.PieceFilter) ([]
 	}
 	var where []string
 	var args []any
+	if f.CollectionID != 0 {
+		where = append(where, "run_id IN (SELECT id FROM sort_runs WHERE collection_id = ?)")
+		args = append(args, f.CollectionID)
+	}
 	if f.RunID != 0 {
 		where = append(where, "run_id = ?")
 		args = append(args, f.RunID)
+	}
+	if f.Unknown {
+		where = append(where, unknownPiece)
 	}
 	if f.Status != "" {
 		where = append(where, "status = ?")
@@ -483,8 +495,23 @@ ON CONFLICT (layer, bin) DO UPDATE SET emptied_at = excluded.emptied_at
 	return err
 }
 
-// KitPieces lists delivered pieces in these categories from runs under the profile.
-func (s *RecordsStore) KitPieces(ctx context.Context, profileID int64, categories []string) ([]sorter.KitPiece, error) {
+// EmptyAllBins records every bin that has had a piece as emptied now.
+func (s *RecordsStore) EmptyAllBins(ctx context.Context, at time.Time) error {
+	if s.db == nil {
+		return ErrDBNotConfigured
+	}
+	const query = `
+INSERT INTO bin_empties (layer, bin, emptied_at)
+SELECT DISTINCT bin_layer, bin_number, ? FROM pieces WHERE bin_layer > 0
+ON CONFLICT (layer, bin) DO UPDATE SET emptied_at = excluded.emptied_at
+`
+	_, err := s.db.ExecContext(ctx, query, at.UTC())
+	return err
+}
+
+// KitPieces lists delivered pieces in these categories from the collection's runs
+// under the profile, since its bins last started afresh.
+func (s *RecordsStore) KitPieces(ctx context.Context, collectionID, profileID int64, categories []string) ([]sorter.KitPiece, error) {
 	if s.db == nil {
 		return nil, ErrDBNotConfigured
 	}
@@ -493,9 +520,10 @@ func (s *RecordsStore) KitPieces(ctx context.Context, profileID int64, categorie
 	}
 	query, args, err := sqlx.In(`
 SELECT p.category, p.part_id, p.color_id
-FROM pieces p JOIN sort_runs r ON r.id = p.run_id
-WHERE r.profile_id = ? AND p.status = 'distributed' AND p.category IN (?)
-ORDER BY p.seen_at`, profileID, categories)
+FROM pieces p JOIN sort_runs r ON r.id = p.run_id JOIN collections c ON c.id = r.collection_id
+WHERE r.collection_id = ? AND r.profile_id = ? AND p.status = 'distributed' AND p.category IN (?)
+  AND (c.bins_started_at IS NULL OR p.distributed_at >= c.bins_started_at)
+ORDER BY p.seen_at`, collectionID, profileID, categories)
 	if err != nil {
 		return nil, err
 	}

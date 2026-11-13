@@ -22,7 +22,7 @@ func TestRecordsPiecesRunsAndIncidents(t *testing.T) {
 	go records.Run(ctx)
 
 	start := time.Now().UTC().Truncate(time.Second)
-	runID, err := store.StartRun(ctx, nil, "Bricks", start)
+	runID, err := store.StartRun(ctx, newCollection(t, store, "Test"), nil, "Bricks", start)
 	require.NoError(t, err)
 
 	p := sorter.Piece{ID: sorter.NewPieceID(), RunID: runID, Status: sorter.PieceTracking, SeenAt: start}
@@ -81,7 +81,7 @@ func TestRecordsPiecesRunsAndIncidents(t *testing.T) {
 	assert.Equal(t, 1, total)
 
 	require.NoError(t, store.EndRun(ctx, runID, start.Add(time.Minute)))
-	runs, err := store.ListRuns(ctx, 10)
+	runs, err := store.ListRuns(ctx, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, runs, 1)
 	assert.Equal(t, 2, runs[0].Pieces)

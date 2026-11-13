@@ -72,10 +72,12 @@ type Piece struct {
 	Category     string `json:"category,omitempty"`
 	CategoryName string `json:"category_name,omitempty"`
 	// BinLayer and BinNumber are 0 for the bucket under the tower.
-	BinLayer    int     `json:"bin_layer,omitempty"`
-	BinNumber   int     `json:"bin_number,omitempty"`
-	RouteReason string  `json:"route_reason,omitempty"`
-	PieceMm     float64 `json:"piece_mm,omitempty"`
+	BinLayer    int    `json:"bin_layer,omitempty"`
+	BinNumber   int    `json:"bin_number,omitempty"`
+	RouteReason string `json:"route_reason,omitempty"`
+	// VirtualBin: the chute was left out, so the bin is where it would have gone.
+	VirtualBin bool    `json:"virtual_bin,omitempty"`
+	PieceMm    float64 `json:"piece_mm,omitempty"`
 
 	Problems   []Problem       `json:"problems"`
 	Prediction json.RawMessage `json:"prediction,omitempty"`
@@ -128,13 +130,15 @@ type PieceImage struct {
 }
 
 type Run struct {
-	ID          int64      `json:"id"`
-	ProfileID   *int64     `json:"profile_id,omitempty"`
-	ProfileName string     `json:"profile_name"`
-	StartedAt   time.Time  `json:"started_at"`
-	EndedAt     *time.Time `json:"ended_at,omitempty"`
-	Pieces      int        `json:"pieces"`
-	Distributed int        `json:"distributed"`
+	ID             int64      `json:"id"`
+	CollectionID   int64      `json:"collection_id"`
+	CollectionName string     `json:"collection_name"`
+	ProfileID      *int64     `json:"profile_id,omitempty"`
+	ProfileName    string     `json:"profile_name"`
+	StartedAt      time.Time  `json:"started_at"`
+	EndedAt        *time.Time `json:"ended_at,omitempty"`
+	Pieces         int        `json:"pieces"`
+	Distributed    int        `json:"distributed"`
 	// LastPieceAt is when its last piece was sorted: where its sorting really ended,
 	// whatever ran on after (an empty hopper turning until it was stopped).
 	LastPieceAt *time.Time `json:"last_piece_at,omitempty"`
@@ -157,8 +161,10 @@ type Incident struct {
 
 // PieceFilter narrows the pieces list.
 type PieceFilter struct {
+	CollectionID int64
 	RunID        int64
 	Status       string
+	Unknown      bool // only pieces with no part (see Unknown)
 	ColorID      string
 	PartCategory string // Brickognize's category of the part ("Brick", "Plate", …)
 	Search       string // a part id, category name or piece id prefix
@@ -176,9 +182,10 @@ type Stats struct {
 
 // RecordsStore keeps pieces, runs and incidents.
 type RecordsStore interface {
-	StartRun(ctx context.Context, profileID *int64, profileName string, at time.Time) (int64, error)
+	StartRun(ctx context.Context, collectionID int64, profileID *int64, profileName string, at time.Time) (int64, error)
 	EndRun(ctx context.Context, id int64, at time.Time) error
-	ListRuns(ctx context.Context, limit int) ([]Run, error)
+	// ListRuns is the newest runs; collectionID 0 means every collection's.
+	ListRuns(ctx context.Context, collectionID int64, limit int) ([]Run, error)
 	SavePiece(ctx context.Context, p Piece) error
 	AddPieceImage(ctx context.Context, pieceID string, img PieceImage) error
 	ListPieces(ctx context.Context, f PieceFilter) ([]Piece, int, error)

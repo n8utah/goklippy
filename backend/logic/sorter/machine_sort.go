@@ -83,19 +83,24 @@ func (m *Machine) startRun(now time.Time) error {
 		return nil
 	}
 	st := m.sort
-	// With the chute left out pieces go nowhere in particular, so no profile is used
-	// (or needed): the run has none.
+	col := st.deps.Sorting.Collection()
+	if col == nil {
+		return ErrNoCollection
+	}
+	// With the chute left out a profile is optional: with one, each piece is still given
+	// the bin it would have gone to (a virtual bin); without, pieces go nowhere in
+	// particular and the run has none.
 	var profileID *int64
 	name := ""
-	if !m.settings().Distributor.LeftOut {
-		active := st.deps.Sorting.Active()
-		if active == nil {
-			return ErrNoActiveProfile
-		}
+	active := st.deps.Sorting.Active()
+	if active == nil && !m.settings().Distributor.LeftOut {
+		return ErrNoActiveProfile
+	}
+	if active != nil {
 		id := active.ID
 		profileID, name = &id, active.Name
 	}
-	runID, err := st.deps.Records.Store().StartRun(context.Background(), profileID, name, now)
+	runID, err := st.deps.Records.Store().StartRun(context.Background(), col.ID, profileID, name, now)
 	if err != nil {
 		return fmt.Errorf("start a sort run: %w", err)
 	}
@@ -105,8 +110,35 @@ func (m *Machine) startRun(now time.Time) error {
 	st.platter.Reset(now)
 	st.spent = newTimeSpent()
 	st.spent.last = now
-	slog.Info("sort run started", "run", runID, "profile", name)
+	slog.Info("sort run started", "run", runID, "collection", col.Name, "profile", name)
 	return nil
+}
+
+// SelectCollection makes a collection the one the next run sorts into. Not while a
+// run is on: stop it first.
+func (m *Machine) SelectCollection(ctx context.Context, col Collection) error {
+	return m.send(ctx, request{do: func() error {
+		if m.sort == nil {
+			return ErrNoCollection
+		}
+		if m.sort.runID != 0 {
+			return fmt.Errorf("%w: stop the run before picking another collection", ErrInvalidTransition)
+		}
+		if err := m.sort.deps.Sorting.SelectCollection(ctx, col); err != nil {
+			return err
+		}
+		m.changed = true
+		return nil
+	}})
+}
+
+// SortingInto is the collection a run is sorting into now, or 0.
+func (m *Machine) SortingInto() int64 {
+	snap := m.Snapshot()
+	if snap.RunID == 0 || snap.Collection == nil {
+		return 0
+	}
+	return snap.Collection.ID
 }
 
 // endRun closes the run, on Stop or an error. Pieces still aboard are recorded lost.
@@ -487,6 +519,9 @@ func (m *Machine) sortSnapshot(snap *Snapshot) {
 	}
 	st := m.sort
 	snap.RunID = st.runID
+	if st.deps.Sorting != nil {
+		snap.Collection = st.deps.Sorting.Collection()
+	}
 	if st.spent != nil {
 		snap.TimeMs = st.spent.snapshot()
 	}

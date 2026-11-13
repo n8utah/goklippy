@@ -35,8 +35,9 @@ type CatalogEntry struct {
 
 // CatalogRun is how many of a part were seen in one run.
 type CatalogRun struct {
-	RunID int64 `json:"run_id"`
-	Seen  int   `json:"seen"`
+	RunID        int64 `json:"run_id"`
+	CollectionID int64 `json:"collection_id,omitempty"`
+	Seen         int   `json:"seen"`
 }
 
 // CatalogFilter narrows and orders the catalog. Sort is "seen" (default), "name",
@@ -46,9 +47,11 @@ type CatalogFilter struct {
 	Search   string
 	ColorID  string
 	Category string
-	RunID    int64
-	Sort     string
-	Desc     bool
+	// CollectionID and RunID: only parts seen in that collection's runs, or that run.
+	CollectionID int64
+	RunID        int64
+	Sort         string
+	Desc         bool
 }
 
 // CatalogFacets are the values the catalog can be filtered by, with counts.

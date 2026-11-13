@@ -44,6 +44,7 @@ func TestSortEndToEndInSimulation(t *testing.T) {
 	world := sorter.NewSimWorld(hw, settings, supply)
 
 	sorting := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	pickCollection(t, db, sorting, "Test")
 	p, err := sorting.Import(ctx, []byte(bricksProfile))
 	require.NoError(t, err)
 	require.NoError(t, sorting.Activate(ctx, p.ID, sorter.ActivateKeep))
@@ -122,7 +123,7 @@ func TestSortEndToEndInSimulation(t *testing.T) {
 	}
 	assert.Equal(t, map[string]int{"3001": 2, "3020": 1, "3023": 1, "3003": 1, "": 1}, byPart)
 
-	runs, err := store.ListRuns(ctx, 5)
+	runs, err := store.ListRuns(ctx, 0, 5)
 	require.NoError(t, err)
 	require.Len(t, runs, 1)
 	assert.NotNil(t, runs[0].EndedAt)
@@ -148,6 +149,7 @@ func TestSortLinksJourneysAcrossChannels(t *testing.T) {
 	supply := []sorter.SimPart{sorter.SimCatalog[0], sorter.SimCatalog[2], sorter.SimCatalog[3]}
 	world := sorter.NewSimWorld(hw, settings, supply)
 	sorting := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	pickCollection(t, db, sorting, "Test")
 	p, err := sorting.Import(ctx, []byte(bricksProfile))
 	require.NoError(t, err)
 	require.NoError(t, sorting.Activate(ctx, p.ID, sorter.ActivateKeep))
@@ -203,6 +205,7 @@ func TestSortWithTheChuteLeftOut(t *testing.T) {
 	world := sorter.NewSimWorld(hw, settings, sorter.SimCatalog[:3])
 	// No profile is imported or active: with the chute left out none is needed.
 	sorting := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	pickCollection(t, db, sorting, "Test")
 	records := sorter.NewRecords(NewRecordsStore(db), t.TempDir())
 	go records.Run(ctx)
 	m := sorter.NewMachine(hw, settings, 2*time.Millisecond)
@@ -232,6 +235,32 @@ func TestSortWithTheChuteLeftOut(t *testing.T) {
 	}
 }
 
+// With the chute left out and a profile active, each piece is still given the bin it
+// would have gone to (a virtual bin), so bin layouts and plans can be tried out.
+func TestSortWithTheChuteLeftOutUsesVirtualBins(t *testing.T) {
+	settings := func() sorter.MachineSettings {
+		s := fastSettings()
+		s.Distributor.LeftOut = true
+		return s
+	}
+	m, _, store := startSimSort(t, settings, sorter.SimCatalog[:3], nil)
+	require.Eventually(t, func() bool { return len(m.Snapshot().Recent) == 3 }, 30*time.Second, 10*time.Millisecond)
+	virtual := 0
+	for _, piece := range m.Snapshot().Recent {
+		assert.NotEqual(t, sorter.RouteNoChute, piece.RouteReason, piece.PartID)
+		assert.NotEmpty(t, piece.CategoryName, "the profile was asked")
+		if piece.BinLayer > 0 {
+			assert.True(t, piece.VirtualBin, piece.PartID)
+			virtual++
+		}
+	}
+	assert.Positive(t, virtual, "some pieces were given a bin")
+	runs, err := store.ListRuns(context.Background(), testCollectionID, 1)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	assert.Equal(t, "Test", runs[0].CollectionName)
+}
+
 // failingIdentifier fails every request, or blocks until its context ends.
 type failingIdentifier struct{ block bool }
 
@@ -251,6 +280,7 @@ func startSimSort(t *testing.T, settings func() sorter.MachineSettings, supply [
 	hw := sorter.NewSimHardware(settings)
 	world := sorter.NewSimWorld(hw, settings, supply)
 	sorting := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	pickCollection(t, db, sorting, "Test")
 	p, err := sorting.Import(ctx, []byte(bricksProfile))
 	require.NoError(t, err)
 	require.NoError(t, sorting.Activate(ctx, p.ID, sorter.ActivateKeep))
@@ -311,7 +341,7 @@ func TestSortFinishesOnItsOwnWhenC2RunsDry(t *testing.T) {
 	assert.Equal(t, "everything left was sorted", fin.Step)
 	assert.Zero(t, m.Snapshot().RunID)
 
-	runs, err := store.ListRuns(context.Background(), 1)
+	runs, err := store.ListRuns(context.Background(), 0, 1)
 	require.NoError(t, err)
 	require.Len(t, runs, 1)
 	assert.NotNil(t, runs[0].EndedAt, "the run was ended")
@@ -572,10 +602,11 @@ func TestSortingKitsAndFullBins(t *testing.T) {
 	records := NewRecordsStore(db)
 	svc := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
 	require.NoError(t, svc.AttachCounts(ctx, records))
+	pickCollection(t, db, svc, "Test")
 	p, err := svc.Import(ctx, []byte(kitProfile))
 	require.NoError(t, err)
 	require.NoError(t, svc.Activate(ctx, p.ID, sorter.ActivateKeep))
-	runID, err := records.StartRun(ctx, &p.ID, p.Name, time.Now())
+	runID, err := records.StartRun(ctx, testCollectionID, &p.ID, p.Name, time.Now())
 	require.NoError(t, err)
 
 	// deliver routes a red 3001 and records it as delivered where it was sent.

@@ -64,3 +64,7 @@ func TestIdentifyAndRouteNoPart(t *testing.T) {
 type memSortingStore struct{ SortingStore }
 
 func (memSortingStore) ActiveProfileID(context.Context) (int64, bool, error) { return 0, false, nil }
+
+func (memSortingStore) CurrentCollection(context.Context) (CollectionRef, bool, error) {
+	return CollectionRef{}, false, nil
+}

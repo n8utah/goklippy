@@ -33,9 +33,10 @@ func TestCatalogCountsFiltersFillsAndClears(t *testing.T) {
 	ctx := context.Background()
 	store := NewRecordsStore(openTestDB(t))
 	t0 := time.Now().UTC().Truncate(time.Second)
-	run1, err := store.StartRun(ctx, nil, "", t0)
+	col := newCollection(t, store, "Test")
+	run1, err := store.StartRun(ctx, col, nil, "", t0)
 	require.NoError(t, err)
-	run2, err := store.StartRun(ctx, nil, "", t0.Add(time.Hour))
+	run2, err := store.StartRun(ctx, col, nil, "", t0.Add(time.Hour))
 	require.NoError(t, err)
 
 	a := identified(t, run1, "3001", "5", "Red", t0)
@@ -52,7 +53,7 @@ func TestCatalogCountsFiltersFillsAndClears(t *testing.T) {
 	require.Len(t, list, 1)
 	assert.Equal(t, 2, list[0].Seen)
 	assert.Equal(t, "https://img/3001.png", list[0].ImgURL, "the picture of the part named, not the first one")
-	assert.Equal(t, []sorter.CatalogRun{{RunID: run2, Seen: 1}, {RunID: run1, Seen: 1}}, list[0].Runs)
+	assert.Equal(t, []sorter.CatalogRun{{RunID: run2, CollectionID: col, Seen: 1}, {RunID: run1, CollectionID: col, Seen: 1}}, list[0].Runs)
 	assert.True(t, list[0].FirstSeen.Equal(t0))
 	assert.True(t, list[0].LastSeen.Equal(t0.Add(time.Hour)))
 

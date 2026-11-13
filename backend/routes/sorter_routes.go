@@ -155,7 +155,8 @@ func sorterError(c *gin.Context, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, sorter.ErrInvalidTransition), errors.Is(err, sorter.ErrBusy),
 		errors.Is(err, sorter.ErrChuteNotHomed), errors.Is(err, sorter.ErrNoActiveProfile),
-		errors.Is(err, sorter.ErrNoLight), errors.Is(err, sorter.ErrSupplyLow):
+		errors.Is(err, sorter.ErrNoLight), errors.Is(err, sorter.ErrSupplyLow),
+		errors.Is(err, sorter.ErrNoCollection), errors.Is(err, sorter.ErrCollectionArchived):
 		status = http.StatusConflict
 	case errors.Is(err, sorter.ErrNoBoard):
 		status = http.StatusServiceUnavailable

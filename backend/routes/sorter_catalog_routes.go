@@ -20,18 +20,19 @@ func catalogOf(c *gin.Context) (sorter.CatalogStore, bool) {
 	return cat, true
 }
 
-// ListSorterCatalog GET /sorter/catalog?q=&color=&category=&run=&sort=seen|name|part|color|last&dir=asc|desc
+// ListSorterCatalog GET /sorter/catalog?q=&color=&category=&collection=&run=&sort=seen|name|part|color|last&dir=asc|desc
 func ListSorterCatalog(c *gin.Context) {
 	cat, ok := catalogOf(c)
 	if !ok {
 		return
 	}
+	collectionID, _ := strconv.ParseInt(c.Query("collection"), 10, 64)
 	runID, _ := strconv.ParseInt(c.Query("run"), 10, 64)
 	sort := c.DefaultQuery("sort", "seen")
 	desc := c.Query("dir") == "desc" || (c.Query("dir") == "" && (sort == "seen" || sort == "last"))
 	entries, err := cat.ListCatalog(c.Request.Context(), sorter.CatalogFilter{
 		Search: c.Query("q"), ColorID: c.Query("color"), Category: c.Query("category"),
-		RunID: runID, Sort: sort, Desc: desc,
+		CollectionID: collectionID, RunID: runID, Sort: sort, Desc: desc,
 	})
 	if err != nil {
 		sorterError(c, err)

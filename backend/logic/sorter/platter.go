@@ -664,8 +664,9 @@ func (p *Platter) prepareExit(now time.Time, settings MachineSettings) {
 		return
 	}
 
-	if settings.Distributor.LeftOut {
-		// No chute: nothing is aimed, and no profile is asked where it would go.
+	leftOut := settings.Distributor.LeftOut
+	if leftOut && (p.deps.Sorting == nil || p.deps.Sorting.Active() == nil) {
+		// No chute and no profile: nothing is aimed, and nothing says where it would go.
 		s.choice = BinChoice{Reason: RouteNoChute}
 		s.piece.RouteReason = RouteNoChute
 		s.routed = true
@@ -696,6 +697,9 @@ func (p *Platter) prepareExit(now time.Time, settings MachineSettings) {
 	}
 	if s.choice.Bin != nil {
 		s.piece.BinLayer, s.piece.BinNumber = s.choice.Bin.Layer, s.choice.Bin.Bin
+		// With the chute left out the bin is only where it would have gone; it still
+		// counts, so bin layouts, full bins and plans can be tried without the chute.
+		s.piece.VirtualBin = leftOut
 	}
 	s.routed = true
 	p.aim(now, s, settings)

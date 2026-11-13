@@ -118,6 +118,11 @@ func (s *RecordsStore) ListCatalog(ctx context.Context, f sorter.CatalogFilter) 
 		where = append(where, "EXISTS (SELECT 1 FROM catalog_runs r WHERE r.part_id = catalog_parts.part_id AND r.color_id = catalog_parts.color_id AND r.run_id = ?)")
 		args = append(args, f.RunID)
 	}
+	if f.CollectionID != 0 {
+		where = append(where, `EXISTS (SELECT 1 FROM catalog_runs r JOIN sort_runs s ON s.id = r.run_id
+  WHERE r.part_id = catalog_parts.part_id AND r.color_id = catalog_parts.color_id AND s.collection_id = ?)`)
+		args = append(args, f.CollectionID)
+	}
 	clause := ""
 	if len(where) > 0 {
 		clause = "WHERE " + strings.Join(where, " AND ")
@@ -167,18 +172,21 @@ FROM catalog_parts ` + clause + " ORDER BY " + strings.Replace(order, "%s", dir,
 // catalogRuns is each part and colour's runs, newest first.
 func (s *RecordsStore) catalogRuns(ctx context.Context) (map[string][]sorter.CatalogRun, error) {
 	var rows []struct {
-		PartID  string `db:"part_id"`
-		ColorID string `db:"color_id"`
-		RunID   int64  `db:"run_id"`
-		Seen    int    `db:"seen"`
+		PartID       string        `db:"part_id"`
+		ColorID      string        `db:"color_id"`
+		RunID        int64         `db:"run_id"`
+		CollectionID sql.NullInt64 `db:"collection_id"`
+		Seen         int           `db:"seen"`
 	}
-	if err := s.db.SelectContext(ctx, &rows, `SELECT part_id, color_id, run_id, seen FROM catalog_runs ORDER BY run_id DESC`); err != nil {
+	const query = `SELECT c.part_id, c.color_id, c.run_id, r.collection_id, c.seen
+FROM catalog_runs c LEFT JOIN sort_runs r ON r.id = c.run_id ORDER BY c.run_id DESC`
+	if err := s.db.SelectContext(ctx, &rows, query); err != nil {
 		return nil, err
 	}
 	out := map[string][]sorter.CatalogRun{}
 	for _, r := range rows {
 		k := r.PartID + "\x00" + r.ColorID
-		out[k] = append(out[k], sorter.CatalogRun{RunID: r.RunID, Seen: r.Seen})
+		out[k] = append(out[k], sorter.CatalogRun{RunID: r.RunID, CollectionID: r.CollectionID.Int64, Seen: r.Seen})
 	}
 	return out, nil
 }

@@ -48,9 +48,24 @@ CREATE TABLE IF NOT EXISTS sorting_profiles (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sorting_profiles_one_active ON sorting_profiles(active) WHERE active;
 
--- A sort run: from Start to Stop.
+-- A collection: one person's LEGO being sorted, over as many runs as it takes. At most
+-- one is current: the one the bins hold and the next run sorts into. bins_started_at is
+-- when it last became current, i.e. when its bins were last started afresh.
+CREATE TABLE IF NOT EXISTS collections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  current BOOLEAN NOT NULL DEFAULT FALSE,
+  bins_started_at DATETIME NULL,
+  archived_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_one_current ON collections(current) WHERE current;
+
+-- A sort run: from Start to Stop, sorting into one collection.
 CREATE TABLE IF NOT EXISTS sort_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  collection_id INTEGER NOT NULL REFERENCES collections(id),
   profile_id INTEGER NULL REFERENCES sorting_profiles(id) ON DELETE SET NULL,
   profile_name TEXT NOT NULL DEFAULT '',
   started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -78,6 +93,8 @@ CREATE TABLE IF NOT EXISTS pieces (
   bin_layer INTEGER NOT NULL DEFAULT 0,
   bin_number INTEGER NOT NULL DEFAULT 0,
   route_reason TEXT NOT NULL DEFAULT '',
+  -- virtual_bin: the chute was left out, so the bin is where it would have gone.
+  virtual_bin BOOLEAN NOT NULL DEFAULT FALSE,
   piece_mm REAL NOT NULL DEFAULT 0,
   problems TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(problems)),
   prediction TEXT NULL
@@ -176,14 +193,16 @@ CREATE TABLE IF NOT EXISTS bin_empties (
 
 CREATE INDEX IF NOT EXISTS idx_pieces_bin ON pieces(bin_layer, bin_number, distributed_at);
 
--- Which categories each bin takes, per profile, so switching profiles keeps each
--- profile's bins. Layer and bin count from 1; position keeps a bin's categories in
+-- Which categories each bin takes, per collection and profile: a collection's sorting
+-- plan. Switching profiles keeps each profile's bins; switching collections starts the
+-- new one's afresh. Layer and bin count from 1; position keeps a bin's categories in
 -- the order they were given.
 CREATE TABLE IF NOT EXISTS bin_categories (
+  collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
   profile_id INTEGER NOT NULL REFERENCES sorting_profiles(id) ON DELETE CASCADE,
   layer INTEGER NOT NULL,
   bin INTEGER NOT NULL,
   category_id TEXT NOT NULL,
   position INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (profile_id, layer, bin, category_id)
+  PRIMARY KEY (collection_id, profile_id, layer, bin, category_id)
 );

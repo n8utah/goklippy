@@ -48,11 +48,14 @@ type Snapshot struct {
 	Ticks    uint64         `json:"ticks"`              // control-loop ticks spent running
 
 	// Sorting, once AttachSorting is called.
-	Incident *IncidentHold              `json:"incident,omitempty"`
-	RunID    int64                      `json:"run_id,omitempty"`
-	Aboard   []Piece                    `json:"aboard"`
-	Recent   []Piece                    `json:"recent"`
-	Channels map[Channel]ChannelSummary `json:"channels,omitempty"`
+	Incident *IncidentHold `json:"incident,omitempty"`
+	// Collection is the current collection: the one being sorted into while RunID is
+	// set, else the one the next run sorts into.
+	Collection *CollectionRef             `json:"collection,omitempty"`
+	RunID      int64                      `json:"run_id,omitempty"`
+	Aboard     []Piece                    `json:"aboard"`
+	Recent     []Piece                    `json:"recent"`
+	Channels   map[Channel]ChannelSummary `json:"channels,omitempty"`
 	// TimeMs: the current (or last) run's time per channel per state, in ms
 	// (time_spent.go): where the time goes.
 	TimeMs map[Channel]map[string]int64 `json:"time_ms,omitempty"`
