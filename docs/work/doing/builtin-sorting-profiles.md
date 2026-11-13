@@ -142,6 +142,11 @@ starting and commit in small steps.
 - 2026-11-13, Nate: plan approved. Built-ins are always there (one of each, can't be deleted);
   a profile change needs the run stopped first; changing a non-current collection's profile
   doesn't ask about the bins.
+- 2026-11-13, progress: built in `24f1543` (backend) and `8284d34` (UI). Go tests pass; tried
+  on a simulated backend against a copy of the sorter's database (part-type sort, change to
+  colour keeping full bins, change back with bins emptied). Left: back up and migrate the
+  sorter's database (adds `collections.profile_id`, drops `sorting_profiles.active`; existing
+  collections get the active profile), restart the backend, and look the pages over.
 - 2026-11-13, Nate: no machine-wide active profile once collections choose their own.
 - 2026-11-13, Nate: changing a collection's profile asks whether the bins were emptied; if not,
   the new profile uses only the unused bins and the sort continues.
