@@ -271,6 +271,13 @@ type FeederSettings struct {
 	// PileSeconds: a pile of pieces jammed together is cleared off for at least this
 	// long (on the machine 10 s left a big plate's pile; 30 s cleared it).
 	PileSeconds int `json:"pileSeconds"`
+	// AutoStopSec: C2 without a piece this long in a run means the hopper has run dry,
+	// so the run finishes on its own: C1 stops, what's left is sorted, C2 and C3 turn
+	// round once for any piece the cameras missed, and it stops (machine_finish.go).
+	// 0 never does.
+	AutoStopSec int `json:"autoStopSec"`
+	// FinishMaxSec: finishing stops the run after this long whatever is left.
+	FinishMaxSec int `json:"finishMaxSec"`
 	// ShakeBeforePush: shake a stuck piece first, and push only if that fails. Off, it's
 	// pushed straight away (shaking rarely frees one caught on a fixed part).
 	ShakeBeforePush bool    `json:"shakeBeforePush"`
@@ -460,6 +467,8 @@ func DefaultMachineSettings() MachineSettings {
 			WorkAroundStuck: true,
 			PushPastStuck:   true,
 			PileSeconds:     30,
+			AutoStopSec:     120,
+			FinishMaxSec:    120,
 			PushSeconds:     3,
 			PushBumpDeg:     45,
 			ClearSeconds:    30,

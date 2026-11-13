@@ -285,6 +285,51 @@ func TestSortIdentificationFailureGoesToTheBucket(t *testing.T) {
 	_ = store
 }
 
+// finishSoon: the run finishes on its own once C2 has had no piece for 2 s.
+func finishSoon() sorter.MachineSettings {
+	s := fastSettings()
+	s.Feeder.AutoStopSec = 2
+	s.Feeder.FinishMaxSec = 60
+	return s
+}
+
+// The hopper runs dry: the run finishes on its own, sorting every piece first, then
+// stops (Ready, the run ended) and says why.
+func TestSortFinishesOnItsOwnWhenC2RunsDry(t *testing.T) {
+	m, world, store := startSimSort(t, finishSoon, []sorter.SimPart{sorter.SimCatalog[0], sorter.SimCatalog[1]}, nil)
+
+	require.Eventually(t, func() bool { return m.Snapshot().Finish != nil }, 30*time.Second, 10*time.Millisecond,
+		"finishing once C2 has been empty a while")
+	assert.Contains(t, m.Snapshot().Finish.Reason, "no new pieces on C2")
+	require.Eventually(t, func() bool { return m.Snapshot().State == sorter.StateReady }, 60*time.Second, 20*time.Millisecond,
+		"and then stopped on its own")
+
+	assert.Len(t, world.Falls(), 2, "both pieces sorted before it stopped")
+	fin := m.Snapshot().Finish
+	require.NotNil(t, fin, "how it finished stays shown")
+	assert.True(t, fin.Done)
+	assert.Equal(t, "everything left was sorted", fin.Step)
+	assert.Zero(t, m.Snapshot().RunID)
+
+	runs, err := store.ListRuns(context.Background(), 1)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	assert.NotNil(t, runs[0].EndedAt, "the run was ended")
+	assert.Equal(t, 2, runs[0].Distributed)
+}
+
+// Keep feeding calls finishing off, and the run carries on as usual.
+func TestSortKeepFeedingCallsFinishingOff(t *testing.T) {
+	m, _, _ := startSimSort(t, finishSoon, nil, nil)
+	require.Eventually(t, func() bool { f := m.Snapshot().Finish; return f != nil && !f.Done }, 30*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "finishing: not feeding, C2 has had no pieces for a while", m.Snapshot().Doing[sorter.ChannelC1])
+
+	require.NoError(t, m.KeepFeeding(context.Background()))
+	assert.Nil(t, m.Snapshot().Finish)
+	assert.Equal(t, sorter.StateRunning, m.Snapshot().State)
+	assert.Error(t, m.KeepFeeding(context.Background()), "nothing to call off")
+}
+
 // stallSettings: Brickognize hangs and the platter waits for it, so it stalls.
 func stallSettings() sorter.MachineSettings {
 	s := fastSettings()

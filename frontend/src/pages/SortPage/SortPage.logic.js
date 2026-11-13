@@ -9,6 +9,7 @@ import {
   listSorterRuns,
   listSorterShakes,
   moveSorterChannel,
+  keepSorterFeeding,
   resolveSorterIncident,
   shakeSorterChannel,
   sorterCommand,
@@ -138,6 +139,8 @@ export function useSortPageLogic() {
     closeFullscreen: () => setFullscreen(null),
     command: (name) => run(() => sorterCommand(name)),
     resolve: (action) => run(() => resolveSorterIncident(action)),
+    /** Calls off the run finishing on its own, for a refilled hopper. */
+    keepFeeding: () => run(() => keepSorterFeeding()),
     /** Turn by hand at the channel's own speed. */
     turn: (channel, degrees) => {
       const rpm = channel === 'c4' ? settings.indexRpm : settings.feederRpm?.[channel] || 5;

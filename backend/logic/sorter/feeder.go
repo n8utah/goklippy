@@ -52,6 +52,9 @@ type FeederInput struct {
 	// Feeder.C3BusyStandoffDeg short of the exit (nothing waits at the lip to fall
 	// onto it mid-turn).
 	PlatterBusy bool
+	// Finishing: the run is finishing on its own (machine_finish.go), so C1 doesn't
+	// feed; the rest carry on.
+	Finishing bool
 }
 
 // Feeder decides C1–C3's pulses. It keeps its own timers; feed it every tick.
@@ -115,6 +118,13 @@ func (f *Feeder) Reset() {
 	}
 	f.c2SeenAt = time.Time{}
 }
+
+// C2SeenAt is when C2 last had a piece on it (zero: not this run).
+func (f *Feeder) C2SeenAt() time.Time { return f.c2SeenAt }
+
+// FeedAgain starts C2's idle clock again, as if it just had a piece: after the hopper
+// is refilled, C1 feeds as usual (not the harder starving nudges straight away).
+func (f *Feeder) FeedAgain(now time.Time) { f.c2SeenAt = now }
 
 // Stuck lists channels whose leading piece won't ride; they stop pulsing until
 // Unstick.
@@ -331,6 +341,8 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 	c1 := f.channels[ChannelC1]
 	set1 := func(state, doing string) { c1.state, c1.doing = state, doing }
 	switch {
+	case in.Finishing:
+		set1(TimeEmpty, "finishing: not feeding, C2 has had no pieces for a while")
 	case in.Now.Before(c1.busyUntil):
 		if c1.state != TimeMoving {
 			set1(TimeMoving, "feeding C2")

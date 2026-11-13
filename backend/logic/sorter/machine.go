@@ -59,6 +59,9 @@ type Snapshot struct {
 	// Doing is what each channel (C1–C4) is doing right now, in a few words with why,
 	// while a run is on.
 	Doing map[Channel]string `json:"doing,omitempty"`
+	// Finish is the run finishing on its own (C2 has had no pieces for a while), or how
+	// the last run did, until the next starts (machine_finish.go).
+	Finish *FinishStatus `json:"finish,omitempty"`
 }
 
 // JobStatus is a task the machine runs off the loop: homing, aiming, sending to a bin.

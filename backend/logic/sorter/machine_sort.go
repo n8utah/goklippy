@@ -30,6 +30,12 @@ type sortStations struct {
 	platter *Platter
 	runID   int64
 	spent   *timeSpent // this run's time per channel per state
+	// runStart: when the run started (the idle clock for finishing starts there);
+	// finish: the run finishing on its own (machine_finish.go); lastFinish: how the last
+	// run did, shown until the next starts.
+	runStart   time.Time
+	finish     *finishing
+	lastFinish *FinishStatus
 }
 
 // ChannelSummary is one camera channel's state for the dashboard.
@@ -94,6 +100,7 @@ func (m *Machine) startRun(now time.Time) error {
 		return fmt.Errorf("start a sort run: %w", err)
 	}
 	st.runID = runID
+	st.runStart, st.finish, st.lastFinish = now, nil, nil
 	st.feeder.Reset()
 	st.platter.Reset(now)
 	st.spent = newTimeSpent()
@@ -110,6 +117,7 @@ func (m *Machine) endRun(now time.Time) {
 	st := m.sort
 	st.platter.Reset(now)
 	st.feeder.Reset()
+	st.finish = nil
 	runID := st.runID
 	st.runID = 0
 	if err := st.deps.Records.Store().EndRun(context.Background(), runID, now); err != nil {
@@ -133,6 +141,10 @@ func (m *Machine) stepSorting(now time.Time) {
 			return false
 		}
 		if st.spent == nil {
+			return true
+		}
+		if m.incident == nil && st.finish != nil {
+			st.spent.addAll(TimeBusy, dt) // a finishing step
 			return true
 		}
 		if m.incident != nil || m.recovering == "" {
@@ -162,12 +174,14 @@ func (m *Machine) stepSorting(now time.Time) {
 		held()
 		return
 	}
+	m.checkAutoStop(now, settings.Feeder)
 	moves := st.feeder.Step(FeederInput{
 		Now:          now,
 		C2:           st.deps.Vision.Observation(ChannelC2),
 		C3:           st.deps.Vision.Observation(ChannelC3),
 		PlatterReady: st.platter.Ready(now),
 		PlatterBusy:  st.platter.Busy(now),
+		Finishing:    st.finish != nil,
 	}, settings)
 	if st.feeder.TakeSeveralFell(ChannelC3) {
 		st.platter.ExpectSeveral(now) // the next landing on C4 is a double
@@ -183,6 +197,7 @@ func (m *Machine) stepSorting(now time.Time) {
 		}
 		st.spent.add(ChannelC4, st.platter.TimeState(now), dt)
 	}
+	m.stepFinish(now, settings)
 }
 
 // raiseIncident stops the sort until the operator resolves it.
@@ -472,6 +487,7 @@ func (m *Machine) sortSnapshot(snap *Snapshot) {
 		snap.TimeMs = st.spent.snapshot()
 	}
 	snap.Doing = m.channelsDoing(time.Now())
+	snap.Finish = st.finishStatus()
 	snap.Aboard = append(snap.Aboard, st.platter.Aboard()...)
 	snap.Recent = append(snap.Recent, st.platter.Recent()...)
 	now := time.Now()
@@ -499,6 +515,8 @@ func (m *Machine) channelsDoing(now time.Time) map[Channel]string {
 		switch {
 		case m.incident != nil:
 			out[ch] = "stopped: " + m.incident.Title
+		case m.job != nil && st.finish != nil && m.recovering == "":
+			out[ch] = "finishing: " + st.finish.Step
 		case m.job != nil && ch == m.recovering:
 			what := m.job.status.Name
 			if d := m.job.status.Detail; d != "" {

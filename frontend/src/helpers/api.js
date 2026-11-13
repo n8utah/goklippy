@@ -439,6 +439,11 @@ export function listSorterShakes() {
 }
 
 /** Run C2–C4 for the set time to empty them (into the bucket when the chute is in). */
+/** Calls off the run finishing on its own (C2 empty a while): C1 feeds again. */
+export function keepSorterFeeding() {
+  return postJSON('/api/v1/sorter/keep-feeding', {});
+}
+
 export function clearSorterChannels() {
   return postJSON('/api/v1/sorter/channels/clear', {});
 }

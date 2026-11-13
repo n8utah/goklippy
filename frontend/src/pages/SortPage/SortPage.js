@@ -12,6 +12,8 @@ import ChannelControls from './components/ChannelControls';
 import ChannelsNow from './components/ChannelsNow';
 import TimeSpent from './components/TimeSpent';
 
+const upperFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
 /** What the machine is doing, in a sentence, for the top of the page. */
 function headline(state, connected, numbers) {
   if (!connected) return { title: 'No backend', text: 'Waiting for goklippy’s backend to answer.' };
@@ -19,8 +21,15 @@ function headline(state, connected, numbers) {
   const profile = numbers.profile
     ? `Profile: ${numbers.profile.name}.`
     : 'No sorting profile is active.';
+  const fin = state.finish;
   switch (state.state) {
     case 'running':
+      if (fin && !fin.done) {
+        return {
+          title: `Finishing · run ${state.run_id}`,
+          text: `${upperFirst(fin.reason)}, so it’s wrapping up: ${fin.step}. It stops on its own when done.`,
+        };
+      }
       return { title: `Sorting · run ${state.run_id}`, text: profile };
     case 'paused':
       return {
@@ -30,6 +39,12 @@ function headline(state, connected, numbers) {
     case 'homing':
       return { title: 'Homing…', text: 'Starting the hardware and homing the chute.' };
     case 'ready':
+      if (fin?.done) {
+        return {
+          title: 'Ready to sort',
+          text: `The last run stopped on its own at ${new Date(fin.at).toLocaleTimeString()}: ${fin.reason}; ${fin.step}. ${profile}`,
+        };
+      }
       return { title: 'Ready to sort', text: profile };
     case 'error':
       return { title: 'Stopped on an error', text: state.error };
@@ -83,6 +98,15 @@ const SortPage = () => {
           <Button variant="outline" disabled={!logic.canHome} onClick={() => logic.command('home')}>
             {state?.chute?.homed ? 'Re-home' : 'Home'}
           </Button>
+          {state?.state === 'running' && state.finish && !state.finish.done && (
+            <Button
+              disabled={logic.busy}
+              onClick={logic.keepFeeding}
+              title="Hopper refilled? Call off finishing and feed from C1 again"
+            >
+              Keep feeding
+            </Button>
+          )}
           {logic.canPause ? (
             <Button variant="outline" onClick={() => logic.command('pause')}>
               Pause

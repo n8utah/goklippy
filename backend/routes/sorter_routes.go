@@ -176,6 +176,16 @@ func ClearSorterChannels(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// KeepSorterFeeding POST /sorter/keep-feeding: calls off the run finishing on its own
+// (C2 had no pieces for a while), for a refilled hopper.
+func KeepSorterFeeding(c *gin.Context) {
+	if err := sorterMachine.KeepFeeding(c.Request.Context()); err != nil {
+		sorterError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, sorterMachine.Snapshot())
+}
+
 // ForgetSorterIgnored POST /sorter/channels/:channel/forget-ignored: the channel's
 // camera watches the spots of stuck pieces it was working around again.
 func ForgetSorterIgnored(c *gin.Context) {
