@@ -116,6 +116,12 @@ export function useCollectionDetail(id) {
         () => updateSorterCollection(id, { archived }),
         () => (archived ? 'Archived' : 'Unarchived'),
       ),
+    /** bins: "emptied" or "continue" for the current collection; undefined otherwise. */
+    changeProfile: (profileId, bins) =>
+      act(
+        () => updateSorterCollection(id, { profile_id: profileId, bins }),
+        (col) => `Sorting by ${col.profile_name}`,
+      ),
     confirm,
     closeConfirm: () => setConfirm(null),
     askClearUnknowns: () =>

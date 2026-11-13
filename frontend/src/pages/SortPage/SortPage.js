@@ -21,8 +21,10 @@ function headline(state, connected, numbers) {
   if (!connected) return { title: 'No backend', text: 'Waiting for goklippy’s backend to answer.' };
   if (!state) return { title: 'Connecting…', text: '' };
   const profile = numbers.profile
-    ? `Profile: ${numbers.profile.name}.`
-    : 'No sorting profile is active.';
+    ? `Sorting by ${numbers.profile.name}.`
+    : state.collection
+      ? `${state.collection.name} has no sorting profile: pick one on Run › Collections.`
+      : 'Pick the collection to sort into.';
   const fin = state.finish;
   switch (state.state) {
     case 'running':

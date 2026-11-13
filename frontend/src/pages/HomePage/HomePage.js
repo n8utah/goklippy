@@ -77,7 +77,7 @@ const HomePage = () => {
               {logic.profile
                 ? `Sorting by ${logic.profile.name}.`
                 : logic.profile === null
-                  ? 'No sorting profile is active.'
+                  ? 'No sorting profile picked for the collection.'
                   : ''}
             </p>
           </div>

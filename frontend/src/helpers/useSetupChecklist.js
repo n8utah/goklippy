@@ -137,7 +137,7 @@ export function useSetupChecklist() {
 
   items.push({
     id: 'profile',
-    label: 'Sorting profile active',
+    label: 'Collection with a sorting profile',
     state: profile === undefined ? 'unknown' : profile ? 'done' : 'todo',
     // Not needed while the chute is left out: sorting doesn't use one then.
     optional: Boolean(chute?.left_out),
@@ -145,8 +145,8 @@ export function useSetupChecklist() {
       ? 'Not used while the chute is left out.'
       : profile
         ? profile.name
-        : 'Upload a Hive profile and activate it.',
-    to: '/rules/profiles',
+        : 'Pick the collection to sort into and the profile it sorts by.',
+    to: state?.collection ? `/run/collections/${state.collection.id}` : '/run/sort',
   });
 
   const required = items.filter((i) => !i.optional);

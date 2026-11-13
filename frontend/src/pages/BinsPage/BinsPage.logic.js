@@ -4,6 +4,7 @@ import {
   emptySorterBin,
   getSorterBins,
   getSorterKits,
+  preassignSorterBins,
   resetSorterBins,
   routeSorterPiece,
   sendToSorterBin,
@@ -27,7 +28,13 @@ export function useBinsPageLogic() {
   const [view, setView] = useState(null); // GET /sorter/bins
   const [selected, setSelected] = useState(null); // { layer, bin }
   const [error, setError] = useState('');
-  const [route, setRoute] = useState({ part: '', color: '', size: '', result: null });
+  const [route, setRoute] = useState({
+    part: '',
+    color: '',
+    category: '',
+    size: '',
+    result: null,
+  });
   const [kits, setKits] = useState([]);
 
   // Layer and section switches live in the machine settings, so read the bins
@@ -79,6 +86,12 @@ export function useBinsPageLogic() {
       setSelected(null);
     });
 
+  const preassignBins = () =>
+    guard(async () => {
+      setView(await preassignSorterBins());
+      setSelected(null);
+    });
+
   const pointChute = () => guard(() => sendToSorterBin(selected.layer, selected.bin));
 
   /** The bin was emptied: it counts from zero and takes pieces again. */
@@ -113,6 +126,7 @@ export function useBinsPageLogic() {
         route.part.trim(),
         route.color.trim(),
         Number(route.size) || 0,
+        route.category.trim(),
       );
       setRoute((prev) => ({ ...prev, result }));
     });
@@ -126,6 +140,7 @@ export function useBinsPageLogic() {
     select: setSelected,
     saveBin,
     resetBins,
+    preassignBins,
     pointChute,
     emptyBin,
     kits,

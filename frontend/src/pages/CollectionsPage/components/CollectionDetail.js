@@ -1,4 +1,11 @@
-import { Archive, ArchiveRestore, ChevronLeft, Pencil, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronLeft,
+  Pencil,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
@@ -18,6 +25,7 @@ import {
 } from '@/components/ui/table';
 
 import { useCollectionDetail } from '../CollectionsPage.logic';
+import ChangeProfileDialog from './ChangeProfileDialog';
 
 const when = (t) => (t ? new Date(t).toLocaleString() : '—');
 
@@ -79,17 +87,32 @@ function NameEditor({ name, busy, onSave }) {
 }
 
 /** The bins the collection is being sorted into: its plan, i.e. the groups it comes back in. */
-function PlanSection({ plan }) {
+function PlanSection({ plan, canChange, onChange }) {
   const bins = plan?.bins ?? [];
   return (
     <section className="flex flex-col gap-3">
-      <div>
-        <h3 className="font-display text-lg font-semibold">Sorting plan</h3>
-        <p className="text-sm text-muted-foreground">
-          {plan?.profile
-            ? `Profile ${plan.profile.name}. Each bin is a group it comes back in; counts are since its bins started afresh.`
-            : 'No profile yet: the plan shows once a run sorts into it with a profile active.'}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3 className="font-display text-lg font-semibold">Sorting plan</h3>
+          <p className="text-sm text-muted-foreground">
+            {plan?.profile ? (
+              <>
+                Sorted by <strong className="text-foreground">{plan.profile.name}</strong>. Each bin
+                is a group it comes back in; counts are since its bins started afresh.
+              </>
+            ) : (
+              'No profile yet: pick the one it sorts by before sorting into it.'
+            )}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          disabled={!canChange}
+          title={canChange ? undefined : 'Stop the run first'}
+          onClick={onChange}
+        >
+          <SlidersHorizontal /> {plan?.profile ? 'Change profile' : 'Pick a profile'}
+        </Button>
       </div>
       <div className="rounded-xl border border-border bg-card">
         {bins.length === 0 ? (
@@ -140,6 +163,7 @@ export default function CollectionDetail({ id }) {
   const logic = useCollectionDetail(id);
   const journey = useJourneyModal();
   const navigate = useNavigate();
+  const [changing, setChanging] = useState(false);
   const col = logic.collection;
 
   return (
@@ -197,7 +221,24 @@ export default function CollectionDetail({ id }) {
             />
           </section>
 
-          <PlanSection plan={logic.plan} />
+          <PlanSection
+            plan={logic.plan}
+            canChange={!logic.busy && !logic.sortingHere}
+            onChange={() => setChanging(true)}
+          />
+          {changing && (
+            <ChangeProfileDialog
+              open
+              collection={col}
+              current={col.current}
+              busy={logic.busy}
+              onCancel={() => setChanging(false)}
+              onSave={(profileId, bins) => {
+                setChanging(false);
+                logic.changeProfile(profileId, bins);
+              }}
+            />
+          )}
 
           <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-end justify-between gap-2">

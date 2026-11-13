@@ -39,7 +39,8 @@ function RouteTester({ route, setRoute, onTry, canTry }) {
       <div>
         <h2 className="font-display text-xl font-semibold">Where would a piece go?</h2>
         <p className="text-sm text-muted-foreground">
-          The bin the active profile would choose for a part and color. Nothing is saved.
+          The bin the collection’s profile would choose for a part and color (and, sorting by part
+          type, Brickognize’s category). Nothing is saved.
         </p>
       </div>
       <form
@@ -51,6 +52,7 @@ function RouteTester({ route, setRoute, onTry, canTry }) {
       >
         {field('part', 'Part', { placeholder: '3001' })}
         {field('color', 'Color id', { placeholder: '5' })}
+        {field('category', 'Part type', { placeholder: 'Plate, Round' })}
         {field('size', 'Longest side (mm)', { type: 'number', min: 0, placeholder: 'optional' })}
         <Button type="submit" disabled={!canTry || !route.part.trim()}>
           Check
@@ -239,22 +241,34 @@ const BinsPage = () => {
             </>
           ) : (
             <>
-              No profile is active, so bins can’t be assigned.{' '}
-              <Link to="/rules/profiles" className="font-medium text-primary-text hover:underline">
-                Choose a profile
+              {view.collection.name} has no sorting profile, so bins can’t be assigned.{' '}
+              <Link
+                to={`/run/collections/${view.collection.id}`}
+                className="font-medium text-primary-text hover:underline"
+              >
+                Pick its profile
               </Link>
             </>
           )}
         </p>
         {part === 'layout' && (
-          <Button
-            variant="outline"
-            disabled={!view.profile || !view.collection}
-            onClick={logic.resetBins}
-            className="shrink-0"
-          >
-            Unassign every bin
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button
+              variant="outline"
+              disabled={!view.profile || !view.collection}
+              onClick={logic.preassignBins}
+              title="Gives the profile’s categories, in order, the bins that hold no pieces"
+            >
+              Pre-assign from the profile
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!view.profile || !view.collection}
+              onClick={logic.resetBins}
+            >
+              Unassign every bin
+            </Button>
+          </div>
         )}
       </section>
       {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}

@@ -165,7 +165,14 @@ export function useSortPageLogic() {
           ? 'Wait for the task to finish'
           : '',
     canHome: !busy && s && s !== 'running' && s !== 'homing' && !job,
-    canStart: !busy && s === 'ready' && !job && Boolean(state?.collection),
+    // A run sorts by its collection's profile, so it needs one (unless the chute is left
+    // out: then nothing is aimed).
+    canStart:
+      !busy &&
+      s === 'ready' &&
+      !job &&
+      Boolean(state?.collection) &&
+      Boolean(state.collection.profile_id || state?.chute?.left_out),
     canPause: !busy && s === 'running',
     canResume: !busy && s === 'paused' && !job,
   };

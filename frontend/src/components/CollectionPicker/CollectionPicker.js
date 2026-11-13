@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import ProfileSelect, { useSortingProfiles } from '@/components/ProfileSelect/ProfileSelect';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -29,9 +30,13 @@ const NONE = '__none__';
 
 function NewCollectionDialog({ open, hasCurrent, busy, onCancel, onCreate }) {
   const [name, setName] = useState('');
+  const { profiles, error } = useSortingProfiles();
+  const [picked, setPicked] = useState(null);
+  // Sort by part type unless another is picked.
+  const profileId = picked ?? profiles?.[0]?.id ?? null;
   const submit = (e) => {
     e.preventDefault();
-    if (name.trim()) onCreate(name.trim());
+    if (name.trim() && profileId) onCreate(name.trim(), profileId);
   };
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
@@ -54,13 +59,29 @@ function NewCollectionDialog({ open, hasCurrent, busy, onCancel, onCreate }) {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="new-collection-profile">Sort it by</Label>
+            <ProfileSelect
+              id="new-collection-profile"
+              profiles={profiles}
+              value={profileId}
+              onChange={setPicked}
+            />
+            {error ? (
+              <p className="text-sm text-destructive">{error}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                What groups it comes back in. You can change it later on Run › Collections.
+              </p>
+            )}
+          </div>
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={busy || !name.trim()}>
+            <Button type="submit" disabled={busy || !name.trim() || !profileId}>
               Create and pick
             </Button>
           </DialogFooter>

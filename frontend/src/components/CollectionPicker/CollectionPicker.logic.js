@@ -62,10 +62,10 @@ export function useCollectionPicker(current, onPicked) {
     cancelPick: () => setConfirm(null),
     startCreating: () => setCreating(true),
     cancelCreating: () => setCreating(false),
-    create: async (name) => {
+    create: async (name, profileId) => {
       setBusy(true);
       try {
-        const col = await createSorterCollection(name);
+        const col = await createSorterCollection(name, profileId);
         setCreating(false);
         await pick(col);
       } catch (err) {

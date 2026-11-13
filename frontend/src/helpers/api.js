@@ -222,11 +222,6 @@ export async function importSortingProfile(text) {
   return parseJSON(response);
 }
 
-/** mode: keep | reset | preassign */
-export function activateSortingProfile(id, mode) {
-  return postJSON(`/api/v1/sorter/profiles/${id}/activate`, { mode });
-}
-
 export async function deleteSortingProfile(id) {
   const response = await fetch(`${API_BASE_URL}/api/v1/sorter/profiles/${id}`, {
     method: 'DELETE',
@@ -244,6 +239,11 @@ export function setSorterBin(layer, bin, categories) {
 
 export function resetSorterBins() {
   return postJSON('/api/v1/sorter/bins/reset', {});
+}
+
+/** Gives the profile's categories, in order, the bins that hold no pieces. */
+export function preassignSorterBins() {
+  return postJSON('/api/v1/sorter/bins/preassign', {});
 }
 
 /** Sends 1–8 photos of one piece to Brickognize and routes the best match (dry run). */
@@ -318,11 +318,15 @@ export function getSorterCollection(id) {
   return getJSON(`/api/v1/sorter/collections/${id}`);
 }
 
-export function createSorterCollection(name) {
-  return postJSON('/api/v1/sorter/collections', { name });
+/** A new collection sorting by the profile. */
+export function createSorterCollection(name, profileId) {
+  return postJSON('/api/v1/sorter/collections', { name, profile_id: profileId });
 }
 
-/** changes: { name, archived } */
+/**
+ * changes: { name, archived, profile_id, bins }. With profile_id on the current
+ * collection, bins is "emptied" or "continue" (keep what's in them, use the unused ones).
+ */
 export function updateSorterCollection(id, changes) {
   return patchJSON(`/api/v1/sorter/collections/${id}`, changes);
 }
@@ -545,10 +549,12 @@ export function reviewSorterPiece(id, review) {
 }
 
 /** Where a piece would go now; nothing is saved. */
-export function routeSorterPiece(partId, colorId, pieceMm) {
+/** partCategory is Brickognize's category ("Plate, Round"), for sorting by part type. */
+export function routeSorterPiece(partId, colorId, pieceMm, partCategory = '') {
   return postJSON('/api/v1/sorter/route', {
     part_id: partId,
     color_id: colorId,
+    part_category: partCategory,
     piece_mm: pieceMm || 0,
   });
 }

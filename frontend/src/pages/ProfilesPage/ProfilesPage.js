@@ -12,78 +12,83 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { useProfilesPageLogic } from './ProfilesPage.logic';
 
-import { ACTIVATION_MODES, useProfilesPageLogic } from './ProfilesPage.logic';
+/** What a profile sorts by, in a line. */
+function describe(summary) {
+  if (summary.format === 'builtin') {
+    return summary.builtin === 'color'
+      ? 'One category per colour, made as colours arrive'
+      : `${summary.categories.length} usual part types, plus any other as it arrives`;
+  }
+  return (
+    <>
+      <span className="font-mono">{summary.categories.length}</span> categories ·{' '}
+      <span className="font-mono">{summary.part_count.toLocaleString()}</span> parts ·{' '}
+      {summary.format === 'program' ? 'compiled program' : 'part map'}
+      {summary.fallback_by_color && ' · the rest by color'}
+    </>
+  );
+}
 
-function ProfileRow({ profile, busy, onActivate, onDelete }) {
-  const [mode, setMode] = useState('keep');
+function ProfileRow({ profile, busy, onDelete }) {
   const { summary } = profile;
-  const hint = ACTIVATION_MODES.find((m) => m.mode === mode)?.hint;
+  const builtin = profile.source === 'builtin';
+  const used = profile.used_by ?? [];
 
   return (
-    <li
-      className={cn(
-        'flex flex-col gap-4 rounded-xl border bg-card p-5 lg:flex-row lg:items-start lg:justify-between',
-        profile.active ? 'border-primary/60' : 'border-border',
-      )}
-    >
+    <li className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 lg:flex-row lg:items-start lg:justify-between">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="font-display text-lg font-semibold">{profile.name}</h2>
-          {profile.active && <Badge variant="running">Active</Badge>}
+          {builtin && <Badge variant="outline">Built in</Badge>}
           {summary.set_based && <Badge variant="outline">Set</Badge>}
         </div>
         <p className="text-sm text-muted-foreground">
-          <span className="font-mono">{summary.categories.length}</span> categories ·{' '}
-          <span className="font-mono">{summary.part_count.toLocaleString()}</span> parts ·{' '}
-          {summary.format === 'program' ? 'compiled program' : 'part map'}
-          {summary.fallback_by_color && ' · the rest by color'} · added{' '}
-          {new Date(profile.created_at).toLocaleDateString()}
+          {describe(summary)}
+          {!builtin && <> · added {new Date(profile.created_at).toLocaleDateString()}</>}
         </p>
         {summary.description && <p className="mt-2 max-w-[75ch] text-sm">{summary.description}</p>}
-      </div>
-      <div className="flex shrink-0 flex-col gap-2 lg:items-end">
-        <div className="flex flex-wrap gap-2">
-          <Select value={mode} onValueChange={setMode} disabled={busy}>
-            <SelectTrigger className="w-56" aria-label="What happens to the bins">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ACTIVATION_MODES.map((m) => (
-                <SelectItem key={m.mode} value={m.mode}>
-                  {m.label}
-                </SelectItem>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {used.length === 0 ? (
+            'No collection sorts by it.'
+          ) : (
+            <>
+              Sorting{' '}
+              {used.map((c, i) => (
+                <span key={c.id}>
+                  {i > 0 && ', '}
+                  <Link
+                    to={`/run/collections/${c.id}`}
+                    className="font-medium text-primary-text hover:underline"
+                  >
+                    {c.name}
+                  </Link>
+                </span>
               ))}
-            </SelectContent>
-          </Select>
-          <Button disabled={busy} onClick={() => onActivate(profile, mode)}>
-            {profile.active ? 'Activate again' : 'Activate'}
-          </Button>
-          <Button
-            variant="ghost"
-            className="text-destructive"
-            disabled={busy || profile.active}
-            title={profile.active ? 'Activate another profile first' : undefined}
-            onClick={() => onDelete(profile)}
-          >
-            Delete
-          </Button>
-        </div>
-        {hint && <p className="max-w-sm text-xs text-muted-foreground lg:text-right">{hint}</p>}
+            </>
+          )}
+        </p>
       </div>
+      {!builtin && (
+        <Button
+          variant="ghost"
+          className="shrink-0 text-destructive"
+          disabled={busy || used.length > 0}
+          title={used.length > 0 ? 'Give its collections another profile first' : undefined}
+          onClick={() => onDelete(profile)}
+        >
+          Delete
+        </Button>
+      )}
     </li>
   );
 }
 
-/** Rules › Profiles: upload sorting profiles built in Hive and choose the active one. */
+/**
+ * Rules › Profiles: the built-in profiles and those uploaded from Hive. Each collection
+ * picks the one it sorts by (Run › Collections).
+ */
 const ProfilesPage = () => {
   const logic = useProfilesPageLogic();
   const [deleting, setDeleting] = useState(null);
@@ -97,7 +102,12 @@ const ProfilesPage = () => {
           <Link to="/rules/bins" className="font-medium text-primary-text hover:underline">
             Rules › Bins
           </Link>
-          ). Upload a <code className="font-mono">sorting_profile.json</code> built in Hive.
+          ). Each collection picks its profile on{' '}
+          <Link to="/run/collections" className="font-medium text-primary-text hover:underline">
+            Run › Collections
+          </Link>
+          . The built-in ones need nothing; for finer rules, upload a{' '}
+          <code className="font-mono">sorting_profile.json</code> built in Hive.
         </p>
         <Button asChild disabled={logic.busy} className="shrink-0">
           <label className="cursor-pointer">
@@ -127,22 +137,24 @@ const ProfilesPage = () => {
 
       {logic.loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : logic.profiles.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No profiles yet. Upload one to start sorting by it.
-        </p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {logic.profiles.map((p) => (
-            <ProfileRow
-              key={p.id}
-              profile={p}
-              busy={logic.busy}
-              onActivate={logic.activate}
-              onDelete={setDeleting}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-3" aria-label="Built-in profiles">
+            {logic.builtins.map((p) => (
+              <ProfileRow key={p.id} profile={p} busy={logic.busy} onDelete={setDeleting} />
+            ))}
+          </ul>
+          <h2 className="mt-2 font-display text-lg font-semibold">Uploaded from Hive</h2>
+          {logic.uploads.length === 0 ? (
+            <p className="text-sm text-muted-foreground">None uploaded.</p>
+          ) : (
+            <ul className="flex flex-col gap-3" aria-label="Uploaded profiles">
+              {logic.uploads.map((p) => (
+                <ProfileRow key={p.id} profile={p} busy={logic.busy} onDelete={setDeleting} />
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       <Dialog open={Boolean(deleting)} onOpenChange={(o) => !o && setDeleting(null)}>

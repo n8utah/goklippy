@@ -63,6 +63,7 @@ function CollectionsList() {
             <TableHeader>
               <TableRow>
                 <TableHead className="pl-5">Collection</TableHead>
+                <TableHead className="hidden lg:table-cell">Sorts by</TableHead>
                 <TableHead className="text-right">Runs</TableHead>
                 <TableHead className="text-right">Pieces</TableHead>
                 <TableHead className="hidden text-right sm:table-cell">Identified</TableHead>
@@ -83,6 +84,9 @@ function CollectionsList() {
                     </button>{' '}
                     {c.current && <Badge variant="running">Current</Badge>}
                     {c.archived_at && <Badge variant="idle">Archived</Badge>}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    {c.profile_name || <span className="text-muted-foreground">No profile</span>}
                   </TableCell>
                   <TableCell className="text-right font-mono">{c.runs}</TableCell>
                   <TableCell className="text-right font-mono">
