@@ -64,7 +64,7 @@ This is the single source of truth; tool-specific files (e.g. `CLAUDE.md`, `.git
 ## Docs and Planning
 - Use `docs/` for all PRDs, implementation plans, and mockups.
 - Treat docs as development artifacts and keep them in sync with code changes.
-- `docs/work/` is the work board: one Markdown file per item in `todo/`, `doing/` or `done/` (see `docs/work/README.md`). When asked what to work on, check `doing/` first; move an item's file as its status changes. Claude Code skills for this live in `.claude/skills/` (`tasks`, `task-add`, `task-start`, `task-done`).
+- `docs/work/` is the work board, shared by several people and agents at once: one Markdown file per item in `todo/`, `doing/` or `done/`. Before claiming, changing or finishing an item, follow the rules in `docs/work/README.md` (pull first, claim by moving the file to `doing/` with `Owner:` set, push each `board:` commit straight away, don't change items someone else owns). Skills for this live in `.agents/skills/` (`tasks`, `task-add`, `task-start`, `task-release`, `task-done`); edit them there, not the Claude Code stubs in `.claude/skills/`.
 
 ## Private Assets
 - `private/` is for local secrets, local logs, and private config.
