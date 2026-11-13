@@ -10,7 +10,7 @@ import (
 type Config struct {
 	Host    string // HOST: the interface to listen on ("" = all; Dry Dock sets 127.0.0.1)
 	Port    string // PORT
-	DataDir string // DATA_DIR: database and photos
+	DataDir string // DATA_DIR, else KEEPER_DATA_DIR: database and photos
 	AppURL  string // APP_URL: https://lego.n8p.xyz, for cookies and sign-in redirects
 
 	OIDCIssuer       string   // OIDC_ISSUER: https://login.n8p.xyz
@@ -27,7 +27,8 @@ func FromEnv() Config {
 	c := Config{
 		Host:             os.Getenv("HOST"),
 		Port:             env("PORT", "8090"),
-		DataDir:          env("DATA_DIR", "../private"),
+		// Dry Dock gives each environment KEEPER_DATA_DIR, kept across versions.
+		DataDir:          env("DATA_DIR", env("KEEPER_DATA_DIR", "../private")),
 		AppURL:           strings.TrimRight(env("APP_URL", "http://localhost:8090"), "/"),
 		OIDCIssuer:       os.Getenv("OIDC_ISSUER"),
 		OIDCClientID:     os.Getenv("OIDC_CLIENT_ID"),

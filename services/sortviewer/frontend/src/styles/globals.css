@@ -1,0 +1,208 @@
+/*
+ * The design system's base (docs/ui-ux-spec.md, "Design tokens"): Tailwind, the color tokens
+ * for light and dark, fonts, radii. Tokens use shadcn/ui's names so its components pick them
+ * up: our orange accent is `primary`; shadcn's `accent` is the subtle hover background.
+ *
+ * Tailwind's preflight (its CSS reset) is left out: today's pages rely on browser defaults
+ * (heading sizes, button borders) until each is rebuilt. The new UI gets the reset scoped
+ * instead: everything inside an element with class `ds` (the new app frame, and each shadcn
+ * dialog, popover, menu and toast, which render outside the page) is reset as preflight would.
+ * When the last old page is rebuilt, `ds` gives way to the real preflight.
+ */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+
+/* .dark on <html> switches every token (see helpers/theme.js). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --radius: 10px;
+
+  --background: #f6f4f0;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+  --primary: #c2410c;
+  --primary-foreground: #ffffff;
+  --secondary: #fafaf9;
+  --secondary-foreground: #1c1917;
+  --muted: #fafaf9;
+  --muted-foreground: #57534e;
+  --accent: #f5f5f4;
+  --accent-foreground: #1c1917;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e7e5e4;
+  --border-strong: #d6d3d1;
+  --input: #d6d3d1;
+  --ring: #c2410c;
+
+  /* Ours beyond shadcn's set. */
+  --primary-text: #c2410c; /* the accent as text or lines on the ground */
+  --media: #1c1917; /* behind camera pictures and piece crops */
+  --running: #16a34a;
+  --running-text: #166534;
+  --running-bg: #f0fdf4;
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --idle: #78716c;
+
+  /* Categorical chart series, in fixed order (validated for colour-blind separation;
+     three sit under 3:1 on light, so charts using them always label their parts). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+}
+
+/* Native parts (number spinners, scrollbars, date pickers) follow the theme. */
+.dark .ds,
+.dark.ds {
+  color-scheme: dark;
+}
+
+.dark {
+  --background: #171412;
+  --foreground: #f5f5f4;
+  --card: #1f1b18;
+  --card-foreground: #f5f5f4;
+  --popover: #1f1b18;
+  --popover-foreground: #f5f5f4;
+  --primary: #c2410c;
+  --primary-foreground: #ffffff;
+  --secondary: #262220;
+  --secondary-foreground: #f5f5f4;
+  --muted: #262220;
+  --muted-foreground: #a8a29e;
+  --accent: #2e2925;
+  --accent-foreground: #f5f5f4;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #2e2925;
+  --border-strong: #44403c;
+  --input: #44403c;
+  --ring: #fb923c;
+
+  --primary-text: #fb923c;
+  --media: #000000;
+  --running: #4ade80;
+  --running-text: #86efac;
+  --running-bg: #052e16;
+  --warning: #fbbf24;
+  --warning-bg: #451a03;
+  --idle: #a8a29e;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+}
+
+/* Preflight, scoped to `ds` and kept at zero specificity so utilities always win. */
+@layer base {
+  :where(.ds, .ds *, .ds ::before, .ds ::after) {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid var(--border);
+  }
+  :where(.ds) {
+    font-family: var(--font-sans);
+    color: var(--foreground);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  :where(.ds) :where(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  :where(.ds) :where(ol, ul, menu) {
+    list-style: none;
+  }
+  :where(.ds) :where(img, svg, video, canvas) {
+    display: block;
+    vertical-align: middle;
+  }
+  :where(.ds) :where(img, video) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(.ds) :where(button, input, select, textarea) {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    background-color: transparent;
+    border-radius: 0;
+  }
+  :where(.ds) :where(button, [role='button']) {
+    cursor: pointer;
+  }
+  :where(.ds) :where(a) {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  :where(.ds) :where(table) {
+    border-collapse: collapse;
+  }
+  :where(.ds) :where(:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-media: var(--media);
+  --color-running: var(--running);
+  --color-running-text: var(--running-text);
+  --color-running-bg: var(--running-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-idle: var(--idle);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+
+  /* 10 inputs and buttons, 14 cards, 18 dialogs (docs/ui-ux-spec.md). */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
