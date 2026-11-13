@@ -4,6 +4,7 @@ Priority: medium
 Added: 2026-11-13 by Nate
 Owner: Nate + Claude
 Started: 2026-11-13
+Finished: 2026-11-13
 
 ## Why
 When sorting a friend's LEGO, they should be able to watch it live and see what they'll get
@@ -36,12 +37,15 @@ A separate web app on our own server (not part of the bench sorter):
 
 ## Done when
 - [ ] Deployed on Harbor Keeper at `lego.n8p.xyz`; admin signs in through Gangway.
-- [ ] Admin can create viewer accounts; viewers sign in with username and password.
-- [ ] Sorter push API accepts runs, pieces, photos and plans with a valid key, rejects without.
-- [ ] Viewers see only collections they've been given.
-- [ ] Live view updates while the sorter runs.
+      (Deployed and live; the Gangway sign-in itself is unconfirmed, see Notes.)
+- [x] Admin can create viewer accounts; viewers sign in with email and password.
+- [x] Sorter push API accepts runs, pieces, photos and plans with a valid key, rejects without.
+- [x] Viewers see only collections they've been given.
+- [ ] Live view updates while the sorter runs. (Events stream as pieces are pushed; the page
+      updating hasn't been watched in a browser.)
 - [ ] Counts, unknowns, pieces with photos and the sorting plan are viewable per collection.
-- [ ] Admin can clear a collection's photos (or the whole collection) by hand.
+      (The API serves them all; the pages haven't been looked at in a browser.)
+- [x] Admin can clear a collection's photos (or the whole collection) by hand.
 
 ## Plan
 
@@ -120,8 +124,11 @@ with the keeper CLI (`mage keeperSetup`).
   sign-in; a local run with pushed data and live events. Not tested: the real Gangway sign-in
   (needs Nate to sign in) and the pages in a browser. Gangway sign-in is only covered by the
   redirect check, not a test against a fake provider.
-- Left: Nate signs in as admin at https://lego.n8p.xyz ("Admin sign-in"), makes a viewer and a
-  sorter key; then [sort-sharing-push](../todo/sort-sharing-push.md) sends real data.
+- 2026-11-13, closed at Nate's say-so with three boxes unconfirmed: the real Gangway admin
+  sign-in, and the live view and collection pages in a browser. They get checked when Nate
+  signs in and when [sort-sharing-push](../todo/sort-sharing-push.md) sends real data.
+  Commits: `4276417`, `0fef899`, plus the admin clear/delete test.
+- First steps on the live site: Admin sign-in, make a sorter key (shown once), add viewers.
 - 2026-11-13, Nate: name `sortviewer`, at `lego.n8p.xyz`. Viewers get site-local
   username/password accounts; only the admin uses Harbor Keeper OIDC. Unknowns show as
   "unknown" for now.
