@@ -1,6 +1,7 @@
 import { TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router';
 
+import CollectionPicker from '@/components/CollectionPicker/CollectionPicker';
 import { useJourneyModal } from '@/components/JourneyModal/JourneyModal.logic';
 import PieceCard from '@/components/PieceCard/PieceCard';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,12 @@ function headline(state, connected, numbers) {
     case 'homing':
       return { title: 'Homing…', text: 'Starting the hardware and homing the chute.' };
     case 'ready':
+      if (!state.collection) {
+        return {
+          title: 'Ready to sort',
+          text: 'Pick the collection to sort into, or make a new one, then start.',
+        };
+      }
       if (fin?.done) {
         return {
           title: 'Ready to sort',
@@ -94,6 +101,24 @@ const SortPage = () => {
               Connect the board
             </Link>
           )}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label htmlFor="sort-collection" className="text-sm text-muted-foreground">
+              Sorting into
+            </label>
+            <CollectionPicker
+              id="sort-collection"
+              current={state?.collection}
+              locked={Boolean(state?.run_id)}
+            />
+            {state?.collection && (
+              <Link
+                to={`/run/collections/${state.collection.id}`}
+                className="text-sm font-medium text-primary-text hover:underline"
+              >
+                Its pieces and plan
+              </Link>
+            )}
+          </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button variant="outline" disabled={!logic.canHome} onClick={() => logic.command('home')}>
@@ -169,7 +194,11 @@ const SortPage = () => {
         <Stat
           label={numbers.current ? 'Pieces this run' : 'Pieces last run'}
           value={run ? run.pieces.toLocaleString() : '—'}
-          detail={run ? `Run ${run.id} · ${run.profile_name || 'no profile'}` : 'No runs yet'}
+          detail={
+            run
+              ? `Run ${run.id} · ${run.collection_name} · ${run.profile_name || 'no profile'}`
+              : 'No runs yet'
+          }
         />
         <Stat
           label="Sorted"

@@ -35,6 +35,8 @@ Right now every piece goes into one shared pile of records, so there's no way to
 - [ ] A collection's unknowns can be cleared before re-running the unknown bin.
 - [ ] A collection shows its current sorting plan (bins and their categories), and the plan
       can be changed partway through.
+- [ ] With the chute left out and a profile active, each piece still gets the bin it would
+      have gone to, marked virtual, so layouts and plans can be tested without the chute.
 
 ## Plan
 

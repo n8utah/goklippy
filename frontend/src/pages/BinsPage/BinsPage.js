@@ -219,10 +219,23 @@ const BinsPage = () => {
     <div className="ds flex flex-col gap-4">
       <section className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm">
-          {view.profile ? (
+          {!view.collection ? (
             <>
-              Sorting with <strong>{view.profile.name}</strong>. A category with no bin gets the
-              first free one when its first piece arrives.
+              No collection is picked: these are a collection’s bins.{' '}
+              <Link to="/run/sort" className="font-medium text-primary-text hover:underline">
+                Pick one on Run › Sort
+              </Link>
+            </>
+          ) : view.profile ? (
+            <>
+              <Link
+                to={`/run/collections/${view.collection.id}`}
+                className="font-semibold hover:underline"
+              >
+                {view.collection.name}
+              </Link>
+              ’s bins, sorting with <strong>{view.profile.name}</strong>. A category with no bin
+              gets the first free one when its first piece arrives.
             </>
           ) : (
             <>
@@ -236,7 +249,7 @@ const BinsPage = () => {
         {part === 'layout' && (
           <Button
             variant="outline"
-            disabled={!view.profile}
+            disabled={!view.profile || !view.collection}
             onClick={logic.resetBins}
             className="shrink-0"
           >

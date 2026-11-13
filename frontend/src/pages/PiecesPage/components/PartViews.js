@@ -13,8 +13,11 @@ import Picture from './Picture';
 const day = (t) => (t ? new Date(t).toLocaleDateString() : '—');
 const key = (p) => `${p.part_id}/${p.color_id}`;
 
-/** Every part and colour as cards; a card opens the part. */
-export function PartGrid({ parts, run, picture, onOpen }) {
+/**
+ * Every part and colour as cards; a card opens the part. `scope` is the run or collection
+ * filtered to ({ run, collection }), whose counts show, or null.
+ */
+export function PartGrid({ parts, scope, picture, onOpen }) {
   return (
     <ul className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
       {parts.map((p) => (
@@ -32,7 +35,7 @@ export function PartGrid({ parts, run, picture, onOpen }) {
                 className="aspect-square w-full"
               />
               <span className="absolute top-1.5 right-1.5 rounded-full bg-primary px-2 py-0.5 font-mono text-xs font-semibold text-primary-foreground">
-                ×{seenIn(p, run).toLocaleString()}
+                ×{seenIn(p, scope).toLocaleString()}
               </span>
             </span>
             <span className="block min-w-0 px-0.5 text-sm">
@@ -55,7 +58,7 @@ export function PartGrid({ parts, run, picture, onOpen }) {
 }
 
 /** Every part and colour as rows; a row opens the part. */
-export function PartList({ parts, run, picture, onOpen }) {
+export function PartList({ parts, scope, picture, onOpen }) {
   return (
     <Table>
       <TableHeader>
@@ -73,7 +76,7 @@ export function PartList({ parts, run, picture, onOpen }) {
       </TableHeader>
       <TableBody>
         {parts.map((p) => {
-          const n = seenIn(p, run);
+          const n = seenIn(p, scope);
           return (
             <TableRow key={key(p)} className="cursor-pointer" onClick={() => onOpen(p)}>
               <TableCell className="pl-5">
@@ -101,7 +104,7 @@ export function PartList({ parts, run, picture, onOpen }) {
               </TableCell>
               <TableCell className="text-right font-mono">
                 {n.toLocaleString()}
-                {run && n !== p.seen && (
+                {scope && n !== p.seen && (
                   <span className="text-xs text-muted-foreground"> of {p.seen}</span>
                 )}
               </TableCell>

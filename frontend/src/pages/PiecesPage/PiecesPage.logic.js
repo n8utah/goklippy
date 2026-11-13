@@ -7,6 +7,7 @@ import {
   getSorterCatalogFacets,
   getSorterPhotos,
   listSorterCatalog,
+  listSorterCollections,
   listSorterPieces,
   listSorterRuns,
   sorterPieceImageURL,
@@ -15,7 +16,7 @@ import { formatBytes } from '@/helpers/format';
 
 export const PAGE_SIZE = 60;
 const PREFS_KEY = 'goklippy.pieces.prefs';
-const EMPTY_FILTERS = { q: '', color: '', category: '', run: '', status: '' };
+const EMPTY_FILTERS = { q: '', color: '', category: '', collection: '', run: '', status: '' };
 
 /** The parts' sorts, each with the way it reads best first. */
 export const SORTS = [
@@ -55,11 +56,23 @@ export const piecePictures = (piece) => ({
   official: piece.part_img_url,
 });
 
-/** How many of a part were seen: in the run filtered to, or in all. */
-export function seenIn(part, run) {
-  if (!run) return part.seen;
-  return part.runs.find((r) => String(r.run_id) === String(run))?.seen ?? 0;
+/**
+ * How many of a part were seen: in the run or collection filtered to (`scope`, null for
+ * all), or in all.
+ */
+export function seenIn(part, scope) {
+  if (scope?.run) return part.runs.find((r) => String(r.run_id) === String(scope.run))?.seen ?? 0;
+  if (scope?.collection) {
+    return part.runs
+      .filter((r) => String(r.collection_id) === String(scope.collection))
+      .reduce((n, r) => n + r.seen, 0);
+  }
+  return part.seen;
 }
+
+/** The file name's scope: "-run-4", "-collection-2" or nothing. */
+const scopeName = ({ run, collection }) =>
+  run ? `-run-${run}` : collection ? `-collection-${collection}` : '';
 
 const csvCell = (v) => {
   const s = String(v ?? '');
@@ -76,16 +89,16 @@ function download(name, head, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function exportParts(parts, run) {
+function exportParts(parts, scope) {
   download(
-    run ? `lego-parts-run-${run}` : 'lego-parts',
+    `lego-parts${scopeName(scope)}`,
     [
       'part_id',
       'part_name',
       'color_id',
       'color_name',
       'category',
-      run ? `seen_in_run_${run}` : 'seen',
+      scope.run ? `seen_in_run_${scope.run}` : scope.collection ? 'seen_in_collection' : 'seen',
       'seen_total',
       'first_seen',
       'last_seen',
@@ -98,7 +111,7 @@ function exportParts(parts, run) {
       p.color_id,
       p.color_name,
       p.category,
-      seenIn(p, run),
+      seenIn(p, scope),
       p.seen,
       p.first_seen,
       p.last_seen,
@@ -116,7 +129,7 @@ async function exportPieces(filters) {
     if (pieces.length === 0 || all.length >= total) break;
   }
   download(
-    filters.run ? `lego-pieces-run-${filters.run}` : 'lego-pieces',
+    `lego-pieces${scopeName(filters)}`,
     [
       'piece_id',
       'run',
@@ -130,6 +143,7 @@ async function exportPieces(filters) {
       'category',
       'bin_layer',
       'bin',
+      'virtual_bin',
       'image',
     ],
     all.map((p) => [
@@ -145,6 +159,7 @@ async function exportPieces(filters) {
       p.category_name,
       p.bin_layer ?? '',
       p.bin_number ?? '',
+      p.virtual_bin ? 'yes' : '',
       p.part_img_url,
     ]),
   );
@@ -169,10 +184,15 @@ function useLoad(fn, deps) {
 /**
  * Pieces: every part found across runs (tab "parts") and every piece seen (tab "all"),
  * with shared filters, a grid or a list, camera or official pictures, export, and
- * clearing the catalog or the photos. `linkedRun` (?run=) filters to one run.
+ * clearing the catalog or the photos. `linkedRun` (?run=) filters to one run,
+ * `linkedCollection` (?collection=) to one collection.
  */
-export function usePiecesPageLogic(tab, linkedRun) {
-  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, run: linkedRun || '' });
+export function usePiecesPageLogic(tab, linkedRun, linkedCollection) {
+  const [filters, setFilters] = useState({
+    ...EMPTY_FILTERS,
+    run: linkedRun || '',
+    collection: linkedCollection || '',
+  });
   const [query, setQuery] = useState(filters); // filters, with the search settled
   const [sort, setSortState] = useState({ sort: 'seen', dir: 'desc' });
   const [prefs, setPrefs] = useState(readPrefs);
@@ -183,12 +203,12 @@ export function usePiecesPageLogic(tab, linkedRun) {
   const [actionError, setActionError] = useState('');
   const [openPart, setOpenPart] = useState(null); // { part_id, color_id }
 
-  // A link to a run while already here (from a journey) moves the filter.
-  const [seenRun, setSeenRun] = useState(linkedRun);
-  if (linkedRun !== seenRun) {
-    setSeenRun(linkedRun);
-    if (linkedRun) {
-      setFilters({ ...EMPTY_FILTERS, run: linkedRun });
+  // A link to a run or collection while already here (from a journey) moves the filter.
+  const [seenLink, setSeenLink] = useState(`${linkedRun}|${linkedCollection}`);
+  if (`${linkedRun}|${linkedCollection}` !== seenLink) {
+    setSeenLink(`${linkedRun}|${linkedCollection}`);
+    if (linkedRun || linkedCollection) {
+      setFilters({ ...EMPTY_FILTERS, run: linkedRun || '', collection: linkedCollection || '' });
       setOffset(0);
     }
   }
@@ -215,6 +235,10 @@ export function usePiecesPageLogic(tab, linkedRun) {
   );
   const facets = useLoad(getSorterCatalogFacets, [reload]);
   const runs = useLoad(() => listSorterRuns().then((r) => r.runs ?? []), [reload]);
+  const collections = useLoad(
+    () => listSorterCollections().then((r) => r.collections ?? []),
+    [reload],
+  );
   const photos = useLoad(getSorterPhotos, [reload]);
 
   const savePrefs = (next) => {
@@ -241,14 +265,28 @@ export function usePiecesPageLogic(tab, linkedRun) {
   };
 
   const filtered = Boolean(
-    filters.q || filters.color || filters.category || filters.run || filters.status,
+    filters.q ||
+    filters.color ||
+    filters.category ||
+    filters.collection ||
+    filters.run ||
+    filters.status,
   );
+  const allRuns = runs.data ?? [];
 
   return {
     filters,
     filtered,
     setFilter: (key, value) => {
-      setFilters((prev) => ({ ...prev, [key]: value }));
+      setFilters((prev) => {
+        const next = { ...prev, [key]: value };
+        // A run from another collection doesn't fit the collection picked.
+        if (key === 'collection' && value && prev.run) {
+          const run = allRuns.find((r) => String(r.id) === String(prev.run));
+          if (run && String(run.collection_id) !== String(value)) next.run = '';
+        }
+        return next;
+      });
       setOffset(0);
     },
     resetFilters: () => {
@@ -263,14 +301,19 @@ export function usePiecesPageLogic(tab, linkedRun) {
     setView: (view) => savePrefs({ ...prefs, view }),
     picture: prefs.picture,
     setPicture: (picture) => savePrefs({ ...prefs, picture }),
-    /** The run the shown list is filtered to (settled with the list). */
-    shownRun: query.run,
+    /** The run or collection the shown list is filtered to (settled with the list), or null. */
+    shownScope:
+      query.run || query.collection ? { run: query.run, collection: query.collection } : null,
     parts: parts.data,
     pieces: pieces.data,
     offset,
     setOffset,
     facets: facets.data,
-    runs: runs.data ?? [],
+    /** Runs for the run filter: the picked collection's, or every one. */
+    runs: filters.collection
+      ? allRuns.filter((r) => String(r.collection_id) === String(filters.collection))
+      : allRuns,
+    collections: collections.data ?? [],
     photos: photos.data,
     error: actionError || parts.error || pieces.error || facets.error,
     busy,
@@ -280,7 +323,7 @@ export function usePiecesPageLogic(tab, linkedRun) {
     setOpenPart,
     exportCsv: () =>
       tab === 'parts'
-        ? exportParts(parts.data ?? [], query.run)
+        ? exportParts(parts.data ?? [], query)
         : act('export', async () => {
             await exportPieces(query);
             return '';

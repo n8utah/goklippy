@@ -258,10 +258,22 @@ export async function identifySorterPiece(files, pieceMm) {
   return parseJSON(response);
 }
 
-/** category is the part's Brickognize category. */
-export function listSorterPieces({ run, status, color, category, q, limit = 50, offset = 0 } = {}) {
+/** category is the part's Brickognize category; unknown lists only pieces with no part. */
+export function listSorterPieces({
+  collection,
+  run,
+  unknown,
+  status,
+  color,
+  category,
+  q,
+  limit = 50,
+  offset = 0,
+} = {}) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (collection) params.set('collection', String(collection));
   if (run) params.set('run', String(run));
+  if (unknown) params.set('unknown', '1');
   if (status) params.set('status', status);
   if (color) params.set('color', color);
   if (category) params.set('category', category);
@@ -283,8 +295,51 @@ export function sorterPieceImageURL(id, index) {
   return `${API_BASE_URL}/api/v1/sorter/pieces/${id}/images/${index}`;
 }
 
-export function listSorterRuns() {
-  return getJSON('/api/v1/sorter/runs');
+/** The newest runs; collection narrows them to one collection's. */
+export function listSorterRuns(collection) {
+  return getJSON(`/api/v1/sorter/runs${collection ? `?collection=${collection}` : ''}`);
+}
+
+async function patchJSON(path, payload) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJSON(response);
+}
+
+/** Every collection with its totals: { collections }. */
+export function listSorterCollections() {
+  return getJSON('/api/v1/sorter/collections');
+}
+
+export function getSorterCollection(id) {
+  return getJSON(`/api/v1/sorter/collections/${id}`);
+}
+
+export function createSorterCollection(name) {
+  return postJSON('/api/v1/sorter/collections', { name });
+}
+
+/** changes: { name, archived } */
+export function updateSorterCollection(id, changes) {
+  return patchJSON(`/api/v1/sorter/collections/${id}`, changes);
+}
+
+/** Makes it the collection the next run sorts into; another one starts the bins afresh. */
+export function selectSorterCollection(id) {
+  return postJSON(`/api/v1/sorter/collections/${id}/select`, {});
+}
+
+/** Its bins: what each takes and how many pieces it has had. */
+export function getSorterCollectionPlan(id) {
+  return getJSON(`/api/v1/sorter/collections/${id}/plan`);
+}
+
+/** Deletes its unknown pieces and their photos: { cleared }. */
+export function clearSorterCollectionUnknowns(id) {
+  return postJSON(`/api/v1/sorter/collections/${id}/clear-unknowns`, {});
 }
 
 export function listSorterIncidents() {
@@ -315,7 +370,7 @@ export async function clearLogs() {
   return parseJSON(response);
 }
 
-/** The catalog of every part and colour found. filters: { q, color, category, run, sort, dir } */
+/** The catalog of every part and colour found. filters: { q, color, category, collection, run, sort, dir } */
 export function listSorterCatalog(filters = {}) {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => v && params.set(k, v));

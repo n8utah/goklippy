@@ -30,6 +30,12 @@ export const NAV_GROUPS = [
     pages: [
       { id: 'sort', label: 'Sort', path: '/run/sort', about: 'Start sorting and watch it run' },
       {
+        id: 'collections',
+        label: 'Collections',
+        path: '/run/collections',
+        about: 'Each person’s LEGO being sorted: its plan, counts and unknowns',
+      },
+      {
         id: 'records',
         label: 'Records',
         path: '/run/records',

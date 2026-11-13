@@ -11,6 +11,7 @@ import BoardPage from './pages/BoardPage/BoardPage';
 import CamerasPage from './pages/CamerasPage/CamerasPage';
 import ChannelsPage from './pages/ChannelsPage/ChannelsPage';
 import ChutePage from './pages/ChutePage/ChutePage';
+import CollectionsPage from './pages/CollectionsPage/CollectionsPage';
 import HomePage from './pages/HomePage/HomePage';
 import IncidentsPage from './pages/IncidentsPage/IncidentsPage';
 import JourneysPage from './pages/JourneysPage/JourneysPage';
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="run">
                 <Route index element={<Navigate to="sort" replace />} />
                 <Route path="sort" element={<SortPage />} />
+                <Route path="collections/:part?" element={<CollectionsPage />} />
                 <Route path="records/:part?" element={<RecordsPage />} />
                 <Route path="incidents" element={<IncidentsPage />} />
               </Route>

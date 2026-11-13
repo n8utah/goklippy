@@ -165,7 +165,7 @@ export function useSortPageLogic() {
           ? 'Wait for the task to finish'
           : '',
     canHome: !busy && s && s !== 'running' && s !== 'homing' && !job,
-    canStart: !busy && s === 'ready' && !job,
+    canStart: !busy && s === 'ready' && !job && Boolean(state?.collection),
     canPause: !busy && s === 'running',
     canResume: !busy && s === 'paused' && !job,
   };

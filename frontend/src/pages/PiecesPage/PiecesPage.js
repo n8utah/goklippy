@@ -104,6 +104,14 @@ function Filters({ tab, logic }) {
         }))}
       />
       <FilterSelect
+        label="Collection"
+        value={filters.collection}
+        onChange={(v) => logic.setFilter('collection', v)}
+        anyLabel="Every collection"
+        className="sm:w-48"
+        options={logic.collections.map((c) => ({ value: String(c.id), label: c.name }))}
+      />
+      <FilterSelect
         label="Run"
         value={filters.run}
         onChange={(v) => logic.setFilter('run', v)}
@@ -287,14 +295,14 @@ function Empty({ children }) {
 /**
  * Pieces: Parts (every part and colour identified, across runs) and Every piece (each
  * piece seen), at /pieces/<tab>. A part opens in full; a piece opens its journey.
- * ?run= filters to a run; ?piece= opens a piece.
+ * ?run= filters to a run, ?collection= to a collection; ?piece= opens a piece.
  */
 const PiecesPage = () => {
   const { part: tab = 'parts' } = useParams();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const journey = useJourneyModal();
-  const logic = usePiecesPageLogic(tab, params.get('run'));
+  const logic = usePiecesPageLogic(tab, params.get('run'), params.get('collection'));
   const [confirm, setConfirm] = useState(null);
   const { facets, parts, pieces } = logic;
 
@@ -328,7 +336,7 @@ const PiecesPage = () => {
   if (tab === 'parts' && parts) {
     const props = {
       parts,
-      run: logic.shownRun,
+      scope: logic.shownScope,
       picture: logic.picture,
       onOpen: logic.setOpenPart,
     };

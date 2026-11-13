@@ -1,4 +1,4 @@
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { Badge } from '@/components/ui/badge';
 import {
@@ -62,7 +62,8 @@ const RecordsPage = () => {
             <TableHeader>
               <TableRow>
                 <TableHead className="pl-5">Run</TableHead>
-                <TableHead>Profile</TableHead>
+                <TableHead>Collection</TableHead>
+                <TableHead className="hidden sm:table-cell">Profile</TableHead>
                 <TableHead className="hidden sm:table-cell">Started</TableHead>
                 <TableHead className="hidden md:table-cell">Ended</TableHead>
                 <TableHead className="text-right">Pieces</TableHead>
@@ -79,7 +80,16 @@ const RecordsPage = () => {
                       {r.id}
                     </button>
                   </TableCell>
-                  <TableCell>{r.profile_name || '—'}</TableCell>
+                  <TableCell>
+                    <Link
+                      to={`/run/collections/${r.collection_id}`}
+                      className="hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {r.collection_name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">{r.profile_name || '—'}</TableCell>
                   <TableCell className="hidden sm:table-cell">{when(r.started_at)}</TableCell>
                   <TableCell className="hidden md:table-cell">
                     {r.ended_at ? when(r.ended_at) : <Badge variant="running">Running</Badge>}
