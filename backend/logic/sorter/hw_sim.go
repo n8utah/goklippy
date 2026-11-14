@@ -27,6 +27,24 @@ type SimHardware struct {
 	shakes    []Channel
 	lights    bool
 	supply    *float64 // simulated supply volts; nil is 12 V
+	releases  int      // ReleaseMotors calls
+}
+
+func (h *SimHardware) ReleaseMotors() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.connected {
+		return ErrNoBoard
+	}
+	h.releases++
+	return nil
+}
+
+// Releases is how many times the motors were let go (ReleaseMotors).
+func (h *SimHardware) Releases() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.releases
 }
 
 // OnMove calls fn after every move with the channel's rotor angle before and after

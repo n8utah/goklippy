@@ -8,7 +8,18 @@ import (
 	"goklippy/backend/mcu/cfgtranslate"
 )
 
+// stepperDriverEnableCommands turns the stepper's driver on (its enable pin), when it
+// has one.
 func (s *Session) stepperDriverEnableCommands(stepperOID int) []string {
+	if cmd, ok := s.stepperEnableCommand(stepperOID, true); ok {
+		return []string{cmd}
+	}
+	return nil
+}
+
+// stepperEnableCommand sets the stepper's enable pin to on or off; ok is false when it
+// has none.
+func (s *Session) stepperEnableCommand(stepperOID int, on bool) (string, bool) {
 	section := ""
 	for _, obj := range s.Objects {
 		if obj.OID == stepperOID && obj.Kind == cfgtranslate.KindStepper {
@@ -17,19 +28,29 @@ func (s *Session) stepperDriverEnableCommands(stepperOID int) []string {
 		}
 	}
 	if section == "" {
-		return nil
+		return "", false
 	}
 	for _, obj := range s.Objects {
 		if obj.Meta["stepper"] != section {
 			continue
 		}
-		val := 1
-		if obj.Meta["active_low"] == "true" {
-			val = 0
-		}
-		return []string{fmt.Sprintf("update_digital_out oid=%d value=%d", obj.OID, val)}
+		level := on != (obj.Meta["active_low"] == "true") // active-low: low is on
+		return fmt.Sprintf("update_digital_out oid=%d value=%d", obj.OID, boolInt(level)), true
 	}
-	return nil
+	return "", false
+}
+
+// StepperRelease turns the stepper's driver off, so a motor standing still doesn't
+// heat: it stops holding and can be turned by hand. Any move turns it back on. A
+// stepper with no enable pin stays on. Stop it first: this doesn't cancel a move.
+func (s *Session) StepperRelease(oid int) error {
+	cmd, ok := s.stepperEnableCommand(oid, false)
+	if !ok {
+		return nil
+	}
+	s.stepperLock(oid).Lock()
+	defer s.stepperLock(oid).Unlock()
+	return s.Conn.SendCommand(cmd)
 }
 
 // stepperStartCommands enables the driver and restarts the stepper's step clock at

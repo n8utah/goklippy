@@ -249,6 +249,28 @@ func (h *MCUHardware) StopAll() error {
 	return errors.Join(errs...)
 }
 
+func (h *MCUHardware) ReleaseMotors() error {
+	s, err := h.session()
+	if err != nil {
+		return err
+	}
+	settings := h.settings()
+	var errs []error
+	for _, ch := range Channels {
+		if ch == ChannelDistributor {
+			continue
+		}
+		st, err := h.stepperFor(s, settings, ch)
+		if err != nil {
+			continue // not mapped
+		}
+		if err := s.StepperRelease(st.oid); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", ch, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func (h *MCUHardware) Health() HardwareHealth {
 	s, err := h.session()
 	if err != nil {

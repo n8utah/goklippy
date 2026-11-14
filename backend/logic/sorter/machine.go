@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sync"
 	"time"
 )
@@ -148,6 +149,10 @@ type Machine struct {
 	// recovering: the channel the running recovery job is for, so its time counts as
 	// stuck there and as waiting on the others (time_spent.go). Empty otherwise.
 	recovering Channel
+	// motorsHeld: the channel motors may be powered (something moved them since they
+	// were last let go); busyUntil: when the machine last was, or will be, moving them.
+	motorsHeld bool
+	busyUntil  time.Time
 	changed    bool
 	lastSent   time.Time
 }
@@ -217,6 +222,7 @@ func (m *Machine) Run(ctx context.Context) {
 			m.checkHealth()
 		case <-ticker.C:
 			m.step()
+			m.releaseIdleMotors(time.Now())
 		}
 		m.publish()
 	}
@@ -236,8 +242,45 @@ func (m *Machine) MoveChannel(ctx context.Context, ch Channel, degrees, rpm floa
 			return err
 		}
 		_, err := m.hw.MoveChannel(ch, degrees, rpm)
+		if err == nil && rpm > 0 {
+			// Held until it's done: |deg| at rpm turns of 360°, plus its ramps.
+			m.holdMotors(time.Now().Add(time.Duration(math.Abs(degrees)/(6*rpm)*float64(time.Second)) + time.Second))
+		}
 		return err
 	}})
+}
+
+// motorsIdleFor: how long the machine stands idle (paused, stopped, waiting on an
+// incident, no job running) before the channel motors are let go so they don't
+// overheat. Long enough for a move already under way when it paused to finish.
+const motorsIdleFor = 3 * time.Second
+
+// holdMotors notes the channel motors are powered and busy until then.
+func (m *Machine) holdMotors(until time.Time) {
+	m.motorsHeld = true
+	if until.After(m.busyUntil) {
+		m.busyUntil = until
+	}
+}
+
+// releaseIdleMotors lets the channel motors go once the machine has stood idle for
+// motorsIdleFor; the next move powers them again.
+func (m *Machine) releaseIdleMotors(now time.Time) {
+	if (m.state == StateRunning && m.incident == nil) || m.job != nil {
+		m.holdMotors(now)
+		return
+	}
+	if !m.motorsHeld || now.Sub(m.busyUntil) < motorsIdleFor {
+		return
+	}
+	m.motorsHeld = false // tried once; a failure here isn't retried every tick
+	if err := m.hw.ReleaseMotors(); err != nil {
+		if !errors.Is(err, ErrNoBoard) {
+			slog.Warn("couldn't let the idle motors go", "error", err)
+		}
+		return
+	}
+	slog.Info("idle: channel motors let go so they don't overheat", "state", m.state)
 }
 
 // SetLights turns the machine's light on or off. It's allowed at any time, sorting

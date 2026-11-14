@@ -56,6 +56,10 @@ type Hardware interface {
 	Shake(ch Channel, s Shake) (<-chan error, error)
 	// StopAll stops every sorter motor.
 	StopAll() error
+	// ReleaseMotors turns the channels' (C1–C4) stepper drivers off, so they don't heat
+	// standing still; the next move turns one back on. The chute keeps holding: let go,
+	// it could be knocked off its homed angle. Only call it with nothing moving.
+	ReleaseMotors() error
 	Health() HardwareHealth
 
 	// HomeChute turns the chute counter-clockwise onto its home switch, which becomes
