@@ -14,10 +14,15 @@ export const TONE_BADGE = {
   bad: 'destructive',
 };
 
+const PHOTO_RETRIES = 3;
+const PHOTO_RETRY_MS = 1500;
+
 /** A piece's first photo, or an empty square until it's saved. */
 export function PieceThumb({ piece, className }) {
-  const [failed, setFailed] = useState(false);
-  // Photos are saved a moment after they're taken; until then there's nothing to show.
+  // Photos are saved a moment after they're taken (a double's as soon as it lands), so a
+  // missing one is asked for again a few times before giving up.
+  const [attempt, setAttempt] = useState(0);
+  const failed = attempt > PHOTO_RETRIES;
   const has = !failed && piece.status !== 'tracking';
   return (
     <span
@@ -26,10 +31,11 @@ export function PieceThumb({ piece, className }) {
     >
       {has && (
         <img
-          src={sorterPieceImageURL(piece.id, 0)}
+          key={attempt}
+          src={`${sorterPieceImageURL(piece.id, 0)}${attempt ? `?n=${attempt}` : ''}`}
           alt=""
           className="size-full object-cover"
-          onError={() => setFailed(true)}
+          onError={() => setTimeout(() => setAttempt((n) => n + 1), PHOTO_RETRY_MS)}
         />
       )}
     </span>

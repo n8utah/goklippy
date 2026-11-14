@@ -331,6 +331,13 @@ func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSet
 	p.slots[0] = s
 	p.progress(now)
 	p.deps.Records.SavePiece(s.piece)
+	if s.piece.Status == PieceMultiDrop {
+		box := inDrop[0].Box
+		for _, o := range inDrop[1:] {
+			box = vision.Box{X1: min(box.X1, o.Box.X1), Y1: min(box.Y1, o.Box.Y1), X2: max(box.X2, o.Box.X2), Y2: max(box.Y2, o.Box.Y2)}
+		}
+		p.snapDouble(s.piece.ID, box)
+	}
 	slog.Info("piece landed on the platter", "piece", s.piece.ID, "multi_drop", s.piece.Status == PieceMultiDrop)
 	if p.deps.OnLanded != nil && s.piece.Status != PieceMultiDrop {
 		p.deps.OnLanded(s.piece.ID, obs.At)
@@ -562,8 +569,23 @@ func (p *Platter) markDouble(s *platterSlot, now time.Time, why string) {
 	s.piece.AddProblem(ProblemDoubleFeed, why, now)
 	s.state, s.shots = slotResolved, nil
 	p.deps.Records.SavePiece(s.piece)
+	p.snapDouble(s.piece.ID, s.box)
 	p.progress(now)
 	slog.Info("piece landed with another", "piece", s.piece.ID)
+}
+
+// snapDouble keeps one picture of a double, though it isn't identified: the newest C4
+// frame cut around where it landed, so its record shows what came down together.
+func (p *Platter) snapDouble(id string, box vision.Box) {
+	frame, at, ok := p.deps.Vision.Frame(ChannelC4)
+	if !ok {
+		return
+	}
+	jpg, err := cropJPEG(frame, box)
+	if err != nil {
+		return
+	}
+	p.deps.Records.SaveImage(id, 0, jpg, false, at)
 }
 
 // ExpectSeveral tells the platter that more than one piece just fell off C3 together:
