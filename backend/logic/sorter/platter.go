@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/jpeg"
 	"log/slog"
+	"math"
 	"time"
 
 	"goklippy/backend/logic/brickognize"
@@ -65,6 +66,7 @@ type platterSlot struct {
 	state     slotState
 	landedAt  time.Time
 	box       vision.Box // where it lay in the drop zone
+	angle     float64    // and its angle round the platter
 	shots     []platterShot
 	lastFrame time.Time
 	sentAt    time.Time
@@ -82,6 +84,8 @@ type identResult struct {
 	result   brickognize.Result
 	err      error
 	strategy string // which request's answer it is (platter_identify.go)
+	// sentAt: the request it answers (a piece photographed again sends another).
+	sentAt time.Time
 }
 
 // Platter runs C4. Step it from the control loop; it never blocks.
@@ -97,6 +101,9 @@ type Platter struct {
 	doorsSettled time.Time
 	aimedFor     string // piece id
 	idents       chan identResult
+	// riding: the piece the last index carried out of the drop sector, until the next
+	// landing. One seen back where it was didn't ride: it hung off C3 (rideCheck).
+	riding       *platterSlot
 	lastProgress time.Time
 	stallRaised  bool
 	recent       []Piece // last pieces delivered, newest first
@@ -307,11 +314,15 @@ func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSet
 	if len(inDrop) == 0 {
 		return
 	}
+	if p.rideCheck(now, inDrop[0]) {
+		return
+	}
 	s := &platterSlot{
 		piece:    Piece{ID: NewPieceID(), Status: PieceTracking, SeenAt: now, Problems: []Problem{}},
 		state:    slotSettling,
 		landedAt: now,
 		box:      inDrop[0].Box,
+		angle:    inDrop[0].Angle,
 	}
 	if p.deps.RunID != nil {
 		s.piece.RunID = p.deps.RunID()
@@ -433,6 +444,9 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 	}
 	moved := centerDist(lead.Box, s.box) > stillTol(s.box) || !similarArea(lead.Box.Area(), s.box.Area())
 	s.box = lead.Box
+	if ok {
+		s.angle = lead.Angle
+	}
 	switch s.state {
 	case slotSettling:
 		if moved {
@@ -474,11 +488,13 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 	s.piece.Status = PieceIdentifying
 	p.deps.Records.SavePiece(s.piece)
 	p.progress(now)
-	shots, id := s.shots, s.piece.ID
+	shots, id, sent := s.shots, s.piece.ID, s.sentAt
 	go func() {
 		// Off the control loop: a full-size frame takes a while to decode, and
 		// Brickognize a while to answer (platter_identify.go).
-		p.idents <- p.identify(id, shots, ps)
+		r := p.identify(id, shots, ps)
+		r.sentAt = sent
+		p.idents <- r
 	}()
 }
 
@@ -559,6 +575,38 @@ func absDuration(d time.Duration) time.Duration {
 	return d
 }
 
+// rideCheck: a piece landing where the one the last index carried off lay, well short of
+// a sector further on, is that piece. It didn't ride the platter (it hung off C3's lip,
+// half fallen) and was photographed too soon. It goes back to the drop sector under its
+// own record, to be photographed again now it's down, rather than becoming a second
+// record of the same piece. It reports whether it was.
+func (p *Platter) rideCheck(now time.Time, o vision.PieceObs) bool {
+	s := p.riding
+	p.riding = nil
+	if s == nil || len(p.slots) < 2 || p.slots[1] != s {
+		return false
+	}
+	sector := 360 / float64(len(p.slots))
+	if turned := math.Mod(o.Angle-s.angle+540, 360) - 180; math.Abs(turned) >= sector/2 {
+		return false
+	}
+	p.slots[0], p.slots[1] = s, nil
+	s.landedAt, s.lastObs, s.lastFrame, s.sentAt = now, time.Time{}, time.Time{}, time.Time{}
+	s.box, s.angle, s.shots, s.stillFrames, s.routed = o.Box, o.Angle, nil, 0, false
+	if s.piece.Status == PieceMultiDrop {
+		s.state = slotResolved
+	} else {
+		s.state = slotSettling
+		s.piece.Status, s.piece.IdentifiedAt, s.piece.Prediction = PieceTracking, nil, nil
+		s.piece.PartID, s.piece.PartName, s.piece.PartCategory, s.piece.PartScore = "", "", "", 0
+		s.piece.ColorID, s.piece.ColorName, s.piece.ColorScore = "", "", 0
+	}
+	p.deps.Records.SavePiece(s.piece)
+	p.progress(now)
+	slog.Info("piece didn't ride the platter: photographing it again", "piece", s.piece.ID)
+	return true
+}
+
 // markDouble records the piece in the drop sector as having landed with another: it
 // isn't photographed, and goes to the bucket.
 func (p *Platter) markDouble(s *platterSlot, now time.Time, why string) {
@@ -630,7 +678,7 @@ func (p *Platter) drainIdents(now time.Time) {
 		select {
 		case r := <-p.idents:
 			for _, s := range p.slots {
-				if s != nil && s.piece.ID == r.pieceID && s.state == slotIdentifying {
+				if s != nil && s.piece.ID == r.pieceID && s.state == slotIdentifying && r.sentAt.Equal(s.sentAt) {
 					applyIdentification(&s.piece, r, now)
 					s.state = slotResolved
 					p.deps.Records.SavePiece(s.piece)
@@ -821,6 +869,7 @@ func (p *Platter) finishIndex(now time.Time, ps PlatterSettings) {
 	copy(p.slots[1:], p.slots[:len(p.slots)-1])
 	p.slots[0] = nil
 	p.slots[exit] = nil
+	p.riding = p.slots[1]
 	if fallen != nil {
 		p.delivered++
 		fallen.piece.Status = PieceDistributed

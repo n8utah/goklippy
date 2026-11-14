@@ -91,7 +91,7 @@ type feederChannel struct {
 	// The last exit pulse's length, and whether it was aimed at the fall point.
 	pushDeg   float64
 	pushAimed bool
-	falls       int
+	falls     int
 	// severalFell: the last exit pulse sent more than one piece off at once.
 	severalFell bool
 	// state: what it was doing at the last Step, for the time spent (time_spent.go);

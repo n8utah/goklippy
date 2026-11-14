@@ -185,3 +185,32 @@ func TestFeederNotesTwoFallingTogether(t *testing.T) {
 	f.Step(FeederInput{Now: t1, C2: obs(t1), C3: obs(t1, piece(vision.ZonePrecise, 3)), PlatterReady: true}, s)
 	assert.False(t, f.TakeSeveralFell(ChannelC3), "one went")
 }
+
+// A piece seen back in the drop sector, short of where the last index should have taken
+// it, is the same piece (it hung off C3 and didn't ride): it goes back under its own
+// record to be photographed again, not recorded a second time.
+func TestPlatterTakesBackAPieceThatDidntRide(t *testing.T) {
+	p, _ := captureTestPlatter(t)
+	now := time.Now()
+	ps := DefaultMachineSettings().Platter
+	landed := func() *platterSlot {
+		s := &platterSlot{piece: Piece{ID: "p1", Status: PieceIdentified, PartID: "3003"}, state: slotResolved, angle: 173}
+		p.slots[0] = s
+		p.finishIndex(now, ps)
+		return s
+	}
+
+	s := landed()
+	back := vision.PieceObs{Zone: vision.ZoneDrop, Angle: 192, Box: vision.Box{X1: 10, Y1: 10, X2: 50, Y2: 50}}
+	require.True(t, p.rideCheck(now, back), "19° on, not 72°: it didn't ride")
+	assert.Same(t, s, p.slots[0])
+	assert.Nil(t, p.slots[1])
+	assert.Equal(t, slotSettling, s.state, "photographed again")
+	assert.Equal(t, PieceTracking, s.piece.Status)
+	assert.Empty(t, s.piece.PartID)
+	assert.False(t, p.rideCheck(now, back), "only once per index")
+
+	p.slots[0] = nil
+	landed()
+	assert.False(t, p.rideCheck(now, vision.PieceObs{Zone: vision.ZoneDrop, Angle: 110}), "a new piece well behind it")
+}
