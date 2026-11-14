@@ -214,3 +214,24 @@ func TestPlatterTakesBackAPieceThatDidntRide(t *testing.T) {
 	landed()
 	assert.False(t, p.rideCheck(now, vision.PieceObs{Zone: vision.ZoneDrop, Angle: 110}), "a new piece well behind it")
 }
+
+func TestPlatterLooksBeforeDroppingAPieceThatMayNotHaveRidden(t *testing.T) {
+	p, v := captureTestPlatter(t)
+	now := time.Now()
+	ps := p.deps.Settings().Platter
+	s := &platterSlot{piece: Piece{ID: "p1", Status: PieceIdentified, PartID: "3004"}, state: slotResolved, angle: 173, routed: true}
+	p.slots[0] = s
+	p.finishIndex(now, ps)
+	p.aimedFor = s.piece.ID
+	require.Same(t, s, p.slots[p.exitIndex(p.deps.Settings())-1], "routed, aimed and next to fall")
+
+	v.set(now.Add(-time.Second)) // no frame since the index yet
+	p.Step(now)
+	assert.Nil(t, p.indexDone, "doesn't drop it before seeing whether it rode")
+
+	now = now.Add(100 * time.Millisecond)
+	v.set(now, vision.PieceObs{Zone: vision.ZoneDrop, Angle: 175, Box: vision.Box{X1: 10, Y1: 10, X2: 50, Y2: 50}})
+	p.Step(now)
+	assert.Same(t, s, p.slots[0], "it's still in the drop sector: taken back")
+	assert.Zero(t, p.delivered)
+}

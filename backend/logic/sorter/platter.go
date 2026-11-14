@@ -101,8 +101,9 @@ type Platter struct {
 	doorsSettled time.Time
 	aimedFor     string // piece id
 	idents       chan identResult
-	// riding: the piece the last index carried out of the drop sector, until the next
-	// landing. One seen back where it was didn't ride: it hung off C3 (rideCheck).
+	// riding: the piece the last index carried out of the drop sector, until the first
+	// fresh look at the drop sector after it. One seen back where it was didn't ride: it
+	// hung off C3 (rideCheck). The platter doesn't index again before that look.
 	riding       *platterSlot
 	lastProgress time.Time
 	stallRaised  bool
@@ -120,6 +121,9 @@ type Platter struct {
 const (
 	recentPieces = 8
 	cropMargin   = 0.35
+	// rideLookWait: how long after an index's settle the platter waits for a fresh frame
+	// of the drop sector before indexing anyway (the camera's gone quiet).
+	rideLookWait = time.Second
 )
 
 func NewPlatter(deps PlatterDeps) *Platter {
@@ -302,7 +306,11 @@ func (p *Platter) Step(now time.Time) {
 
 // watchDrop notices a piece landing in the free drop sector.
 func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSettings) {
-	if p.slots[0] != nil || !obs.Valid || obs.At.Before(p.settleUntil) || !obs.InDrop {
+	if p.slots[0] != nil || !obs.Valid || obs.At.Before(p.settleUntil) {
+		return
+	}
+	if !obs.InDrop {
+		p.riding = nil // it rode: the drop sector is clear
 		return
 	}
 	var inDrop []vision.PieceObs
@@ -312,6 +320,7 @@ func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSet
 		}
 	}
 	if len(inDrop) == 0 {
+		p.riding = nil
 		return
 	}
 	if p.rideCheck(now, inDrop[0]) {
@@ -852,6 +861,9 @@ func (p *Platter) maybeIndex(now time.Time, settings MachineSettings) {
 	}
 	if (p.checkFall && now.Before(p.fallBy)) || !p.distributionReady(now, exit) {
 		return // still watching the last piece fall off; or the chute isn't set
+	}
+	if p.riding != nil && now.Sub(p.settleUntil) < rideLookWait {
+		return // not yet seen whether the last piece rode: it may be at the exit by mistake
 	}
 	done, err := p.deps.HW.MoveChannel(ChannelC4, 360/float64(len(p.slots)), settings.IndexRpm)
 	if err != nil {
