@@ -78,3 +78,52 @@ func TestPlatterTurnsBackAfterDroppingWithExtra(t *testing.T) {
 	assert.True(t, p.Ready(now), "then C3 may drop again")
 	assert.Equal(t, 1, p.Delivered())
 }
+
+func TestPlatterFollowsAPieceLaggingAtTheExit(t *testing.T) {
+	p, v, hw := dropTestPlatter(t)
+	var didntFall int
+	p.deps.OnDidntFall = func() { didntFall++ }
+	settings := p.deps.Settings()
+	exit := p.exitIndex(settings) - 1
+	s := &platterSlot{piece: Piece{ID: "p1", Status: PieceIdentified}, state: slotResolved, angle: 170, routed: true}
+	p.slots[exit] = s
+	p.aimedFor = s.piece.ID
+	z := settings.Cameras.Zones["c4"]
+	at := func(angle float64) vision.PieceObs {
+		return vision.PieceObs{Angle: angle, ForwardToExit: z.ForwardToExit(angle)}
+	}
+	now := p.settleUntil
+	// stepUntil steps (the simulated move reports done on its own goroutine) until
+	// there have been n moves.
+	stepUntil := func(n int, pieces ...vision.PieceObs) {
+		for i := 0; i < 20 && len(hw.Moves()) < n; i++ {
+			time.Sleep(time.Millisecond)
+			step(p, v, &now, pieces...)
+		}
+	}
+
+	step(p, v, &now, at(262))
+	require.Len(t, hw.Moves(), 1)
+	extra := hw.Moves()[0].Degrees - 72
+
+	stepUntil(2, at(10)) // it dragged on the wall: 14° short of the exit
+	require.Len(t, hw.Moves(), 2, "turns on after it")
+	assert.InDelta(t, 34.5, hw.Moves()[1].Degrees, 0.01, "as far as the exit's middle")
+
+	stepUntil(3) // now it's gone
+	require.Len(t, hw.Moves(), 3)
+	assert.InDelta(t, -(extra + 34.5), hw.Moves()[2].Degrees, 0.01, "back by everything past the sector")
+	assert.Zero(t, didntFall, "it fell: no recovery")
+}
+
+func TestPlatterLeavesAnotherSlotsPieceAlone(t *testing.T) {
+	p, _, _ := dropTestPlatter(t)
+	settings := p.deps.Settings()
+	z := settings.Cameras.Zones["c4"]
+	p.slots[1] = &platterSlot{angle: 300} // landed at 300°: one sector on, at 12° now
+	o := vision.PieceObs{Angle: 12, ForwardToExit: z.ForwardToExit(12)}
+	_, there := p.straggler(vision.Observation{Valid: true, Pieces: []vision.PieceObs{o}}, settings)
+	assert.False(t, there, "it's where its slot says: not a piece left behind")
+	assert.InDelta(t, 9, p.followTurn(vision.PieceObs{Angle: 5}, settings), 0.01,
+		"a turn after a piece lagging behind it stops it 3° short of the exit")
+}

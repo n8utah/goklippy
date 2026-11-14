@@ -487,7 +487,7 @@ export const SETTING_SECTIONS = [
         step: 1,
         min: 0,
         max: 10,
-        help: 'How many of those turns before shaking it.',
+        help: 'How many turns after a piece the camera still sees short of the exit or in it. The drop itself follows a lagging piece this many times (to the middle of the exit by what the camera shows) before calling it stuck; the recovery then tries as many again before shaking it.',
         keywords: 'fall drop exit nudge didnt fall stuck c4',
       },
       {

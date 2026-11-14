@@ -79,7 +79,75 @@ func (p *Platter) giveBackTurn(now time.Time, settings MachineSettings) bool {
 		return true // tried again next step
 	}
 	slog.Debug("platter turned back after a drop", "deg", p.giveBack)
-	p.backDone, p.giveBack = done, 0
+	p.turnDone, p.giveBack = done, 0
 	p.progress(now)
 	return true
+}
+
+// straggler is the piece that should have fallen but is still short of the exit or in
+// it, lagging behind the platter: the piece nearest the exit, up to a sector short of
+// it, that isn't where another slot's piece should be. With no exit set it's whatever
+// is in the exit, and its angle isn't known.
+func (p *Platter) straggler(obs vision.Observation, settings MachineSettings) (vision.PieceObs, bool) {
+	width := exitWidth(settings, ChannelC4)
+	if width <= 0 {
+		return vision.PieceObs{}, obs.InExit
+	}
+	sector := 360 / float64(len(p.slots))
+	others := p.othersAt(sector)
+	var best vision.PieceObs
+	found := false
+	for _, o := range obs.Pieces {
+		if o.ForwardToExit <= -width || o.ForwardToExit >= sector {
+			continue // past the exit, or further back on the platter
+		}
+		mine := true
+		for _, e := range others {
+			if angleGap(o.Angle, e) < sector/4 {
+				mine = false // another slot's piece, riding where it should
+				break
+			}
+		}
+		if mine && (!found || o.ForwardToExit < best.ForwardToExit) {
+			best, found = o, true
+		}
+	}
+	return best, found
+}
+
+// othersAt is where each piece aboard should be now: where it landed, carried on by
+// its slot's sectors and the turns past them not yet given back.
+func (p *Platter) othersAt(sector float64) []float64 {
+	var out []float64
+	for i, s := range p.slots {
+		if s != nil {
+			out = append(out, vision.NormalizeAngle(s.angle+float64(i)*sector+p.giveBack))
+		}
+	}
+	return out
+}
+
+// followTurn is how far C4 turns on after a piece lagging at the exit: as far as
+// brings it to the middle of the exit, or Platter.FallNudgeDeg once it's there; never
+// taking another slot's piece into the exit, nor more than two sectors past the index
+// in all. 0 when it can't turn (no exit set, or no room).
+func (p *Platter) followTurn(lagging vision.PieceObs, settings MachineSettings) float64 {
+	z, ok := settings.Cameras.Zones[string(ChannelC4)]
+	width := exitWidth(settings, ChannelC4)
+	if !ok || width <= 0 {
+		return 0
+	}
+	sector := 360 / float64(len(p.slots))
+	step := settings.Platter.FallNudgeDeg
+	deg := vision.ForwardDeg(lagging.Angle, z.Exit.Start+width/2)
+	if deg > 180 {
+		deg = step // past the middle and still there: a nudge
+	}
+	deg = min(max(deg, step), 2*sector-p.giveBack)
+	for _, e := range p.othersAt(sector) {
+		if room := vision.ForwardDeg(e, z.Exit.Start) - dropKeepBack; room < 180 && room < deg {
+			deg = room
+		}
+	}
+	return max(0, deg)
 }
