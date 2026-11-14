@@ -75,6 +75,8 @@ type Feeder struct {
 	channels map[Channel]*feederChannel
 	// c2SeenAt: when C2 last had a piece on it; long ago, C2 is starving.
 	c2SeenAt time.Time
+	// fallAt: where each channel's pieces fall off its exit (feeder_fall.go).
+	fallAt map[Channel]float64
 }
 
 type feederChannel struct {
@@ -86,6 +88,9 @@ type feederChannel struct {
 	atExit      int
 	leadForward float64
 	exitPending bool
+	// The last exit pulse's length, and whether it was aimed at the fall point.
+	pushDeg   float64
+	pushAimed bool
 	falls       int
 	// severalFell: the last exit pulse sent more than one piece off at once.
 	severalFell bool
@@ -112,6 +117,11 @@ type feederChannel struct {
 	exitTriesID int
 	exitTries   int
 	shakeOwed   float64
+	// shakeSudden: the forward half owed is a clump shake's, made without a ramp.
+	shakeSudden bool
+	// A clump at the precise zone: shakes made for the lead with this track id.
+	clumpID     int
+	clumpShakes int
 	// Back-pressure: since when the leading piece has waited at the exit with
 	// nowhere to go (zero when it isn't), and whether that's lasted BackupMs.
 	waitingSince time.Time
@@ -121,10 +131,10 @@ type feederChannel struct {
 func NewFeeder() *Feeder {
 	return &Feeder{channels: map[Channel]*feederChannel{
 		ChannelC1: {}, ChannelC2: {}, ChannelC3: {},
-	}}
+	}, fallAt: map[Channel]float64{}}
 }
 
-// Reset forgets timers, as after a stop.
+// Reset forgets timers, as after a stop. Where pieces fall is kept.
 func (f *Feeder) Reset() {
 	for _, ch := range f.channels {
 		*ch = feederChannel{}
@@ -234,6 +244,10 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 	carry := func(ch Channel, kind string, deg float64, pauseMs int) {
 		move(ch, kind, deg, pauseMs, carryRpm(settings, ch), fs.CarryAccel)
 	}
+	// jerk is a sudden move at the channel's own speed, to make pieces slide.
+	jerk := func(ch Channel, kind string, deg float64, pauseMs int) {
+		move(ch, kind, deg, pauseMs, settings.FeederRpm[string(ch)], 0)
+	}
 	if in.C2.Valid && len(in.C2.Pieces) > 0 {
 		f.c2SeenAt = in.Now
 	}
@@ -270,11 +284,10 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		ch         Channel
 		obs        vision.Observation
 		downstream bool // its exit may push now
-		accepting  bool // the channel ahead is taking pieces: carry further
 		why        func() string
 	}{
-		{ChannelC3, in.C3, in.PlatterReady, !c3BackedUp, func() string { return "C4 can't take a piece yet" }},
-		{ChannelC2, in.C2, c3Ready, c3Accepting, c3Why},
+		{ChannelC3, in.C3, in.PlatterReady, func() string { return "C4 can't take a piece yet" }},
+		{ChannelC2, in.C2, c3Ready, c3Why},
 	} {
 		c := f.channels[step.ch]
 		set := func(state, doing string) { c.state, c.doing = state, doing }
@@ -294,7 +307,7 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 			}
 			continue
 		}
-		f.noteFall(c, step.obs, in.Now, fs)
+		f.noteFall(step.ch, c, step.obs, in.Now, settings)
 		switch f.checkHeld(step.ch, c, step.obs, in.Now) {
 		case heldStuck:
 			c.stuck = true
@@ -329,22 +342,33 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 			set(TimeEmpty, "empty")
 			continue
 		}
+		if c.shakeOwed > 0 && c.shakeSudden {
+			// A clump shake's forward half is owed wherever the jog back left the
+			// pieces, whatever the channel ahead is doing: it was made short of the exit
+			// and puts them back.
+			set(TimeMoving, f.exitMove(step.ch, c, step.obs, lead, settings, add, jerk))
+			continue
+		}
 		if lead.Zone == vision.ZonePrecise || lead.Zone == vision.ZoneExit {
 			switch {
 			case in.Now.Before(c.holdUntil):
 				set(TimeBusy, "a piece just dropped: letting it land")
 			case step.downstream:
-				set(TimeMoving, f.exitMove(step.ch, c, step.obs, lead, fs, add))
+				set(TimeMoving, f.exitMove(step.ch, c, step.obs, lead, settings, add, jerk))
 			default:
-				set(TimeWaiting, "a piece is at the exit; waiting: "+step.why())
+				// Waiting is a good time to shake a clump apart.
+				if doing := f.shakeClump(step.ch, c, step.obs, lead, fs, jerk); doing != "" {
+					set(TimeMoving, doing)
+				} else {
+					set(TimeWaiting, "a piece is at the exit; waiting: "+step.why())
+				}
 			}
 			continue
 		}
-		// Short of the exit: stop the leading piece at the precise zone's start. A
-		// piece already just short of it creeps in by an exit pulse, so it can't be
-		// left needing a move too small to make. Carried at the carry speed, and
-		// further while the channel ahead is taking pieces, since it won't be waiting
-		// at the exit long. While the platter is busy C3 stops it further back still.
+		// Short of the exit: stop the leading piece at the precise zone's start, in one
+		// move at the carry speed (however far). A piece already just short of it creeps
+		// in by an exit pulse, so it can't be left needing a move too small to make.
+		// While the platter is busy C3 stops it further back.
 		clearance := lead.ForwardToExit - preciseWidth(settings, step.ch)
 		if step.ch == ChannelC3 && in.PlatterBusy && fs.C3BusyStandoffDeg > 0 {
 			clearance -= fs.C3BusyStandoffDeg
@@ -353,12 +377,8 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 				continue
 			}
 		}
-		reach := fs.DropPulseDeg
-		if step.accepting {
-			reach = max(reach, fs.CarryPulseDeg)
-		}
 		set(TimeMoving, "carrying a piece to the exit")
-		carry(step.ch, "drop", math.Max(math.Min(reach, clearance), fs.ExitPulseDeg), fs.DropPauseMs)
+		carry(step.ch, "drop", math.Max(clearance, fs.ExitPulseDeg), fs.DropPauseMs)
 	}
 
 	// C1, blind: feed while C2's drop zone is clear and C2 isn't backed up.
@@ -446,16 +466,6 @@ func full(fs FeederSettings, ch Channel, obs vision.Observation) bool {
 	return (limit > 0 && len(obs.Pieces) >= limit) || (fs.MaxCover > 0 && obs.Covered() >= fs.MaxCover)
 }
 
-// exitPulse is how far an exit pulse turns. Short of the exit zone (forward > 0) it
-// covers Feeder.ExitApproach of the way there, so a piece crosses the precise zone in a
-// few nudges rather than many; at the exit it's the careful ExitPulseDeg.
-func exitPulse(fs FeederSettings, forward float64) float64 {
-	if fs.ExitApproach <= 0 || forward <= fs.ExitPulseDeg {
-		return fs.ExitPulseDeg
-	}
-	return max(fs.ExitPulseDeg, forward*min(fs.ExitApproach, 1))
-}
-
 // State is what ch was doing at the last Step (TimeMoving, …), for the time spent.
 func (f *Feeder) State(ch Channel) string {
 	if c, ok := f.channels[ch]; ok {
@@ -471,8 +481,9 @@ func (f *Feeder) fresh(obs vision.Observation, ch Channel, now time.Time, fs Fee
 	return obs.Valid && !now.Before(c.busyUntil) && !obs.At.Before(c.busyUntil) && now.Sub(obs.At) <= stale(fs)
 }
 
-// noteFall starts the hold when the last exit pulse sent a piece off the edge.
-func (f *Feeder) noteFall(c *feederChannel, obs vision.Observation, now time.Time, fs FeederSettings) {
+// noteFall starts the hold when the last exit pulse sent a piece off the edge, and
+// learns from it where the channel's pieces fall (feeder_fall.go).
+func (f *Feeder) noteFall(ch Channel, c *feederChannel, obs vision.Observation, now time.Time, settings MachineSettings) {
 	if !c.exitPending {
 		return
 	}
@@ -480,28 +491,63 @@ func (f *Feeder) noteFall(c *feederChannel, obs vision.Observation, now time.Tim
 	lead, ok := obs.Leading()
 	left := atExitCount(obs)
 	fell := left < c.atExit || !ok || lead.ForwardToExit > c.leadForward+fallBackDeg
+	if c.pushDeg > 0 {
+		f.learnFall(ch, settings, c.pushDeg-c.leadForward, c.pushAimed, fell)
+	}
 	if fell {
 		c.falls++
-		c.holdUntil = now.Add(time.Duration(fs.HoldAfterFallMs) * time.Millisecond)
+		c.holdUntil = now.Add(time.Duration(settings.Feeder.HoldAfterFallMs) * time.Millisecond)
 		// Pieces only leave the exit by falling, so two fewer there is two fallen.
 		c.severalFell = c.atExit-left >= 2
 	}
 }
 
-// exitMove is the exit's next move for a lead in the opening: the forward half of a
-// shake still owed, or exitStep's push, back-off or shake (feeder_held.go). It says
-// which, for the status line.
+// shakeClump starts a shake of a lead that's several pieces, short of the exit, while
+// it has shakes left: a sudden jog back now, the same forward next (shakeOwed). It
+// returns what it's doing, or "" when it didn't.
+func (f *Feeder) shakeClump(ch Channel, c *feederChannel, obs vision.Observation, lead vision.PieceObs,
+	fs FeederSettings, jerk func(Channel, string, float64, int)) string {
+	if !obs.Several(lead) || lead.ForwardToExit <= 0 || fs.ClumpShakeDeg <= 0 {
+		return ""
+	}
+	if c.clumpID != lead.TrackID {
+		c.clumpID, c.clumpShakes = lead.TrackID, 0
+	}
+	if c.clumpShakes >= fs.ClumpShakes {
+		return ""
+	}
+	c.clumpShakes++
+	c.shakeOwed, c.shakeSudden = fs.ClumpShakeDeg, true
+	jerk(ch, "back", -fs.ClumpShakeDeg, 0)
+	return "several pieces together: shaking them apart (back)"
+}
+
+// exitMove is the exit's next move for a lead at the precise zone or in the opening:
+// the forward half of a shake still owed; shaking a clump apart; or exitStep's push,
+// back-off or shake (feeder_held.go). A single piece is pushed to where the channel's
+// pieces fall in one move, a clump that wouldn't part by the careful exit pulse, so its
+// front piece goes alone. It says which, for the status line.
 func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, lead vision.PieceObs,
-	fs FeederSettings, add func(Channel, string, float64, int)) string {
-	push := func(deg float64) {
+	settings MachineSettings, add, jerk func(Channel, string, float64, int)) string {
+	fs := settings.Feeder
+	push := func(deg float64, aimed bool) {
 		c.atExit, c.leadForward, c.exitPending = atExitCount(obs), lead.ForwardToExit, true
+		c.pushDeg, c.pushAimed = deg, aimed
 		add(ch, "exit", deg, fs.ExitPauseMs)
 	}
 	if c.shakeOwed > 0 {
-		deg := c.shakeOwed
-		c.shakeOwed = 0
-		push(deg)
+		deg, sudden := c.shakeOwed, c.shakeSudden
+		c.shakeOwed, c.shakeSudden = 0, false
+		if sudden {
+			// Back where it was, short of the exit: nothing to watch for a fall.
+			jerk(ch, "exit", deg, fs.ExitPauseMs)
+			return "several pieces together: shaking them apart (forward)"
+		}
+		push(deg, false)
 		return "shaking the piece at the exit loose (forward)"
+	}
+	if doing := f.shakeClump(ch, c, obs, lead, fs, jerk); doing != "" {
+		return doing
 	}
 	if c.exitTriesID != lead.TrackID {
 		c.exitTriesID, c.exitTries = lead.TrackID, 0
@@ -510,7 +556,13 @@ func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, 
 	if hasNext {
 		next = obs.Pieces[1].ForwardToExit
 	}
-	st := exitStep(lead.ForwardToExit, next, hasNext, exitPulse(fs, lead.ForwardToExit),
+	full, aimed := fs.ExitPulseDeg, false
+	if !obs.Several(lead) {
+		if aim := lead.ForwardToExit + f.fallPoint(ch, settings); aim > fs.ExitPulseDeg {
+			full, aimed = aim, true
+		}
+	}
+	st := exitStep(lead.ForwardToExit, next, hasNext, full,
 		fs.ExitPulseDeg, fs.ExitClearDeg[string(ch)], c.exitTries)
 	switch st.kind {
 	case exitStepBack:
@@ -523,8 +575,13 @@ func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, 
 		add(ch, "back", -st.deg, 0)
 		return "shaking the piece at the exit loose (back)"
 	}
-	push(st.deg)
-	if lead.ForwardToExit > 0 {
+	push(st.deg, aimed && st.deg == full)
+	switch {
+	case obs.Several(lead):
+		return "several pieces together: nudging them off one at a time"
+	case aimed && st.deg == full:
+		return "taking a piece to where pieces fall off"
+	case lead.ForwardToExit > 0:
 		return "bringing a piece up to the exit"
 	}
 	return "pushing a piece off the exit"

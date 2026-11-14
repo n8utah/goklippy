@@ -15,6 +15,9 @@ type PieceObs struct {
 	ForwardToExit float64 `json:"forward_to_exit"`
 	// TrackID is the tracker's id for it, steady across frames; 0 until tracked.
 	TrackID int `json:"track_id,omitempty"`
+	// Parts is how many of the detector's boxes it was joined from (Merged): more than
+	// one is pieces lying close together, or one piece in parts.
+	Parts int `json:"parts,omitempty"`
 }
 
 // Observation is everything the sorter reads about one channel from one frame.
@@ -58,6 +61,13 @@ func (o Observation) Covered() float64 {
 // Clump reports a box too big to be one piece: pieces lying together in a pile.
 func (o Observation) Clump(b Box) bool {
 	return o.RingRadius > 0 && float64(max(b.X2-b.X1, b.Y2-b.Y1)) > clumpShare*o.RingRadius
+}
+
+// Several reports a blob that's likely more than one piece: joined from several
+// detections, or pile-sized. (One piece in parts, say white on the white ring, counts
+// too; it only costs a shake.)
+func (o Observation) Several(p PieceObs) bool {
+	return p.Parts > 1 || o.Clump(p.Box)
 }
 
 // clumpShare: a box whose longer side is more than this share of the ring's radius is
@@ -111,6 +121,7 @@ func Observe(z ChannelZones, boxes []Box, mergeGap int, at time.Time) Observatio
 		angle := z.AngleOf(center)
 		obs.Pieces = append(obs.Pieces, PieceObs{
 			Box: m.Box, Angle: angle, Zone: z.ZoneAt(angle), ForwardToExit: z.ForwardToExit(angle),
+			Parts: len(m.Parts),
 		})
 	}
 	sort.SliceStable(obs.Pieces, func(i, j int) bool { return obs.Pieces[i].ForwardToExit < obs.Pieces[j].ForwardToExit })

@@ -15,7 +15,7 @@ import (
 // back. TestFeederDefaultsAreSmooth checks the shipped defaults.
 func feederSettings() MachineSettings {
 	s := DefaultMachineSettings()
-	s.Feeder.ExitApproach, s.Feeder.ExitAccel = 0.5, 0
+	s.Feeder.ExitAccel = 0
 	s.Feeder.ExitClearDeg = map[string]float64{"c2": 2, "c3": 2}
 	s.Cameras.Zones = map[string]vision.ChannelZones{
 		"c2": {PreciseWidth: 15},
@@ -83,9 +83,9 @@ func TestFeederDropPulseStopsAtThePreciseZone(t *testing.T) {
 	assert.Equal(t, FeederMove{Channel: ChannelC2, Degrees: 85, Rpm: 12, Accel: 30, Kind: "drop"}, moves[ChannelC2],
 		"C3 is taking pieces: carried fast, all the way to the precise zone (100° less its 15°)")
 
-	f = NewFeeder() // C3's drop zone busy: the usual short pulse, still at the carry speed
+	f = NewFeeder() // C3's drop zone busy: the same one move; the piece waits at the precise zone
 	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, piece(vision.ZoneDrop, 100)), C3: obs(now, piece(vision.ZoneDrop, 120))}, feederSettings()))
-	assert.Equal(t, FeederMove{Channel: ChannelC2, Degrees: 30, Rpm: 12, Accel: 30, Kind: "drop"}, moves[ChannelC2])
+	assert.Equal(t, FeederMove{Channel: ChannelC2, Degrees: 85, Rpm: 12, Accel: 30, Kind: "drop"}, moves[ChannelC2])
 
 	f = NewFeeder()
 	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now, piece(vision.ZoneNone, 21)), C3: obs(now)}, feederSettings()))
@@ -105,7 +105,8 @@ func TestFeederExitWaitsForDownstream(t *testing.T) {
 	assert.NotContains(t, moves, ChannelC3, "the platter isn't ready")
 
 	moves = movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now), C3: atExit, PlatterReady: true}, feederSettings()))
-	assert.Equal(t, FeederMove{Channel: ChannelC3, Degrees: 2.5, Rpm: 11.25, Kind: "exit"}, moves[ChannelC3], "5° short: half the way")
+	assert.Equal(t, FeederMove{Channel: ChannelC3, Degrees: 5, Rpm: 11.25, Kind: "exit"}, moves[ChannelC3],
+		"5° short, and with no exit zone drawn pieces fall at its start: 5°")
 
 	// C2's exit waits while C3's drop zone has a piece.
 	f = NewFeeder()
@@ -117,22 +118,83 @@ func TestFeederExitWaitsForDownstream(t *testing.T) {
 	assert.Equal(t, "exit", moves[ChannelC2].Kind)
 }
 
-func TestFeederExitPulseClosesTheGapThenNudges(t *testing.T) {
-	fs := feederSettings().Feeder
-	assert.InDelta(t, 10, exitPulse(fs, 20), 1e-9, "20° short of the exit: half the way")
-	assert.InDelta(t, 2, exitPulse(fs, 3), 1e-9, "close: never less than the careful nudge")
-	assert.InDelta(t, 2, exitPulse(fs, -1), 1e-9, "in the exit: the careful nudge")
-	fs.ExitApproach = 0
-	assert.InDelta(t, 2, exitPulse(fs, 20), 1e-9, "off: nudges all the way")
+// withExit gives C3 a 20° exit zone, so its pieces start out falling 10° in.
+func withExit(s MachineSettings) MachineSettings {
+	s.Cameras.Zones = map[string]vision.ChannelZones{
+		"c2": {PreciseWidth: 15},
+		"c3": {PreciseWidth: 15, Exit: vision.Span{Start: 0, End: 20}},
+	}
+	return s
+}
 
+// c3Step is one feeder step with only C3's picture mattering.
+func c3Step(f *Feeder, s MachineSettings, at time.Time, pieces ...vision.PieceObs) FeederMove {
+	return movesByChannel(f.Step(FeederInput{Now: at, C2: obs(at), C3: obs(at, pieces...), PlatterReady: true}, s))[ChannelC3]
+}
+
+func TestFeederExitGoesToWherePiecesFall(t *testing.T) {
+	s := withExit(feederSettings())
 	now := time.Now()
+	assert.InDelta(t, 22, c3Step(NewFeeder(), s, now, piece(vision.ZonePrecise, 12)).Degrees, 1e-9,
+		"12° to the exit and 10° into it, in one move")
+	assert.InDelta(t, 18, c3Step(NewFeeder(), s, now, piece(vision.ZonePrecise, 12), piece(vision.ZoneDrop, 20)).Degrees, 1e-9,
+		"no further than keeps the next piece 2° short of the exit")
+	assert.InDelta(t, 2, c3Step(NewFeeder(), s, now, piece(vision.ZoneExit, -11)).Degrees, 1e-9,
+		"past where pieces fall: the careful nudge")
+
+	// It fell on the aimed move: next time a little less.
 	f := NewFeeder()
-	moves := movesByChannel(f.Step(FeederInput{Now: now, C2: obs(now), C3: obs(now, piece(vision.ZonePrecise, 12)), PlatterReady: true}, feederSettings()))
-	assert.InDelta(t, 6, moves[ChannelC3].Degrees, 1e-9)
+	c3Step(f, s, now, piece(vision.ZonePrecise, 12))
+	c3Step(f, s, now.Add(2*time.Second))
+	assert.InDelta(t, 9.5, f.fallPoint(ChannelC3, s), 1e-9)
+
+	// It didn't: just past where it got to, then the careful nudge; it fell on that, so
+	// that's where they fall.
+	f = NewFeeder()
+	c3Step(f, s, now, piece(vision.ZonePrecise, 12))
+	nudge := c3Step(f, s, now.Add(2*time.Second), piece(vision.ZoneExit, -10))
+	assert.InDelta(t, 10.5, f.fallPoint(ChannelC3, s), 1e-9)
+	assert.InDelta(t, 2, nudge.Degrees, 1e-9)
+	c3Step(f, s, now.Add(4*time.Second))
+	assert.InDelta(t, 12, f.fallPoint(ChannelC3, s), 1e-9)
+	assert.Equal(t, 1, f.Falls(ChannelC3))
+
+	// Fell sooner than a short move took it: there.
+	f = NewFeeder()
+	c3Step(f, s, now, piece(vision.ZoneExit, -5), piece(vision.ZoneDrop, 4))
+	c3Step(f, s, now.Add(2*time.Second), piece(vision.ZoneDrop, 2))
+	assert.InDelta(t, 7, f.fallPoint(ChannelC3, s), 1e-9, "the next piece let it go 2°, to 7° in")
+}
+
+func TestFeederShakesAClumpApartThenNudges(t *testing.T) {
+	s := withExit(feederSettings())
+	s.Feeder.ClumpShakes, s.Feeder.ClumpShakeDeg = 2, 8
+	clump := vision.PieceObs{Zone: vision.ZonePrecise, ForwardToExit: 12, Parts: 2}
+	jogged := vision.PieceObs{Zone: vision.ZoneDrop, ForwardToExit: 20, Parts: 2}
+	f := NewFeeder()
+	at := time.Now()
+	for i := range 2 {
+		back := c3Step(f, s, at, clump)
+		assert.Equal(t, FeederMove{Channel: ChannelC3, Degrees: -8, Rpm: 11.25, Kind: "back"}, back, "shake %d: a sudden jog back", i)
+		at = at.Add(2 * time.Second)
+		fwd := c3Step(f, s, at, jogged)
+		assert.Equal(t, FeederMove{Channel: ChannelC3, Degrees: 8, Rpm: 11.25, Kind: "exit"}, fwd, "and forward, from where the jog left it")
+		at = at.Add(2 * time.Second)
+	}
+	assert.InDelta(t, 2, c3Step(f, s, at, clump).Degrees, 1e-9, "still together: nudged off carefully, not to the fall point")
+	assert.Contains(t, f.Doing(ChannelC3), "one at a time")
+
+	// Waiting for C4 is a good time to shake.
+	f = NewFeeder()
+	moves := movesByChannel(f.Step(FeederInput{Now: at, C2: obs(at), C3: obs(at, clump)}, s))
+	assert.InDelta(t, -8, moves[ChannelC3].Degrees, 1e-9)
+
+	// One piece isn't shaken.
+	assert.InDelta(t, 22, c3Step(NewFeeder(), s, at, piece(vision.ZonePrecise, 12)).Degrees, 1e-9)
 }
 
 // Every move ramps (a sudden start makes pieces slide rather than ride), a piece is
-// brought nearly to the exit in one move, and C3 doesn't jerk to part pieces.
+// taken to the exit in one move, and both exits keep the next piece back.
 func TestFeederDefaultsAreSmooth(t *testing.T) {
 	s := DefaultMachineSettings()
 	s.Cameras.Zones = feederSettings().Cameras.Zones
@@ -140,10 +202,10 @@ func TestFeederDefaultsAreSmooth(t *testing.T) {
 	moves := movesByChannel(NewFeeder().Step(FeederInput{Now: now, C2: obs(now), C3: obs(now, piece(vision.ZonePrecise, 10)), PlatterReady: true}, s))
 	exit := moves[ChannelC3]
 	assert.Equal(t, "exit", exit.Kind)
-	assert.InDelta(t, 9, exit.Degrees, 1e-9, "90% of the way in one move")
+	assert.InDelta(t, 10, exit.Degrees, 1e-9, "all the way in one move")
 	assert.Positive(t, exit.Accel, "ramped")
 	assert.Positive(t, moves[ChannelC1].Accel, "C1's nudge too")
-	assert.Zero(t, s.Feeder.ExitClearDeg["c3"])
+	assert.Equal(t, 3.0, s.Feeder.ExitClearDeg["c3"])
 }
 
 func TestFeederHoldsAfterAFall(t *testing.T) {

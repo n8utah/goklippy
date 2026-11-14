@@ -52,13 +52,13 @@ export const DEFAULT_SORTER_SETTINGS = {
   routines: {},
   // The pulsing feeder (C1–C3) and the classification platter (C4); see System › Settings (helpers/settingsRegistry.js).
   feeder: {
-    dropPulseDeg: 30,
     dropPauseMs: 100,
     exitPulseDeg: 2,
     exitPauseMs: 100,
-    exitApproach: 0.9,
+    clumpShakes: 3,
+    clumpShakeDeg: 8,
     exitAccel: 30,
-    exitClearDeg: { c2: 2, c3: 0 },
+    exitClearDeg: { c2: 2, c3: 3 },
     c3BusyStandoffDeg: 6,
     holdAfterFallMs: 800,
     minMoveDeg: 0.1,

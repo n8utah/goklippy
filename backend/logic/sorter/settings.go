@@ -207,13 +207,17 @@ func (cs CameraSettings) SizeFor(ch Channel) (int, int) {
 // FeederSettings tune the pulsing feeder (C1–C3), after Sorter V2's "Feeder simple
 // pulse" page. Distances are rotor degrees; speeds come from feederRpm.
 type FeederSettings struct {
-	DropPulseDeg float64 `json:"dropPulseDeg"` // nudge for a piece short of the exit
-	DropPauseMs  int     `json:"dropPauseMs"`  // look again after a drop-zone nudge
-	ExitPulseDeg float64 `json:"exitPulseDeg"` // nudge for a piece at the exit
+	DropPauseMs int `json:"dropPauseMs"` // look again after carrying a piece
+	// ExitPulseDeg is the careful nudge at the exit: for a piece that didn't fall where
+	// the channel's pieces usually do, or a clump that wouldn't shake apart. Other exit
+	// moves go to the fall point in one (feeder_fall.go).
+	ExitPulseDeg float64 `json:"exitPulseDeg"`
 	ExitPauseMs  int     `json:"exitPauseMs"`
-	// ExitApproach: short of the exit zone, an exit pulse covers this share of the way
-	// there (at least ExitPulseDeg); 0 nudges ExitPulseDeg all the way.
-	ExitApproach float64 `json:"exitApproach"`
+	// ClumpShakes: a blob of several pieces at the precise zone is shaken this many
+	// times (a sudden ClumpShakeDeg back and forward, so the pieces slide apart on the
+	// rotor) before it's nudged off carefully. 0 doesn't shake.
+	ClumpShakes   int     `json:"clumpShakes"`
+	ClumpShakeDeg float64 `json:"clumpShakeDeg"`
 	// ExitAccel: exit pulses, C1's nudges and back-offs ramp up and down at this many
 	// rpm per second (0 starts them at full speed): smooth moves carry pieces, jerky
 	// ones make them slide.
@@ -236,11 +240,10 @@ type FeederSettings struct {
 	BulkPauseMs  int     `json:"bulkPauseMs"`
 	// StaleMs: a camera frame older than this is no information.
 	StaleMs int `json:"staleMs"`
-	// Carrying (drop pulses, and C1's nudges while C2 is starving) runs at CarryRpm
-	// (never slower than the channel's own speed) ramping at CarryAccel rpm/s; exit
-	// pulses keep the channel's own careful speed. While the next channel can take a
-	// piece, a drop pulse may go CarryPulseDeg instead of DropPulseDeg (it still stops
-	// the leading piece at the precise zone).
+	// Carrying (a piece to the precise zone in one move, and C1's nudges while C2 is
+	// starving) runs at CarryRpm (never slower than the channel's own speed) ramping at
+	// CarryAccel rpm/s; exit moves keep the channel's own careful speed. CarryPulseDeg is
+	// each turn of finishing's sweep for pieces the camera missed.
 	CarryRpm      map[string]float64 `json:"carryRpm"`
 	CarryAccel    float64            `json:"carryAccel"`
 	CarryPulseDeg float64            `json:"carryPulseDeg"`
@@ -447,11 +450,12 @@ func DefaultMachineSettings() MachineSettings {
 		},
 		// Sorter V2's defaults ("Conservative" exit pulses).
 		Feeder: FeederSettings{
-			DropPulseDeg: 30, DropPauseMs: 100,
-			ExitPulseDeg: 2, ExitPauseMs: 100, ExitApproach: 0.9, ExitAccel: 30,
-			// Off for C3, as Sorter V2: on the machine its shakes and back-offs couldn't
-			// part two pieces riding together, only jerk them.
-			ExitClearDeg:      map[string]float64{"c2": 2, "c3": 0},
+			DropPauseMs:  100,
+			ExitPulseDeg: 2, ExitPauseMs: 100, ExitAccel: 30,
+			ClumpShakes: 3, ClumpShakeDeg: 8,
+			// On for C3 too: with it off, a piece riding close behind C3's lead went onto
+			// C4 with it about half the time (2026-11-14).
+			ExitClearDeg:      map[string]float64{"c2": 2, "c3": 3},
 			C3BusyStandoffDeg: 6,
 			HoldAfterFallMs:   800,
 			MinMoveDeg:        0.1, MaxMoveDeg: 120,
