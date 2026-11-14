@@ -3,3 +3,5 @@ backend/tmp/*
 *.exe
 *.exe~
 frontend/dist/*
+# Backups the app makes when it saves a Klipper config (klipperconfig.SaveFile)
+*.bak
