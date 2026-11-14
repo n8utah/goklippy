@@ -103,3 +103,17 @@ func TestPlatterLetsC3DropWithoutClearExitFirst(t *testing.T) {
 	exitSlot(p, slotIdentifying)
 	assert.True(t, p.Ready(time.Now()))
 }
+
+func TestFallNudgeTurnsThePieceToTheMiddleOfTheExit(t *testing.T) {
+	s := DefaultMachineSettings()
+	s.Cameras.Zones = map[string]vision.ChannelZones{"c4": {Exit: vision.Span{Start: 24, End: 64}}}
+	s.Platter.Sectors, s.Platter.FallNudgeDeg = 5, 6
+	obs := func(ps ...vision.PieceObs) vision.Observation { return vision.Observation{Valid: true, Pieces: ps} }
+	short := vision.PieceObs{ForwardToExit: 29}   // at the exit's edge, 29° short of it
+	behind := vision.PieceObs{ForwardToExit: 150} // a piece further back on the platter
+	deep := vision.PieceObs{ForwardToExit: -25}   // past the exit's middle
+
+	assert.InDelta(t, 49, fallNudge(obs(behind, short), s), 0.01, "29° to the exit, then 20° to its middle")
+	assert.InDelta(t, 6, fallNudge(obs(deep), s), 0.01, "already there: a small nudge")
+	assert.InDelta(t, 6, fallNudge(obs(), s), 0.01, "nothing seen")
+}

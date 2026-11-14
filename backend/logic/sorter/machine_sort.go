@@ -422,11 +422,32 @@ var c4ShakeOff = []RecoveryMove{
 	{Shake: "max"},
 }
 
+// fallNudge is how far C4 turns to drop the piece left at its exit: as far as the camera
+// says brings its middle to the middle of the exit, or Platter.FallNudgeDeg once it's
+// there (or nothing's seen).
+func fallNudge(obs vision.Observation, settings MachineSettings) float64 {
+	step := settings.Platter.FallNudgeDeg
+	width := exitWidth(settings, ChannelC4)
+	lead, found := vision.PieceObs{}, false
+	for _, p := range obs.Pieces {
+		// The piece nearest the exit (or in it): not one further back on the platter.
+		if p.ForwardToExit > -width && p.ForwardToExit < 360/float64(max(1, settings.Platter.Sectors)) &&
+			(!found || p.ForwardToExit < lead.ForwardToExit) {
+			lead, found = p, true
+		}
+	}
+	if !found {
+		return step
+	}
+	return max(step, lead.ForwardToExit+width/2)
+}
+
 // onDidntFall frees a piece still at C4's exit after the turn that should have dropped
-// it. Most just need a little more turning: C4 turns on Platter.FallNudgeDeg at a time
-// (up to FallNudges), checking after each, then back as far so its sectors stay where
-// the platter expects them. Only then is it shaken, harder each time; if it's still
-// there the sort stops for the operator.
+// it. Most just need more turning: C4 turns it to the middle of the exit by what the
+// camera shows (fallNudge), then on Platter.FallNudgeDeg at a time (up to FallNudges
+// turns and one sector in all), checking after each, then back as far so its sectors
+// stay where the platter expects them. Only then is it shaken, harder each time; if
+// it's still there the sort stops for the operator.
 func (m *Machine) onDidntFall() {
 	runner := m.recovery()
 	ps := m.settings().Platter
@@ -438,12 +459,15 @@ func (m *Machine) onDidntFall() {
 			return obs.Valid && !obs.InExit
 		}
 		turned := 0.0
-		for i := 0; i < ps.FallNudges && ps.FallNudgeDeg > 0; i++ {
-			report(i+1, steps, fmt.Sprintf("Turn C4 on %g° (%g° so far) to let it fall", ps.FallNudgeDeg, turned+ps.FallNudgeDeg))
-			if err := runner.turn(ctx, ChannelC4, ps.FallNudgeDeg); err != nil {
+		sector := 360 / float64(max(1, ps.Sectors))
+		for i := 0; i < ps.FallNudges && ps.FallNudgeDeg > 0 && turned < sector; i++ {
+			obs := runner.freshObs(ctx, ChannelC4, time.Now())
+			deg := min(fallNudge(obs, m.settings()), sector-turned)
+			report(i+1, steps, fmt.Sprintf("Turn C4 on %.0f° (%.0f° so far) to let it fall", deg, turned+deg))
+			if err := runner.turn(ctx, ChannelC4, deg); err != nil {
 				return err
 			}
-			turned += ps.FallNudgeDeg
+			turned += deg
 			if err := waitFor(ctx, recoverySettle); err != nil {
 				return err
 			}

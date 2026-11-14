@@ -70,10 +70,14 @@ type platterSlot struct {
 	shots     []platterShot
 	lastFrame time.Time
 	sentAt    time.Time
-	// Settling: the newest observation looked at, and how many frames in a row the
-	// piece's box has stayed put. Photos start once it's still.
+	// Settling: the newest observation looked at, and how many frames in a row (since
+	// when) the piece's box, and everything in the drop sector, has stayed put. Photos
+	// start once it's still.
 	lastObs     time.Time
 	stillFrames int
+	stillSince  time.Time
+	inDrop      int        // pieces seen in the drop sector last frame
+	all         vision.Box // and the box round them all
 	// The bin it was routed to, once it is next to fall.
 	routed bool
 	choice BinChoice
@@ -332,18 +336,18 @@ func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSet
 		landedAt: now,
 		box:      inDrop[0].Box,
 		angle:    inDrop[0].Angle,
+		// Several blobs on landing may be one piece still falling: capture judges
+		// whether it's alone once the drop sector has lain still.
+		stillSince: obs.At,
+		inDrop:     len(inDrop),
+		all:        unionBox(inDrop),
 	}
 	if p.deps.RunID != nil {
 		s.piece.RunID = p.deps.RunID()
 	}
 	several := now.Before(p.severalUntil)
 	p.severalUntil = time.Time{}
-	switch {
-	case len(inDrop) > 1 || touchingPieces(obs, inDrop[0].Box):
-		s.piece.Status = PieceMultiDrop
-		s.piece.AddProblem(ProblemDoubleFeed, "It landed with another piece, so it couldn't be photographed alone.", now)
-		s.state = slotResolved
-	case several:
+	if several {
 		s.piece.Status = PieceMultiDrop
 		s.piece.AddProblem(ProblemDoubleFeed, "More than one piece fell off C3 together, so it couldn't be photographed alone.", now)
 		s.state = slotResolved
@@ -352,11 +356,7 @@ func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSet
 	p.progress(now)
 	p.deps.Records.SavePiece(s.piece)
 	if s.piece.Status == PieceMultiDrop {
-		box := inDrop[0].Box
-		for _, o := range inDrop[1:] {
-			box = vision.Box{X1: min(box.X1, o.Box.X1), Y1: min(box.Y1, o.Box.Y1), X2: max(box.X2, o.Box.X2), Y2: max(box.Y2, o.Box.Y2)}
-		}
-		p.snapDouble(s.piece.ID, box)
+		p.snapDouble(s.piece.ID, s.all)
 	}
 	slog.Info("piece landed on the platter", "piece", s.piece.ID, "multi_drop", s.piece.Status == PieceMultiDrop)
 	if p.deps.OnLanded != nil && s.piece.Status != PieceMultiDrop {
@@ -410,6 +410,9 @@ const (
 	// stillFramesNeeded: frames in a row the landed piece's box must stay put before
 	// it's photographed, so no photo is of it still sliding or bouncing.
 	stillFramesNeeded = 2
+	// stillFor: and for at least this long, so one hanging off C3's lip or teetering
+	// on a spoke for a moment isn't taken as landed.
+	stillFor = 300 * time.Millisecond
 	// settleMax: a piece still rocking after this long is photographed anyway.
 	settleMax = 2 * time.Second
 	// photoSkew: a frame and an observation (or a full-size frame) this far apart are
@@ -431,10 +434,14 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 		return
 	}
 	s.lastObs = obs.At
-	if inDrop := dropPieces(obs); len(inDrop) > 1 {
-		p.markDouble(s, now, "Another piece landed with it, so it couldn't be photographed alone.")
-		return
-	}
+	// Everything in the drop sector, not just the piece: one still falling or tumbling
+	// (often seen as two blobs) isn't landed yet, so whether it's alone is only judged
+	// once it's all lain still.
+	inDrop := dropPieces(obs)
+	all := unionBox(inDrop)
+	sectorMoved := len(inDrop) != s.inDrop || (len(inDrop) > 0 &&
+		(centerDist(all, s.all) > stillTol(all) || !similarArea(all.Area(), s.all.Area())))
+	s.inDrop, s.all = len(inDrop), all
 	lead, ok := dropPieceNear(obs, s.box)
 	if !ok {
 		// Not in the drop sector this frame: slid just past its edge, or briefly lost.
@@ -451,7 +458,7 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 			lead = vision.PieceObs{Box: s.box}
 		}
 	}
-	moved := centerDist(lead.Box, s.box) > stillTol(s.box) || !similarArea(lead.Box.Area(), s.box.Area())
+	moved := sectorMoved || centerDist(lead.Box, s.box) > stillTol(s.box) || !similarArea(lead.Box.Area(), s.box.Area())
 	s.box = lead.Box
 	if ok {
 		s.angle = lead.Angle
@@ -459,12 +466,17 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 	switch s.state {
 	case slotSettling:
 		if moved {
-			s.stillFrames = 0
+			s.stillFrames, s.stillSince = 0, obs.At
 		} else {
 			s.stillFrames++
 		}
 		settled := now.Sub(s.landedAt) >= time.Duration(ps.SettleMs)*time.Millisecond
-		if !settled || (s.stillFrames < stillFramesNeeded && now.Sub(s.landedAt) < settleMax) {
+		still := s.stillFrames >= stillFramesNeeded && obs.At.Sub(s.stillSince) >= stillFor
+		if !settled || (!still && now.Sub(s.landedAt) < settleMax) {
+			return
+		}
+		if len(inDrop) > 1 || touchingPieces(obs, lead.Box) {
+			p.markDouble(s, now, "Another piece landed with it, so it couldn't be photographed alone.")
 			return
 		}
 		s.state = slotCapturing
@@ -553,6 +565,18 @@ func dropPieces(obs vision.Observation) []vision.PieceObs {
 	return out
 }
 
+// unionBox is the box round them all (zero for none).
+func unionBox(ps []vision.PieceObs) vision.Box {
+	if len(ps) == 0 {
+		return vision.Box{}
+	}
+	b := ps[0].Box
+	for _, o := range ps[1:] {
+		b = vision.Box{X1: min(b.X1, o.Box.X1), Y1: min(b.Y1, o.Box.Y1), X2: max(b.X2, o.Box.X2), Y2: max(b.Y2, o.Box.Y2)}
+	}
+	return b
+}
+
 // dropPieceNear is the piece in the drop sector nearest box: the one that landed.
 func dropPieceNear(obs vision.Observation, box vision.Box) (vision.PieceObs, bool) {
 	var best vision.PieceObs
@@ -602,6 +626,7 @@ func (p *Platter) rideCheck(now time.Time, o vision.PieceObs) bool {
 	p.slots[0], p.slots[1] = s, nil
 	s.landedAt, s.lastObs, s.lastFrame, s.sentAt = now, time.Time{}, time.Time{}, time.Time{}
 	s.box, s.angle, s.shots, s.stillFrames, s.routed = o.Box, o.Angle, nil, 0, false
+	s.stillSince, s.inDrop = now, 0
 	if s.piece.Status == PieceMultiDrop {
 		s.state = slotResolved
 	} else {

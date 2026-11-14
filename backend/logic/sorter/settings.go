@@ -328,10 +328,10 @@ type PlatterSettings struct {
 	// rather than after IdleIndexMs, so a landing piece never holds a finished one.
 	ClearExitFirst bool `json:"clearExitFirst"`
 	// After the turn that drops a piece, the exit may show it for FallWaitMs more (it's
-	// sliding off) before it counts as not fallen. One that didn't is first turned on
-	// FallNudgeDeg at a time, up to FallNudges times, checking after each (it most
-	// often just needs a little more turning), then turned back as far, and only then
-	// shaken.
+	// sliding off) before it counts as not fallen. One that didn't is first turned on as
+	// far as the camera says brings it to the middle of the exit, then FallNudgeDeg at
+	// a time, up to FallNudges turns and one sector in all, checking after each (it most
+	// often just needs more turning), then turned back as far, and only then shaken.
 	FallWaitMs   int     `json:"fallWaitMs"`
 	FallNudgeDeg float64 `json:"fallNudgeDeg"`
 	FallNudges   int     `json:"fallNudges"`

@@ -473,12 +473,12 @@ export const SETTING_SECTIONS = [
       },
       {
         key: 'platter.fallNudgeDeg',
-        label: 'Turn on a piece that didn’t fall by',
+        label: 'Smallest turn for a piece that didn’t fall',
         unit: '°',
         step: 1,
         min: 0,
         max: 36,
-        help: 'A piece still at the exit is first turned on this much at a time, checking after each (most just need a little more turning), then C4 turns back as far so its sectors stay put. Only then is it shaken. 0: shake straight away.',
+        help: 'A piece still at the exit is turned on as far as the camera says brings it to the middle of the exit, then this much at a time, checking after each (up to one sector in all). C4 then turns back as far so its sectors stay put. Only then is it shaken. 0: shake straight away.',
         keywords: 'fall drop exit nudge didnt fall stuck c4',
       },
       {

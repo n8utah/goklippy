@@ -105,7 +105,7 @@ func TestPlatterStartsOverWhenThePieceIsBumped(t *testing.T) {
 	p, v := captureTestPlatter(t)
 	now := time.Now()
 	p.settleUntil = now
-	for range 3 { // still for 2 frames, then 2 of the 3 photos
+	for range 5 { // still for 300 ms, then 2 of the 3 photos
 		step(p, v, &now, dropAt(100))
 	}
 	s := p.slots[0]
@@ -140,8 +140,28 @@ func TestPlatterCallsASecondPieceInTheDropSectorADouble(t *testing.T) {
 	step(p, v, &now, dropAt(100))
 	step(p, v, &now, dropAt(100), dropAt(300)) // a second one bounces in
 	s := p.slots[0]
-	assert.Equal(t, PieceMultiDrop, s.piece.Status)
+	assert.Equal(t, PieceTracking, s.piece.Status, "not judged while things are still landing")
+	for range 5 {
+		step(p, v, &now, dropAt(100), dropAt(300))
+	}
+	assert.Equal(t, PieceMultiDrop, s.piece.Status, "both lie there")
 	assert.Equal(t, slotResolved, s.state)
+}
+
+func TestPlatterDoesntCallAPieceStillFallingADouble(t *testing.T) {
+	p, v := captureTestPlatter(t)
+	now := time.Now()
+	p.settleUntil = now
+	// Seen as two blobs while it tumbles off C3, then one at rest.
+	step(p, v, &now, dropAt(100), dropAt(160))
+	step(p, v, &now, dropAt(110), dropAt(150))
+	for range 6 {
+		step(p, v, &now, dropAt(120))
+	}
+	s := p.slots[0]
+	require.NotNil(t, s)
+	assert.NotEqual(t, PieceMultiDrop, s.piece.Status)
+	assert.NotEmpty(t, s.shots, "photographed once it lay still")
 }
 
 func TestPlatterCallsALandingADoubleWhenC3DroppedTwo(t *testing.T) {
