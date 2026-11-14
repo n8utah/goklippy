@@ -4,6 +4,7 @@ Priority: medium
 Added: 2026-11-13 by Nate
 Owner: Nate + Claude
 Started: 2026-11-13
+Finished: 2026-11-13
 
 ## Why
 Once a collection is sorted, the obvious next question from whoever owns it is "what can I
@@ -19,16 +20,16 @@ build with this?". The viewer site already has every identified piece, by part a
   file next to the site's database and refreshed by the admin (and monthly by itself).
 
 ## Done when
-- [ ] The site downloads Rebrickable's set data on first start and builds `sets.db` without
+- [x] The site downloads Rebrickable's set data on first start and builds `sets.db` without
       blocking requests; the admin can refresh it and sees when it was last built.
-- [ ] `GET /api/collections/:id/sets` ranks sets for a collection (same access rules as the
+- [x] `GET /api/collections/:id/sets` ranks sets for a collection (same access rules as the
       other collection views); `GET /api/collections/:id/sets/:set` lists a set's parts with
       have/need.
-- [ ] Mold variants and alternates (Rebrickable `M`/`A` relationships) count as the same part;
+- [x] Mold variants and alternates (Rebrickable `M`/`A` relationships) count as the same part;
       prints don't. Spare parts, stickers and minifigures aren't counted.
-- [ ] BrickLink colours (what Brickognize gives) map to Rebrickable colours by name.
-- [ ] The Sets tab and set detail work on a phone and in both themes.
-- [ ] Go tests cover the import (from small CSV fixtures) and the matching.
+- [x] BrickLink colours (what Brickognize gives) map to Rebrickable colours by name.
+- [x] The Sets tab and set detail work on a phone and in both themes.
+- [x] Go tests cover the import (from small CSV fixtures) and the matching.
 
 ## Plan
 - `database/catalog.sql`: schema of the separate set database (colors, themes, parts with a
@@ -49,3 +50,13 @@ build with this?". The viewer site already has every identified piece, by part a
 - Part ids: Brickognize gives BrickLink part numbers, which match Rebrickable's for nearly all
   unprinted parts. Ones that don't are reported as "not in the set data" for now; a
   Rebrickable API key could map them later (`/lego/parts/?bricklink_id=`).
+- Built in e4f9f61 and deployed to lego.n8p.xyz the same day. Real data: ~19,900 sets, a
+  ~55 MB `sets.db`, about 80 s to build. Scoring every set costs ~0.75 s for a small
+  collection and ~2 s for a large one, so scores are cached per collection until its counts
+  change; filters and search then run in Go. A `set_shapes` table (set_parts summed over
+  colours) halves the any-colour half of the query.
+- Known mismatch seen in testing: BrickLink `4073` is Rebrickable `6141`. The Sets tab lists
+  such parts; mapping them is the follow-up if they turn out to matter.
+- `mage test`'s lint step (`npx --prefix frontend eslint frontend`) fails on Windows because
+  eslint looks for its config from the service folder; `npm run lint` in `frontend/` works.
+  Not changed here.
