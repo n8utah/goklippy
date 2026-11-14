@@ -33,14 +33,18 @@ Three causes in the feeder:
   A–C have been tried on the machine.
 
 ## Done when
-- [ ] `exitClearDeg.c3` is 3° on the machine and by default.
-- [ ] Carrying goes to the precise zone in one move; the drop-zone pulse and exit approach
+- [x] `exitClearDeg.c3` is 3° on the machine and by default.
+- [x] Carrying goes to the precise zone in one move; the drop-zone pulse and exit approach
       settings are gone.
-- [ ] An exit move goes to the channel's learned fall point, limited by the next piece;
+- [x] An exit move goes to the channel's learned fall point, limited by the next piece;
       the fall point adapts from falls (fell sooner → lower; didn't fall → higher).
-- [ ] Blobs of several pieces are shaken at the precise zone (Settings: how many shakes,
+- [x] Blobs of several pieces are shaken at the precise zone (Settings: how many shakes,
       how far), then nudged off with the careful exit pulse.
-- [ ] Feeder tests cover the above; tried on the machine.
+- [x] Feeder tests cover the above.
+- [ ] Tried on the machine: fewer doubles into C4.
 
 ## Notes
 - 2026-11-14, Nate: do A, B and C now; test on the machine, then decide on D.
+- 2026-11-14, progress: built in `7eb9e1a`; `exitClearDeg.c3` set to 3 on the machine (the
+  settings before are in the session scratchpad). Fresh reloaded the backend. Left: a run on
+  the machine, counting doubles into C4 as before (C4 journeys starting together).
