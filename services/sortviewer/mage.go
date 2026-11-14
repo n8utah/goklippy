@@ -1,11 +1,12 @@
 //go:build mage
 
 // Sort viewer tasks. Run from services/sortviewer: mage build, mage test, mage deploy,
-// mage keeperSetup (once).
+// mage keeperSetup (once), mage keeperTheme (its look on login.n8p.xyz).
 package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -178,10 +179,9 @@ func KeeperSetup() error {
 			clientID = a.ClientID
 		}
 	}
-	change := map[string]any{
-		"gate": false, "allowSignup": false, "showInPortal": true, "portalUrl": appURL + "/auth/login",
-		"publicClient": false, "redirectUris": []string{appURL + "/auth/callback"},
-		"postLogoutUris": []string{appURL + "/"}, "backchannelLogoutUri": appURL + "/auth/backchannel-logout",
+	change, err := signInSettings()
+	if err != nil {
+		return err
 	}
 	if err := api.do("PUT", "/gangway/apps/"+serviceID, change, nil); err != nil {
 		return fmt.Errorf("set up sign-in for %s: %w", keeperApp, err)
@@ -212,6 +212,61 @@ func KeeperSetup() error {
 	return sh.RunV(keeper, "vars", "set", keeperApp, keeperEnv,
 		"APP_URL="+appURL, "OIDC_ISSUER="+apps.Issuer, "OIDC_CLIENT_ID="+clientID,
 		"ADMIN_EMAILS="+adminEmails(), "-plain")
+}
+
+// KeeperTheme sends the app's sign-in settings again, for a change to how it looks on
+// login.n8p.xyz (the logo in brand/, the colours below). It leaves the client, the
+// access and the app's settings alone.
+func KeeperTheme() error {
+	keeper, err := keeperCLI()
+	if err != nil {
+		return err
+	}
+	serviceID, err := keeperServiceID(keeper)
+	if err != nil {
+		return err
+	}
+	if serviceID == "" {
+		return fmt.Errorf("%s isn't a Dry Dock app yet; run mage keeperSetup", keeperApp)
+	}
+	api, err := newKeeperAPI()
+	if err != nil {
+		return err
+	}
+	change, err := signInSettings()
+	if err != nil {
+		return err
+	}
+	if err := api.do("PUT", "/gangway/apps/"+serviceID, change, nil); err != nil {
+		return fmt.Errorf("set the look of %s: %w", keeperApp, err)
+	}
+	fmt.Printf("%s has its logo and colours on the Gangway.\n", keeperApp)
+	return nil
+}
+
+// signInSettings is what the Gangway keeps for the app: how sign-in works, and how its
+// tile and sign-in pages look. A PUT replaces all of it, so every caller sends all of it.
+func signInSettings() (map[string]any, error) {
+	// A PNG, since the Gangway doesn't put SVG logos in emails. brand/make-logo.mjs draws it.
+	logo, err := os.ReadFile(filepath.Join("brand", "logo.png"))
+	if err != nil {
+		return nil, fmt.Errorf("read the logo (run mage from services/sortviewer): %w", err)
+	}
+	return map[string]any{
+		"gate": false, "allowSignup": false, "showInPortal": true, "portalUrl": appURL + "/auth/login",
+		"publicClient": false, "redirectUris": []string{appURL + "/auth/callback"},
+		"postLogoutUris": []string{appURL + "/"}, "backchannelLogoutUri": appURL + "/auth/backchannel-logout",
+		// The viewer's own colours (frontend/src/styles/globals.css). No background, card or
+		// text, so the Gangway keeps its light and dark themes.
+		"theme": map[string]any{
+			"title":   "LEGO sort",
+			"logo":    "data:image/png;base64," + base64.StdEncoding.EncodeToString(logo),
+			"primary": "#c2410c",
+			"header":  "#1c1917",
+			"accent":  "#c2410c",
+			"radius":  10,
+		},
+	}, nil
 }
 
 // grantAccess gives each admin's Gangway user access to the app (admins of the

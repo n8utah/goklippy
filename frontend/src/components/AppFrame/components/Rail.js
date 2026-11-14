@@ -5,6 +5,8 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { NAV_GROUPS } from '@/helpers/navigation';
 import { cn } from '@/lib/utils';
 
+import BrandMark from './BrandMark';
+
 const OPEN_DELAY_MS = 120;
 const CLOSE_DELAY_MS = 180;
 
@@ -21,10 +23,10 @@ export default function Rail({ currentGroup }) {
     >
       <Link
         to="/"
-        className="mb-3 flex size-11 items-center justify-center rounded-lg bg-primary font-display text-lg font-bold text-primary-foreground"
+        className="mb-3 flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground"
         aria-label="goklippy, start page"
       >
-        gk
+        <BrandMark className="w-7" />
       </Link>
       {NAV_GROUPS.map((group) => (
         <RailGroup key={group.id} group={group} current={group.id === currentGroup?.id} />

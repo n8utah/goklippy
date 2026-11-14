@@ -1,3 +1,4 @@
+import BrandMark from '@/components/BrandMark/BrandMark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,11 +12,7 @@ const LoginPage = () => {
     <div className="ds flex min-h-dvh items-center justify-center bg-background px-4 py-10 text-foreground">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <svg viewBox="0 0 32 32" className="size-12" aria-hidden>
-            <rect x="2" y="10" width="28" height="18" rx="3" className="fill-primary" />
-            <rect x="7" y="5" width="7" height="6" rx="1.5" className="fill-primary" />
-            <rect x="18" y="5" width="7" height="6" rx="1.5" className="fill-primary" />
-          </svg>
+          <BrandMark className="h-10" />
           <h1 className="font-display text-2xl font-semibold">Watch your LEGO get sorted</h1>
           <p className="text-sm text-muted-foreground">
             Sign in with the email and password you were sent.

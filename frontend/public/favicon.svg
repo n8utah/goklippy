@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .a { fill: #2a78d6 } .b { fill: #c2410c } .c { fill: #1baf7a }
+    @media (prefers-color-scheme: dark) { .a { fill: #3987e5 } .b { fill: #ea580c } .c { fill: #199e70 } }
+  </style>
+  <g transform="translate(32 32) scale(1.15) translate(-32 -32)">
+    <rect class="a" x="6" y="23" width="16" height="25" rx="2.5"/>
+    <rect class="a" x="9.5" y="16" width="9" height="9" rx="1.5"/>
+    <rect class="b" x="24" y="23" width="16" height="25" rx="2.5"/>
+    <rect class="b" x="27.5" y="16" width="9" height="9" rx="1.5"/>
+    <rect class="c" x="42" y="23" width="16" height="25" rx="2.5"/>
+    <rect class="c" x="45.5" y="16" width="9" height="9" rx="1.5"/>
+  </g>
+</svg>

@@ -20,7 +20,9 @@ light and dark, and two phone screens. Where the canvas and this spec differ, th
 
 ### Laptop and desktop (≥ 1024 px)
 
-- **Rail** (84 px, left): the app mark, then Home, Run, Rules, Machine, Diagnose, System, each
+- **Rail** (84 px, left): the app mark (the logo: three 1×1 bricks in a row, white on the
+  accent tile; in colour, blue / orange / green from `series-1`, `primary`, `series-3`, it's the
+  favicon and the sort viewer's mark), then Home, Run, Rules, Machine, Diagnose, System, each
   an icon with its label. The current group is highlighted.
   - Clicking or hovering a group icon opens its **flyout**: the group's pages, each with a line on
     what it's for. In Machine, each page also shows its setup tick or warning. Clicking a page goes

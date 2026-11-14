@@ -1,20 +1,11 @@
 import { LogOut, Moon, Sun } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 
+import BrandMark from '@/components/BrandMark/BrandMark';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/helpers/session';
 import { setTheme, useTheme } from '@/helpers/theme';
 import { cn } from '@/lib/utils';
-
-function BrickMark() {
-  return (
-    <svg viewBox="0 0 32 32" className="size-7 shrink-0" aria-hidden>
-      <rect x="2" y="10" width="28" height="18" rx="3" className="fill-primary" />
-      <rect x="7" y="5" width="7" height="6" rx="1.5" className="fill-primary" />
-      <rect x="18" y="5" width="7" height="6" rx="1.5" className="fill-primary" />
-    </svg>
-  );
-}
 
 const navClass = ({ isActive }) =>
   cn(
@@ -31,7 +22,7 @@ export default function AppShell() {
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
           <NavLink to="/" className="flex min-w-0 items-center gap-2">
-            <BrickMark />
+            <BrandMark className="h-5" />
             <span className="truncate font-display text-lg font-semibold">LEGO sort</span>
           </NavLink>
           {me?.admin && (

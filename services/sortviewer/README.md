@@ -76,7 +76,11 @@ old file until the new one is swapped in.
 ```sh
 mage keeperSetup   # once: the Dry Dock app (always on), lego.n8p.xyz, the Gangway client, settings
 mage deploy        # build, keeper push SortViewer production -activate, check /api/health
+mage keeperTheme   # its look on login.n8p.xyz: title, colours, brand/logo.png
 ```
+
+The Gangway logo is drawn by `node brand/make-logo.mjs` (writes `brand/logo.svg` and
+`brand/logo.png`); run it, then `mage keeperTheme`, after changing the mark.
 
 Both use the `keeper` CLI's saved login (`keeper login -url https://n8p.xyz`).
 `keeperSetup` also calls Harbor Keeper's admin API with that login for the Gangway parts,
