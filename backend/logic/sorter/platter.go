@@ -98,6 +98,11 @@ type Platter struct {
 
 	slots       []*platterSlot // slots[0] is under the drop; [i] is i indexes on
 	indexDone   <-chan error   // set while an index is turning
+	// giveBack: how far the last index went past its sector to drop a piece, to turn
+	// back once its fall is judged; backDone is set while that turn is under way
+	// (platter_drop.go).
+	giveBack float64
+	backDone <-chan error
 	settleUntil time.Time
 	freeSince   time.Time // when the drop sector last became free
 	// The chute and doors for the piece about to fall.
@@ -151,14 +156,23 @@ func (p *Platter) Reset(now time.Time) {
 	p.indexDone, p.aimDone, p.aimedFor = nil, nil, ""
 	p.settleUntil, p.freeSince, p.lastProgress = now, now, now
 	p.stallRaised = false
+	// A drop's extra not yet turned back stays owed (the next run's first step turns
+	// it back), so the sectors stay where the slots expect them; a turn back cut short
+	// by the stop is taken as done.
+	p.backDone, p.checkFall = nil, false
 }
 
 // Ready is the gate C3 reads: the drop sector is free and still, and (with
 // Platter.ClearExitFirst) the platter has room. When C3 waits, the feeder's
 // back-pressure pauses the channels before it.
 func (p *Platter) Ready(now time.Time) bool {
-	return p.indexDone == nil && p.slots[0] == nil && !now.Before(p.settleUntil) &&
+	return !p.turning() && p.slots[0] == nil && !now.Before(p.settleUntil) &&
 		p.roomForAnother(p.deps.Settings())
+}
+
+// turning: an index, or the turn back after a drop's extra, is under way or owed.
+func (p *Platter) turning() bool {
+	return p.indexDone != nil || p.backDone != nil || p.giveBack != 0
 }
 
 // roomForAnother: at most two pieces on the platter, the other one in the exit slot
@@ -184,15 +198,15 @@ func (p *Platter) roomForAnother(settings MachineSettings) bool {
 // Busy reports the platter turning, settling or with a piece in its drop sector:
 // C3 keeps its lead back from the exit (FeederInput.PlatterBusy).
 func (p *Platter) Busy(now time.Time) bool {
-	return p.indexDone != nil || p.slots[0] != nil || now.Before(p.settleUntil)
+	return p.turning() || p.slots[0] != nil || now.Before(p.settleUntil)
 }
 
 // TimeState is what C4 is doing now, for the time spent (time_spent.go): turning;
 // busy photographing, waiting on Brickognize or for the chute; waiting to turn with
 // pieces aboard; or empty.
 func (p *Platter) TimeState(now time.Time) string {
-	if p.indexDone != nil || p.aimDone != nil {
-		if p.indexDone != nil {
+	if p.indexDone != nil || p.backDone != nil || p.aimDone != nil {
+		if p.indexDone != nil || p.backDone != nil {
 			return TimeMoving
 		}
 		return TimeBusy // the chute is turning for the next piece
@@ -224,6 +238,9 @@ func (p *Platter) Doing(now time.Time) string {
 	}
 	if p.checkFall && now.Before(p.fallBy) {
 		return "watching a piece fall off"
+	}
+	if p.backDone != nil || p.giveBack != 0 {
+		return "turning back after dropping a piece"
 	}
 	if p.aimDone != nil {
 		return "waiting for the chute to aim"
@@ -295,16 +312,34 @@ func (p *Platter) Step(now time.Time) {
 			return
 		}
 	}
+	if p.backDone != nil {
+		select {
+		case err := <-p.backDone:
+			p.backDone = nil
+			if err != nil {
+				slog.Warn("platter turn back failed", "error", err)
+			}
+			p.settleUntil = now.Add(time.Duration(ps.SettleMs) * time.Millisecond)
+			p.freeSince = p.settleUntil
+		default:
+			return
+		}
+	}
 	if now.Before(p.settleUntil) {
 		return
 	}
 
 	obs := p.deps.Vision.Observation(ChannelC4)
-	p.verifyFall(now, obs)
+	if p.verifyFall(now, obs) {
+		return // a recovery is freeing it; turning back waits until that's done
+	}
+	if p.giveBackTurn(now, settings) {
+		return // the sectors aren't where the slots are until it has turned back
+	}
 	p.watchDrop(now, obs, ps)
 	p.capture(now, obs, ps)
 	p.prepareExit(now, settings)
-	p.maybeIndex(now, settings)
+	p.maybeIndex(now, obs, settings)
 	p.watchdog(now, ps)
 }
 
@@ -862,7 +897,7 @@ func (p *Platter) distributionReady(now time.Time, s *platterSlot) bool {
 
 // maybeIndex turns one sector when the drop sector is done with and the piece about
 // to fall is ready.
-func (p *Platter) maybeIndex(now time.Time, settings MachineSettings) {
+func (p *Platter) maybeIndex(now time.Time, obs vision.Observation, settings MachineSettings) {
 	aboard := false
 	for _, s := range p.slots {
 		if s != nil {
@@ -890,12 +925,19 @@ func (p *Platter) maybeIndex(now time.Time, settings MachineSettings) {
 	if p.riding != nil && now.Sub(p.settleUntil) < rideLookWait {
 		return // not yet seen whether the last piece rode: it may be at the exit by mistake
 	}
-	done, err := p.deps.HW.MoveChannel(ChannelC4, 360/float64(len(p.slots)), settings.IndexRpm)
+	extra := 0.0
+	if exit != nil {
+		extra = p.dropExtra(obs, settings)
+	}
+	done, err := p.deps.HW.MoveChannel(ChannelC4, 360/float64(len(p.slots))+extra, settings.IndexRpm)
 	if err != nil {
 		slog.Warn("platter index refused", "error", err)
 		return
 	}
-	p.indexDone = done
+	if extra > 0 {
+		slog.Debug("platter index goes on to drop the piece", "extra_deg", extra)
+	}
+	p.indexDone, p.giveBack = done, extra
 	p.progress(now)
 }
 
@@ -933,16 +975,17 @@ func (p *Platter) finishIndex(now time.Time, ps PlatterSettings) {
 // verifyFall looks at the first settled frame after a drop: a piece still in the exit
 // didn't fall. It was counted as delivered already; the problem is noted and the
 // machine shakes it off.
-func (p *Platter) verifyFall(now time.Time, obs vision.Observation) {
+// It reports a piece found not to have fallen: the machine is freeing it now.
+func (p *Platter) verifyFall(now time.Time, obs vision.Observation) bool {
 	if !p.checkFall || !obs.Valid || obs.At.Before(p.settleUntil) {
-		return
+		return false
 	}
 	if obs.InExit && now.Before(p.fallBy) {
-		return // still sliding off the edge: give it a moment before calling it stuck
+		return false // still sliding off the edge: give it a moment before calling it stuck
 	}
 	p.checkFall = false
 	if !obs.InExit || len(p.recent) == 0 {
-		return
+		return false
 	}
 	last := &p.recent[0]
 	last.AddProblem(ProblemDidntFall, "It was still at the exit after the turn meant to drop it.", now)
@@ -950,6 +993,7 @@ func (p *Platter) verifyFall(now time.Time, obs vision.Observation) {
 	if p.deps.OnDidntFall != nil {
 		p.deps.OnDidntFall()
 	}
+	return true
 }
 
 // Sweep records every piece aboard as gone to the bucket, after the machine turned the
