@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import CollectionPicker from '@/components/CollectionPicker/CollectionPicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -72,7 +73,8 @@ function CollectionsList() {
                 <TableHead className="text-right">Pieces</TableHead>
                 <TableHead className="hidden text-right sm:table-cell">Identified</TableHead>
                 <TableHead className="text-right">Unknown</TableHead>
-                <TableHead className="hidden pr-5 md:table-cell">Last sorted</TableHead>
+                <TableHead className="hidden md:table-cell">Last sorted</TableHead>
+                <TableHead className="pr-5">Shared</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -88,7 +90,6 @@ function CollectionsList() {
                     </button>{' '}
                     {c.current && <Badge variant="running">Current</Badge>}
                     {c.archived_at && <Badge variant="idle">Archived</Badge>}
-                    {c.shared && <Badge variant="secondary">Shared</Badge>}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
                     {c.profile_name || <span className="text-muted-foreground">No profile</span>}
@@ -103,8 +104,19 @@ function CollectionsList() {
                   <TableCell className="text-right font-mono">
                     {c.unknown.toLocaleString()}
                   </TableCell>
-                  <TableCell className="hidden pr-5 md:table-cell">
-                    {when(c.last_sorted_at)}
+                  <TableCell className="hidden md:table-cell">{when(c.last_sorted_at)}</TableCell>
+                  <TableCell className="pr-5" onClick={(e) => e.stopPropagation()}>
+                    <Switch
+                      aria-label={`Share ${c.name} to ${sharing.siteHost || 'the sort viewer site'}`}
+                      title={
+                        sharing.ready || c.shared
+                          ? undefined
+                          : 'Connect the sorter to the site first (Sharing, above)'
+                      }
+                      checked={c.shared}
+                      disabled={logic.sharingId === c.id || (!c.shared && !sharing.ready)}
+                      onCheckedChange={(on) => logic.setShared(c, on)}
+                    />
                   </TableCell>
                 </TableRow>
               ))}

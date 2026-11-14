@@ -68,8 +68,9 @@ export default function SharingPanel({ sharing }) {
             <Share2 className="size-5" /> Sharing
           </h2>
           <p className="text-sm text-muted-foreground">
-            Shared collections are sent to the sort viewer site as they sort, so their owners can
-            watch.{' '}
+            One connection for the whole sorter: the site and its sorter key, set once. Then switch
+            sharing on for each collection below; it sends what&rsquo;s sorted so far and keeps up.
+            Who may see a collection is given on the site.{' '}
             {status?.url && (
               <a
                 href={status.url}

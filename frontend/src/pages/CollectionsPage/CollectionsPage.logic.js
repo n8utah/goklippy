@@ -103,10 +103,29 @@ export function useCollectionsList() {
   }, [load, currentId]);
 
   const archived = collections.filter((c) => c.archived_at).length;
+  const [sharingId, setSharingId] = useState(null); // the collection being switched
   return {
     state,
     error,
     archived,
+    sharingId,
+    /** Shares it to the sort viewer site, sending everything in it so far; or stops. */
+    setShared: async (c, shared) => {
+      setSharingId(c.id);
+      try {
+        await updateSorterCollection(c.id, { shared });
+        toast.success(
+          shared
+            ? `Sharing ${c.name}: sending its ${c.pieces.toLocaleString()} piece${c.pieces === 1 ? '' : 's'} so far`
+            : `${c.name} is no longer shared`,
+        );
+        await load();
+      } catch (err) {
+        toast.error(err.message);
+      } finally {
+        setSharingId(null);
+      }
+    },
     showArchived,
     toggleArchived: () => setShowArchived((v) => !v),
     collections: showArchived ? collections : collections.filter((c) => !c.archived_at),
