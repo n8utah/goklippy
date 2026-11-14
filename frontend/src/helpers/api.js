@@ -258,7 +258,10 @@ export async function identifySorterPiece(files, pieceMm) {
   return parseJSON(response);
 }
 
-/** category is the part's Brickognize category; unknown lists only pieces with no part. */
+/**
+ * category is the part's Brickognize category; unknown lists only pieces with no part;
+ * bin ({ layer, bin }, the bucket { layer: 0, bin: 0 }) only those delivered to it.
+ */
 export function listSorterPieces({
   collection,
   run,
@@ -267,6 +270,7 @@ export function listSorterPieces({
   color,
   category,
   q,
+  bin,
   limit = 50,
   offset = 0,
 } = {}) {
@@ -278,6 +282,7 @@ export function listSorterPieces({
   if (color) params.set('color', color);
   if (category) params.set('category', category);
   if (q) params.set('q', q);
+  if (bin) params.set('bin', `${bin.layer}-${bin.bin}`);
   return getJSON(`/api/v1/sorter/pieces?${params}`);
 }
 

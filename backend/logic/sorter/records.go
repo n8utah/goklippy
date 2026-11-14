@@ -168,8 +168,11 @@ type PieceFilter struct {
 	ColorID      string
 	PartCategory string // Brickognize's category of the part ("Brick", "Plate", …)
 	Search       string // a part id, category name or piece id prefix
-	Limit        int
-	Offset       int
+	// Bin: only pieces delivered to it (BinKey{} is the bucket); with a collection, only
+	// since its bins last started afresh, as its plan counts them.
+	Bin    *BinKey
+	Limit  int
+	Offset int
 }
 
 // Stats are lifetime totals.

@@ -208,3 +208,35 @@ export function useCollectionDetail(id) {
       }),
   };
 }
+
+const BIN_PIECES_SHOWN = 120;
+
+/**
+ * What went into one of a collection's bins (bin: { layer, bin }; the bucket is layer 0),
+ * since its bins last started afresh, newest first. Nothing is asked while bin is null.
+ */
+export function useBinPieces(collectionId, bin) {
+  const key = bin ? `${collectionId}:${bin.layer}-${bin.bin}` : '';
+  const [state, setState] = useState({ key: '', pieces: [], total: 0, error: '' });
+  useEffect(() => {
+    if (!key) return undefined;
+    let live = true;
+    listSorterPieces({ collection: collectionId, bin, limit: BIN_PIECES_SHOWN })
+      .then(
+        (r) => live && setState({ key, pieces: r.pieces ?? [], total: r.total ?? 0, error: '' }),
+      )
+      .catch((err) => live && setState({ key, pieces: [], total: 0, error: err.message }));
+    return () => {
+      live = false;
+    };
+    // bin is keyed by key: a new object for the same bin doesn't ask again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, collectionId]);
+  const loaded = state.key === key;
+  return {
+    loading: Boolean(key) && !loaded,
+    pieces: loaded ? state.pieces : [],
+    total: loaded ? state.total : 0,
+    error: loaded ? state.error : '',
+  };
+}

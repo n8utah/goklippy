@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/table';
 
 import { useCollectionDetail, useSharing } from '../CollectionsPage.logic';
+import BinPiecesDialog from './BinPiecesDialog';
 import ChangeProfileDialog from './ChangeProfileDialog';
 import { SharingStatus } from './SharingPanel';
 
@@ -90,7 +91,7 @@ function NameEditor({ name, busy, onSave }) {
 }
 
 /** The bins the collection is being sorted into: its plan, i.e. the groups it comes back in. */
-function PlanSection({ plan, canChange, onChange }) {
+function PlanSection({ plan, canChange, onChange, onOpenBin }) {
   const bins = plan?.bins ?? [];
   return (
     <section className="flex flex-col gap-3">
@@ -101,7 +102,8 @@ function PlanSection({ plan, canChange, onChange }) {
             {plan?.profile ? (
               <>
                 Sorted by <strong className="text-foreground">{plan.profile.name}</strong>. Each bin
-                is a group it comes back in; counts are since its bins started afresh.
+                is a group it comes back in; counts are since its bins started afresh. Pick a bin to
+                see what went in.
               </>
             ) : (
               'No profile yet: pick the one it sorts by before sorting into it.'
@@ -133,7 +135,11 @@ function PlanSection({ plan, canChange, onChange }) {
             </TableHeader>
             <TableBody>
               {bins.map((b) => (
-                <TableRow key={`${b.layer}-${b.bin}`}>
+                <TableRow
+                  key={`${b.layer}-${b.bin}`}
+                  className="cursor-pointer"
+                  onClick={() => onOpenBin({ layer: b.layer, bin: b.bin })}
+                >
                   <TableCell className="pl-5 font-mono whitespace-nowrap">
                     Layer {b.layer} · bin {b.bin}
                   </TableCell>
@@ -151,10 +157,14 @@ function PlanSection({ plan, canChange, onChange }) {
           </Table>
         )}
         {plan?.bucket > 0 && (
-          <p className="border-t border-border px-5 py-3 text-sm text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => onOpenBin({ layer: 0, bin: 0 })}
+            className="block w-full border-t border-border px-5 py-3 text-left text-sm text-muted-foreground hover:bg-muted/50"
+          >
             <span className="font-mono text-foreground">{plan.bucket}</span> went to the bucket
             under the tower (no bin, too big, or the chute left out).
-          </p>
+          </button>
         )}
       </div>
     </section>
@@ -168,6 +178,7 @@ export default function CollectionDetail({ id }) {
   const journey = useJourneyModal();
   const navigate = useNavigate();
   const [changing, setChanging] = useState(false);
+  const [openBin, setOpenBin] = useState(null); // { layer, bin }: its pieces are shown
   const col = logic.collection;
 
   return (
@@ -274,6 +285,16 @@ export default function CollectionDetail({ id }) {
             plan={logic.plan}
             canChange={!logic.busy && !logic.sortingHere}
             onChange={() => setChanging(true)}
+            onOpenBin={setOpenBin}
+          />
+          <BinPiecesDialog
+            collectionId={col.id}
+            bin={openBin}
+            onClose={() => setOpenBin(null)}
+            onOpenPiece={(pieceId) => {
+              setOpenBin(null);
+              journey.open(pieceId);
+            }}
           />
           {changing && (
             <ChangeProfileDialog

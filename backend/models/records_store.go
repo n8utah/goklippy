@@ -230,6 +230,14 @@ func (s *RecordsStore) ListPieces(ctx context.Context, f sorter.PieceFilter) ([]
 		where = append(where, "part_category = ?")
 		args = append(args, f.PartCategory)
 	}
+	if f.Bin != nil {
+		where = append(where, "status = 'distributed' AND bin_layer = ? AND bin_number = ?")
+		args = append(args, f.Bin.Layer, f.Bin.Bin)
+		if f.CollectionID != 0 {
+			where = append(where, "distributed_at >= COALESCE((SELECT bins_started_at FROM collections WHERE id = ?), distributed_at)")
+			args = append(args, f.CollectionID)
+		}
+	}
 	if q := strings.TrimSpace(f.Search); q != "" {
 		where = append(where, "(part_id LIKE ? OR id LIKE ? OR category_name LIKE ? OR part_name LIKE ? OR color_name LIKE ?)")
 		like := "%" + q + "%"

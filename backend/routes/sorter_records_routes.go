@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"goklippy/backend/logic/sorter"
@@ -19,16 +20,28 @@ func InitRecords(records *sorter.Records) {
 }
 
 // ListSorterPieces GET /sorter/pieces?collection=&run=&unknown=1&status=&color=&category=&q=&limit=&offset=
-// (category is the part's Brickognize category; unknown=1 lists only pieces with no part).
+// (category is the part's Brickognize category; unknown=1 lists only pieces with no part;
+// bin=<layer>-<bin> only those delivered to that bin, 0-0 the bucket).
 func ListSorterPieces(c *gin.Context) {
 	collectionID, _ := strconv.ParseInt(c.Query("collection"), 10, 64)
 	runID, _ := strconv.ParseInt(c.Query("run"), 10, 64)
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.Query("offset"))
+	var bin *sorter.BinKey
+	if q := c.Query("bin"); q != "" {
+		layer, number, ok := strings.Cut(q, "-")
+		l, errL := strconv.Atoi(layer)
+		n, errN := strconv.Atoi(number)
+		if !ok || errL != nil || errN != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "bin is <layer>-<bin>, e.g. 1-3 (0-0 for the bucket)"})
+			return
+		}
+		bin = &sorter.BinKey{Layer: l, Bin: n}
+	}
 	pieces, total, err := sorterRecords.Store().ListPieces(c.Request.Context(), sorter.PieceFilter{
 		CollectionID: collectionID, RunID: runID, Unknown: c.Query("unknown") == "1",
 		Status: c.Query("status"), ColorID: c.Query("color"), PartCategory: c.Query("category"),
-		Search: c.Query("q"), Limit: limit, Offset: offset,
+		Search: c.Query("q"), Bin: bin, Limit: limit, Offset: offset,
 	})
 	if err != nil {
 		sorterError(c, err)
