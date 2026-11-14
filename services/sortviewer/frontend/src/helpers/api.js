@@ -51,6 +51,19 @@ export function watchCollection(id, onEvent) {
   return () => source.close();
 }
 
+/** Sets a collection could build, best covered first. { q, min, any, limit } */
+export function listSets(id, { q, min, any, limit } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (min) params.set('min', String(min));
+  if (any) params.set('any', '1');
+  if (limit) params.set('limit', String(limit));
+  return get(`/api/collections/${id}/sets?${params}`);
+}
+
+export const getSet = (id, setNum) =>
+  get(`/api/collections/${id}/sets/${encodeURIComponent(setNum)}`);
+
 // Admin.
 export const listViewers = () => get('/api/admin/viewers');
 export const createViewer = (viewer) => request('POST', '/api/admin/viewers', viewer);
@@ -63,3 +76,5 @@ export const clearCollectionPhotos = (id) =>
   request('POST', `/api/admin/collections/${id}/clear-photos`, {});
 export const deleteCollection = (id) => request('DELETE', `/api/admin/collections/${id}`);
 export const clearAllPhotos = () => request('POST', '/api/admin/photos/clear', {});
+export const getSetsStatus = () => get('/api/admin/sets');
+export const refreshSets = () => request('POST', '/api/admin/sets/refresh', {});

@@ -5,10 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/helpers/session';
 import { cn } from '@/lib/utils';
 
-import { TABS, useCollectionPage } from './CollectionPage.logic';
+import { TABS, useCollectionPage, useSets } from './CollectionPage.logic';
 import PartsView from './components/PartsView';
 import PieceTile from './components/PieceTile';
 import PlanView from './components/PlanView';
+import SetsView from './components/SetsView';
 
 function Stat({ label, value }) {
   return (
@@ -38,6 +39,7 @@ const CollectionPage = () => {
   const { id, tab = 'live' } = useParams();
   const { me } = useSession();
   const logic = useCollectionPage(id, tab);
+  const sets = useSets(id, tab === 'sets');
   const col = logic.collection;
 
   if (!TABS.some((t) => t.id === tab)) return <Navigate to={`/c/${id}`} replace />;
@@ -115,6 +117,7 @@ const CollectionPage = () => {
       )}
       {tab === 'plan' && <PlanView view={logic.plan} />}
       {tab === 'parts' && <PartsView parts={logic.parts} />}
+      {tab === 'sets' && <SetsView sets={sets} />}
       {tab === 'unknowns' && (
         <section className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">

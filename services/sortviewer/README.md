@@ -1,9 +1,9 @@
 # Sort viewer
 
 A small site where people watch their LEGO get sorted: pieces as they're found (our photo
-next to the official picture), counts by part and colour, unknowns, and the sorting plan,
-the groups they'll get back. The sorter (goklippy) pushes everything here; the site never
-talks to the sorter.
+next to the official picture), counts by part and colour, unknowns, the sorting plan (the
+groups they'll get back), and which LEGO sets they could build from it. The sorter
+(goklippy) pushes everything here; the site never talks to the sorter.
 
 Live at https://lego.n8p.xyz, on Harbor Keeper's Dry Dock as the app `SortViewer`.
 
@@ -20,6 +20,7 @@ Live at https://lego.n8p.xyz, on Harbor Keeper's Dry Dock as the app `SortViewer
 | `backend/webui/` | The built frontend, embedded in the binary (`mage build` copies it in). |
 | `frontend/` | Vite + React, Tailwind + shadcn, goklippy's look. `pages/<Page>/<Page>.js` + `.logic.js`. |
 | `database/schema.sql` | SQLite schema, applied on every start (`IF NOT EXISTS`). |
+| `database/catalog.sql` | Schema of the set data (`sets.db`, see below). |
 | `mage.go` | `build`, `test`, `deploy`, `keeperSetup`. Run mage from this folder. |
 
 ## Develop
@@ -48,6 +49,27 @@ some data with curl (below).
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | The Gangway client (`mage keeperSetup` makes it). |
 | `ADMIN_EMAILS` | Comma-separated emails that may sign in as admin. |
 | `SORTVIEWER_DEV_ADMIN` | Local development only: sign in as this admin with no Gangway. |
+| `SORTVIEWER_SETS_DIR` | Build the set data from downloaded Rebrickable `.csv.gz` files in this folder instead of fetching them. |
+
+## Set data
+
+Each collection's **Sets** tab ranks LEGO sets by how much of each the collection has, in
+the right colours and in any colour, and opens a set's parts with what's missing. The sets
+come from [Rebrickable's downloads](https://rebrickable.com/downloads/) (public, no key),
+built into `sets.db` in the data folder: on the first start, monthly after that, and from
+Admin → Set data. A build takes a minute or two and about 55 MB; the site keeps using the
+old file until the new one is swapped in.
+
+- A set's parts are its latest inventory, without spare parts, stickers or minifigures.
+  Mold variants and alternates (Rebrickable's `M` and `A` relationships) count as one part;
+  prints don't.
+- The sorter's part numbers and colours are BrickLink's (from Brickognize). Colours are
+  matched by name, which BrickLink and Rebrickable share. Part numbers mostly match; the
+  Sets tab lists the ones that don't (`4073` is `6141` on Rebrickable, for example), and
+  those pieces aren't counted.
+- Scoring every set for a big collection takes a second or two, so it's kept per
+  collection until its counts change. The Sets tab doesn't refresh itself while sorting;
+  its Refresh button does.
 
 ## Deploy
 

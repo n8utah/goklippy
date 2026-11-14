@@ -135,7 +135,9 @@ func fail(c *gin.Context, err error) {
 		status = http.StatusForbidden
 	case errors.Is(err, logic.ErrTooManyLogins):
 		status = http.StatusTooManyRequests
-	case errors.Is(err, logic.ErrNoOIDC):
+	case errors.Is(err, logic.ErrSetsBuilding):
+		status = http.StatusConflict
+	case errors.Is(err, logic.ErrNoOIDC), errors.Is(err, logic.ErrSetsNotReady):
 		status = http.StatusServiceUnavailable
 	}
 	if status == http.StatusInternalServerError {

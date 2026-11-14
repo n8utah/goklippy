@@ -8,9 +8,11 @@ import {
   createViewer,
   deleteCollection,
   deleteViewer,
+  getSetsStatus,
   listCollections,
   listKeys,
   listViewers,
+  refreshSets,
   revokeKey,
   updateViewer,
 } from '@/helpers/api';
@@ -19,6 +21,7 @@ export const ADMIN_TABS = [
   { id: 'viewers', label: 'Viewers' },
   { id: 'collections', label: 'Collections' },
   { id: 'keys', label: 'Sorter keys' },
+  { id: 'sets', label: 'Set data' },
 ];
 
 /** Admin: viewers and what they see, the sorter's keys, and clearing out collections. */
@@ -129,5 +132,45 @@ export function useAdminPage() {
             () => 'Deleted',
           ),
       }),
+  };
+}
+
+// While the set data is rebuilding, check on it this often.
+const SETS_POLL_MS = 3000;
+
+/** The set data (every LEGO set's parts, from Rebrickable): its state, and rebuilding it. */
+export function useSetData(active) {
+  const [status, setStatus] = useState(null);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    let cancelled = false;
+    getSetsStatus().then(
+      (s) => !cancelled && setStatus(s),
+      (err) => !cancelled && toast.error(err.message),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [active, tick]);
+
+  const building = Boolean(status?.building);
+  useEffect(() => {
+    if (!active || !building) return undefined;
+    const t = setInterval(() => setTick((n) => n + 1), SETS_POLL_MS);
+    return () => clearInterval(t);
+  }, [active, building]);
+
+  return {
+    status,
+    refresh: () =>
+      refreshSets().then(
+        (s) => {
+          setStatus(s);
+          toast.success('Rebuilding the set data; it takes a minute or two');
+        },
+        (err) => toast.error(err.message),
+      ),
   };
 }

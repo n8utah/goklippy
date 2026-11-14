@@ -27,6 +27,8 @@ func (a *API) Register(r *gin.Engine, ui gin.HandlerFunc) {
 	view.GET("/collections/:id/pieces", a.listPieces)
 	view.GET("/collections/:id/parts", a.listParts)
 	view.GET("/collections/:id/runs", a.listRuns)
+	view.GET("/collections/:id/sets", a.listSets)
+	view.GET("/collections/:id/sets/:set", a.getSet)
 	view.GET("/collections/:id/events", a.events)
 	view.GET("/photos/:piece", a.photo)
 
@@ -41,6 +43,8 @@ func (a *API) Register(r *gin.Engine, ui gin.HandlerFunc) {
 	admin.POST("/collections/:id/clear-photos", a.clearPhotos)
 	admin.DELETE("/collections/:id", a.deleteCollection)
 	admin.POST("/photos/clear", a.clearAllPhotos)
+	admin.GET("/sets", a.setsStatus)
+	admin.POST("/sets/refresh", a.refreshSets)
 
 	// The sorter, with an API key.
 	push := r.Group("/api/push", a.requireAPIKey)

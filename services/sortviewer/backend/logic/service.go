@@ -57,6 +57,7 @@ type Service struct {
 	Events  *Hub
 	logins  *loginLimiter
 	now     func() time.Time
+	sets    *sets // nil until UseSets
 }
 
 // NewService keeps photos under dataDir/photos.

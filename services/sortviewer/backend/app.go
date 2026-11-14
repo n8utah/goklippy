@@ -38,6 +38,17 @@ func main() {
 	defer store.Close()
 
 	svc := logic.NewService(store, cfg.DataDir)
+	setSource := logic.SetSource(logic.RebrickableDownloads)
+	if cfg.SetsDir != "" {
+		setSource = logic.GzipFiles(cfg.SetsDir)
+	}
+	svc.UseSets(logic.SetsConfig{
+		Path:       filepath.Join(cfg.DataDir, "sets.db"),
+		Open:       func(path string) (logic.SetCatalog, error) { return models.OpenCatalog(path) },
+		NewBuilder: func(path string) (logic.CatalogBuilder, error) { return models.NewCatalogBuilder(path) },
+		Source:     setSource,
+	})
+	defer svc.CloseSets()
 	admin := logic.NewAdminSignIn(logic.OIDCConfig{
 		Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID, ClientSecret: cfg.OIDCClientSecret,
 		RedirectURL: cfg.AppURL + "/auth/callback", AdminEmails: cfg.AdminEmails,
@@ -55,6 +66,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go svc.CleanSessions(ctx)
+	go svc.KeepSetsFresh(ctx)
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(cfg.Host, cfg.Port),

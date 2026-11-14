@@ -21,6 +21,10 @@ type Config struct {
 	// DevAdmin (SORTVIEWER_DEV_ADMIN=<email>) signs the admin in without the Gangway,
 	// for local development only. It's ignored when OIDC is set up.
 	DevAdmin string
+
+	// SetsDir (SORTVIEWER_SETS_DIR) reads the set data from downloaded Rebrickable
+	// .csv.gz files in that folder instead of fetching them, for local development.
+	SetsDir string
 }
 
 func FromEnv() Config {
@@ -34,6 +38,7 @@ func FromEnv() Config {
 		OIDCClientID:     os.Getenv("OIDC_CLIENT_ID"),
 		OIDCClientSecret: os.Getenv("OIDC_CLIENT_SECRET"),
 		DevAdmin:         os.Getenv("SORTVIEWER_DEV_ADMIN"),
+		SetsDir:          os.Getenv("SORTVIEWER_SETS_DIR"),
 	}
 	for _, e := range strings.Split(os.Getenv("ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {

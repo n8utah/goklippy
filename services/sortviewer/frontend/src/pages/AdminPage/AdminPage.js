@@ -14,8 +14,9 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
-import { ADMIN_TABS, useAdminPage } from './AdminPage.logic';
+import { ADMIN_TABS, useAdminPage, useSetData } from './AdminPage.logic';
 import KeysPanel from './components/KeysPanel';
+import SetDataPanel from './components/SetDataPanel';
 import ViewersPanel from './components/ViewersPanel';
 
 function Confirm({ what, onClose }) {
@@ -98,10 +99,11 @@ function CollectionsPanel({ logic }) {
   );
 }
 
-/** Admin (/admin/<tab>): viewers, collections and the sorter's keys. */
+/** Admin (/admin/<tab>): viewers, collections, the sorter's keys and the set data. */
 const AdminPage = () => {
   const { tab = 'viewers' } = useParams();
   const logic = useAdminPage();
+  const setData = useSetData(tab === 'sets');
   if (!ADMIN_TABS.some((t) => t.id === tab)) return <Navigate to="/admin" replace />;
 
   return (
@@ -127,6 +129,7 @@ const AdminPage = () => {
       {tab === 'viewers' && <ViewersPanel logic={logic} />}
       {tab === 'collections' && <CollectionsPanel logic={logic} />}
       {tab === 'keys' && <KeysPanel logic={logic} />}
+      {tab === 'sets' && <SetDataPanel setData={setData} />}
       <Confirm what={logic.confirm} onClose={logic.closeConfirm} />
     </div>
   );
