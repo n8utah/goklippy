@@ -255,3 +255,32 @@ func TestPlatterLooksBeforeDroppingAPieceThatMayNotHaveRidden(t *testing.T) {
 	assert.Same(t, s, p.slots[0], "it's still in the drop sector: taken back")
 	assert.Zero(t, p.delivered)
 }
+
+func TestPlatterKnowsAPieceTwistingOnTheEdgeUntilC3FeedsAnother(t *testing.T) {
+	p, v := captureTestPlatter(t)
+	ps := p.deps.Settings().Platter
+	s := &platterSlot{piece: Piece{ID: "p1", Status: PieceIdentified, PartID: "60475b"}, state: slotResolved, angle: 173}
+	p.slots[0] = s
+	now := time.Now()
+	p.finishIndex(now, ps)
+
+	step(p, v, &now) // twisting on the edge: not in this frame
+	step(p, v, &now, vision.PieceObs{Zone: vision.ZoneDrop, Angle: 176, Box: vision.Box{X1: 10, Y1: 10, X2: 50, Y2: 50}})
+	assert.Same(t, s, p.slots[0], "back in the next: the same piece, not a new record")
+
+	// Once C3 has pushed another off, a landing there is that one.
+	p.slots[0] = nil
+	p.slots[1] = s
+	p.riding = s
+	p.NoteFeed()
+	step(p, v, &now, vision.PieceObs{Zone: vision.ZoneDrop, Angle: 176, Box: vision.Box{X1: 10, Y1: 10, X2: 50, Y2: 50}})
+	require.NotNil(t, p.slots[0])
+	assert.NotEqual(t, "p1", p.slots[0].piece.ID, "a new piece")
+
+	// Seen where it rode to: it rode, and a landing behind it is new.
+	p.slots[0], p.slots[1], p.riding = nil, s, s
+	step(p, v, &now, vision.PieceObs{Angle: 173 + 72},
+		vision.PieceObs{Zone: vision.ZoneDrop, Angle: 176, Box: vision.Box{X1: 10, Y1: 10, X2: 50, Y2: 50}})
+	require.NotNil(t, p.slots[0])
+	assert.NotEqual(t, "p1", p.slots[0].piece.ID)
+}

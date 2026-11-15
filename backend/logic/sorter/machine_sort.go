@@ -238,6 +238,9 @@ func (m *Machine) stepSorting(now time.Time) {
 		st.platter.ExpectSeveral(now) // the next landing on C4 is a double
 	}
 	for _, mv := range moves {
+		if mv.Channel == ChannelC3 && mv.Degrees > 0 && (mv.Kind == "exit" || mv.Kind == "free" || mv.Kind == "sweep") {
+			st.platter.NoteFeed() // it may send a piece off: the next landing may be a new one
+		}
 		if mv.Shake != "" {
 			p, err := shakeProfile(mv.Shake)
 			if err == nil {

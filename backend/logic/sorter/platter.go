@@ -96,15 +96,15 @@ type identResult struct {
 type Platter struct {
 	deps PlatterDeps
 
-	slots       []*platterSlot // slots[0] is under the drop; [i] is i indexes on
-	indexDone   <-chan error   // set while an index is turning
+	slots     []*platterSlot // slots[0] is under the drop; [i] is i indexes on
+	indexDone <-chan error   // set while an index is turning
 	// giveBack: how far C4 went past its last index's sector to drop a piece (the
 	// index's extra and any turns after a piece lagging behind), to turn back once its
 	// fall is judged; turnDone is set while one of those turns is under way; follows
 	// counts the turns after a lagging piece since the index (platter_drop.go).
-	giveBack float64
-	turnDone <-chan error
-	follows  int
+	giveBack    float64
+	turnDone    <-chan error
+	follows     int
 	settleUntil time.Time
 	freeSince   time.Time // when the drop sector last became free
 	// The chute and doors for the piece about to fall.
@@ -112,9 +112,10 @@ type Platter struct {
 	doorsSettled time.Time
 	aimedFor     string // piece id
 	idents       chan identResult
-	// riding: the piece the last index carried out of the drop sector, until the first
-	// fresh look at the drop sector after it. One seen back where it was didn't ride: it
-	// hung off C3 (rideCheck). The platter doesn't index again before that look.
+	// riding: the piece the last index carried out of the drop sector, until C3 next
+	// pushes a piece off (NoteFeed) or it's seen where it rode to. One seen back where it
+	// was didn't ride: it hung off C3, or lies across the platter's edge (rideCheck).
+	// The platter doesn't index again until it's known (or rideLookWait has passed).
 	riding       *platterSlot
 	lastProgress time.Time
 	stallRaised  bool
@@ -132,8 +133,8 @@ type Platter struct {
 const (
 	recentPieces = 8
 	cropMargin   = 0.35
-	// rideLookWait: how long after an index's settle the platter waits for a fresh frame
-	// of the drop sector before indexing anyway (the camera's gone quiet).
+	// rideLookWait: how long after an index's settle the platter waits to see where the
+	// piece it carried rode to before indexing anyway (it's hidden, or the camera's quiet).
 	rideLookWait = time.Second
 )
 
@@ -352,18 +353,11 @@ func (p *Platter) watchDrop(now time.Time, obs vision.Observation, ps PlatterSet
 	if p.slots[0] != nil || !obs.Valid || obs.At.Before(p.settleUntil) {
 		return
 	}
-	if !obs.InDrop {
-		p.riding = nil // it rode: the drop sector is clear
-		return
-	}
-	var inDrop []vision.PieceObs
-	for _, o := range obs.Pieces {
-		if o.Zone == vision.ZoneDrop {
-			inDrop = append(inDrop, o)
-		}
-	}
+	// Not the drop sector clear on one frame: a piece twisting on the platter's edge
+	// can drop out of a frame or two. Only seeing it where it rode to clears it.
+	p.sawRide(obs)
+	inDrop := dropPieces(obs)
 	if len(inDrop) == 0 {
-		p.riding = nil
 		return
 	}
 	if p.rideCheck(now, inDrop[0]) {
@@ -647,18 +641,40 @@ func absDuration(d time.Duration) time.Duration {
 	return d
 }
 
+// NoteFeed: C3 is pushing a piece off, so the next landing may be a new piece; the
+// last index's piece is no longer the one a landing near it must be.
+func (p *Platter) NoteFeed() { p.riding = nil }
+
+// sawRide clears riding once a piece is seen where it rode to: a sector on from where
+// it lay.
+func (p *Platter) sawRide(obs vision.Observation) {
+	s := p.riding
+	if s == nil {
+		return
+	}
+	sector := 360 / float64(len(p.slots))
+	for _, o := range obs.Pieces {
+		if angleGap(o.Angle, s.angle+sector) < sector/4 {
+			p.riding = nil
+			return
+		}
+	}
+}
+
 // rideCheck: a piece landing where the one the last index carried off lay, well short of
-// a sector further on, is that piece. It didn't ride the platter (it hung off C3's lip,
-// half fallen) and was photographed too soon. It goes back to the drop sector under its
-// own record, to be photographed again now it's down, rather than becoming a second
-// record of the same piece. It reports whether it was.
+// a sector further on, before C3 has pushed another off, is that piece. It didn't ride
+// the platter (it hung off C3's lip, half fallen, or lies across the platter's edge and
+// twisted in place) and was photographed where it was. It goes back to the drop sector
+// under its own record, to be photographed again, rather than becoming a second record
+// of the same piece. It reports whether it was.
 func (p *Platter) rideCheck(now time.Time, o vision.PieceObs) bool {
 	s := p.riding
-	p.riding = nil
 	if s == nil || len(p.slots) < 2 || p.slots[1] != s {
+		p.riding = nil
 		return false
 	}
 	sector := 360 / float64(len(p.slots))
+	p.riding = nil // either way, judged
 	if turned := math.Mod(o.Angle-s.angle+540, 360) - 180; math.Abs(turned) >= sector/2 {
 		return false
 	}
@@ -927,7 +943,7 @@ func (p *Platter) maybeIndex(now time.Time, obs vision.Observation, settings Mac
 		return // still watching the last piece fall off; or the chute isn't set
 	}
 	if p.riding != nil && now.Sub(p.settleUntil) < rideLookWait {
-		return // not yet seen whether the last piece rode: it may be at the exit by mistake
+		return // not yet seen where the last piece rode to: it may not have, and be back
 	}
 	extra := 0.0
 	if exit != nil {
