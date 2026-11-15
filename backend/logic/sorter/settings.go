@@ -258,6 +258,11 @@ type FeederSettings struct {
 	// C1's carry speed until it does.
 	StarveMs      int     `json:"starveMs"`
 	StarveBulkDeg float64 `json:"starveBulkDeg"`
+	// StarveShake: once C2 has seen no piece for StarveShakeMs, C1 is shaken with this
+	// shake (ShakeProfiles' key; "off" or "" off) to loosen a pile that's packed or bridged
+	// rather than sliding to its edge, then no more often than every StarveShakeMs.
+	StarveShake   string `json:"starveShake"`
+	StarveShakeMs int    `json:"starveShakeMs"`
 	// BackupMs: a channel whose leading piece has waited at its exit this long, with
 	// the next channel unable to take it, is backed up, and the channel before it
 	// stops feeding it until it moves again.
@@ -470,6 +475,8 @@ func DefaultMachineSettings() MachineSettings {
 			MaxCover:        0.2,
 			StarveMs:        3000,
 			StarveBulkDeg:   30,
+			StarveShake:     "heavy",
+			StarveShakeMs:   6000,
 			BackupMs:        1000,
 			WorkAroundStuck: true,
 			PushPastStuck:   true,

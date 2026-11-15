@@ -73,6 +73,8 @@ export const DEFAULT_SORTER_SETTINGS = {
     maxCover: 0.2,
     starveMs: 3000,
     starveBulkDeg: 30,
+    starveShake: 'heavy',
+    starveShakeMs: 6000,
     backupMs: 1000,
     workAroundStuck: true,
     pushPastStuck: true,

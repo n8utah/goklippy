@@ -33,7 +33,9 @@ type FeederMove struct {
 	Degrees float64
 	Rpm     float64
 	Accel   float64 // rpm per second; 0 starts at full speed
-	Kind    string  // "drop", "exit" or "bulk"
+	Kind    string  // "drop", "exit", "bulk" or "shake"
+	// Shake: a shake's key (ShakeProfiles) to run instead of a turn.
+	Shake string
 }
 
 // carryRpm is how fast ch carries pieces along: Feeder.CarryRpm, never slower than the
@@ -75,6 +77,8 @@ type Feeder struct {
 	channels map[Channel]*feederChannel
 	// c2SeenAt: when C2 last had a piece on it; long ago, C2 is starving.
 	c2SeenAt time.Time
+	// c1ShookAt: when C1 was last shaken for a starving C2.
+	c1ShookAt time.Time
 	// fallAt: where each channel's pieces fall off its exit (feeder_fall.go).
 	fallAt map[Channel]float64
 }
@@ -139,7 +143,7 @@ func (f *Feeder) Reset() {
 	for _, ch := range f.channels {
 		*ch = feederChannel{}
 	}
-	f.c2SeenAt = time.Time{}
+	f.c2SeenAt, f.c1ShookAt = time.Time{}, time.Time{}
 }
 
 // C2SeenAt is when C2 last had a piece on it (zero: not this run).
@@ -403,6 +407,8 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		set1(TimeWaiting, "waiting: C2 is backed up")
 	case full(fs, ChannelC2, in.C2):
 		set1(TimeWaiting, "waiting: C2 is full")
+	case f.shakeC1(in.Now, settings, &moves):
+		set1(TimeMoving, "C2 has been empty a while: shaking C1 to loosen the pile")
 	case fs.StarveMs > 0 && in.Now.Sub(f.c2SeenAt) >= time.Duration(fs.StarveMs)*time.Millisecond:
 		// C2 has had nothing for a while: bigger, faster nudges until it does.
 		carry(ChannelC1, "bulk", max(fs.BulkPulseDeg, fs.StarveBulkDeg), fs.BulkPauseMs/2)
@@ -622,4 +628,28 @@ func stale(fs FeederSettings) time.Duration {
 		return time.Second
 	}
 	return time.Duration(fs.StaleMs) * time.Millisecond
+}
+
+// shakeC1 shakes C1 when C2 has been starving for Feeder.StarveShakeMs, and no more
+// often than that: a full hopper whose pile is packed or bridged turns without
+// pieces sliding off its edge, and nudging it harder doesn't help. It reports a shake
+// started.
+func (f *Feeder) shakeC1(now time.Time, settings MachineSettings, moves *[]FeederMove) bool {
+	fs := settings.Feeder
+	every := time.Duration(fs.StarveShakeMs) * time.Millisecond
+	if f.c1ShookAt.IsZero() {
+		f.c1ShookAt = now // a run starts with nudges: the first shake is a while in
+	}
+	if fs.StarveShake == "" || every <= 0 || now.Sub(f.c2SeenAt) < every || now.Sub(f.c1ShookAt) < every {
+		return false
+	}
+	p, err := shakeProfile(fs.StarveShake)
+	if err != nil {
+		return false
+	}
+	f.c1ShookAt = now
+	f.channels[ChannelC1].busyUntil = now.Add(shakeDuration(rotorShake(p, channelGear(settings, ChannelC1))) +
+		time.Duration(fs.BulkPauseMs)*time.Millisecond)
+	*moves = append(*moves, FeederMove{Channel: ChannelC1, Kind: "shake", Shake: p.Key})
+	return true
 }

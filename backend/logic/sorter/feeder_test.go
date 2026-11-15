@@ -253,3 +253,24 @@ func TestFeederIgnoresMissingOrStaleCameras(t *testing.T) {
 	moves = f.Step(FeederInput{Now: now, C2: obs(old, piece(vision.ZoneDrop, 100)), C3: obs(old)}, feederSettings())
 	assert.Empty(t, moves)
 }
+
+func TestFeederShakesC1WhenC2StaysEmpty(t *testing.T) {
+	f := NewFeeder()
+	now := time.Now()
+	settings := feederSettings()
+	step := func(at time.Time, c2 vision.Observation) map[Channel]FeederMove {
+		return movesByChannel(f.Step(FeederInput{Now: at, C2: c2, C3: obs(at), PlatterReady: true}, settings))
+	}
+	assert.Equal(t, "bulk", step(now, obs(now))[ChannelC1].Kind, "a run starts with nudges")
+
+	later := now.Add(7 * time.Second) // C2 still empty
+	assert.Equal(t, FeederMove{Channel: ChannelC1, Kind: "shake", Shake: "heavy"}, step(later, obs(later))[ChannelC1],
+		"starving a while: the pile is shaken")
+	again := later.Add(3 * time.Second)
+	assert.Equal(t, "bulk", step(again, obs(again))[ChannelC1].Kind, "then nudges until the next shake is due")
+
+	settings.Feeder.StarveShake = "off"
+	f = NewFeeder()
+	step(now, obs(now))
+	assert.Equal(t, "bulk", step(later, obs(later))[ChannelC1].Kind, "off: nudges only")
+}

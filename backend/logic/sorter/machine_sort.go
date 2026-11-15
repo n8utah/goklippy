@@ -238,6 +238,18 @@ func (m *Machine) stepSorting(now time.Time) {
 		st.platter.ExpectSeveral(now) // the next landing on C4 is a double
 	}
 	for _, mv := range moves {
+		if mv.Shake != "" {
+			p, err := shakeProfile(mv.Shake)
+			if err == nil {
+				_, err = m.hw.Shake(mv.Channel, rotorShake(p, channelGear(settings, mv.Channel)))
+			}
+			if err != nil {
+				slog.Warn("feeder shake refused", "channel", mv.Channel, "error", err)
+			} else {
+				slog.Info("feeder shake", "channel", mv.Channel, "shake", mv.Shake)
+			}
+			continue
+		}
 		if _, err := m.hw.RampChannel(mv.Channel, mv.Degrees, mv.Rpm, mv.Accel); err != nil {
 			slog.Warn("feeder move refused", "channel", mv.Channel, "error", err)
 		}
