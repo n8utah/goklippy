@@ -160,6 +160,8 @@ Nate checks the UI.
   - Price- or rarity-based rules ("high value" pieces) are not part of this item.
 - The viewer part touches the sharing push and `services/sortviewer/`
   ([sort-sharing-push](../done/sort-sharing-push.md), [sort-viewer-app](../done/sort-viewer-app.md)).
+- 2026-11-15, Nate (plan approved): 2 x 4 and 4 x 2 are the same size; 1 x 2 x 3 is its own
+  size; the preset list is right; a full kit lets extra pieces fall through to later rules.
 - 2026-11-15, Nate: imports (other than set by number) moved to sorting-rule-imports. The
   editor needs lots of sensible premade defaults to build on, part types picked from a list
   (plates, standard bricks, …), sizes, and a rule kind that takes a set number.
