@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 import { TABS, useCollectionPage, useSets, useWatch } from './CollectionPage.logic';
 import PartsView from './components/PartsView';
+import { PieceDialogProvider } from './components/PieceDialog';
 import PieceTile from './components/PieceTile';
 import PlanView from './components/PlanView';
 import SetsView from './components/SetsView';
@@ -57,87 +58,89 @@ const CollectionPage = () => {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1">
-        {me?.admin && (
-          <Link
-            to="/"
-            className="flex items-center gap-1 text-sm font-medium text-primary-text hover:underline"
-          >
-            <ChevronLeft className="size-4" /> Collections
-          </Link>
-        )}
-        <h1 className="flex flex-wrap items-center gap-2 font-display text-2xl font-semibold">
-          {col?.name ?? '…'}
-          {col?.sorting && <Badge variant="running">Sorting now</Badge>}
-          {col?.live && tab !== 'watch' && (
+    <PieceDialogProvider>
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-1">
+          {me?.admin && (
             <Link
-              to={`/c/${id}/watch`}
-              className="rounded-md bg-primary px-2.5 py-1 text-sm font-medium text-primary-foreground hover:opacity-90"
+              to="/"
+              className="flex items-center gap-1 text-sm font-medium text-primary-text hover:underline"
             >
-              Watch it live
+              <ChevronLeft className="size-4" /> Collections
             </Link>
           )}
-        </h1>
-        {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
+          <h1 className="flex flex-wrap items-center gap-2 font-display text-2xl font-semibold">
+            {col?.name ?? '…'}
+            {col?.sorting && <Badge variant="running">Sorting now</Badge>}
+            {col?.live && tab !== 'watch' && (
+              <Link
+                to={`/c/${id}/watch`}
+                className="rounded-md bg-primary px-2.5 py-1 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Watch it live
+              </Link>
+            )}
+          </h1>
+          {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
+        </div>
+
+        {col && (
+          <section aria-label="Totals" className="grid grid-cols-3 gap-3">
+            <Stat label="Pieces" value={col.pieces.toLocaleString()} />
+            <Stat label="Identified" value={col.identified.toLocaleString()} />
+            <Stat label="Unknown" value={col.unknown.toLocaleString()} />
+          </section>
+        )}
+
+        <nav className="flex gap-1 overflow-x-auto border-b border-border" aria-label="Views">
+          {TABS.filter((t) => t.id !== 'watch' || col?.live || tab === 'watch').map((t) => (
+            <NavLink
+              key={t.id}
+              to={t.id === 'live' ? `/c/${id}` : `/c/${id}/${t.id}`}
+              end
+              className={({ isActive }) =>
+                cn(
+                  '-mb-px border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap',
+                  isActive || t.id === tab
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                )
+              }
+            >
+              {t.label}
+              {t.id === 'unknowns' && col?.unknown ? ` (${col.unknown})` : ''}
+            </NavLink>
+          ))}
+        </nav>
+
+        {tab === 'live' && (
+          <section className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              {col?.sorting
+                ? 'The newest pieces, as they’re sorted. Our photo is on the left, the official picture on the right.'
+                : 'The newest pieces. This updates by itself while sorting is on.'}
+            </p>
+            <PieceGrid
+              pieces={logic.live}
+              freshId={logic.connected ? logic.live[0]?.id : undefined}
+              empty="No pieces yet."
+            />
+          </section>
+        )}
+        {tab === 'watch' && <WatchView watch={watch} live={Boolean(col?.live)} />}
+        {tab === 'plan' && <PlanView view={logic.plan} />}
+        {tab === 'parts' && <PartsView parts={logic.parts} />}
+        {tab === 'sets' && <SetsView sets={sets} />}
+        {tab === 'unknowns' && (
+          <section className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              Pieces the sorter couldn’t name. They usually go through again later for another try.
+            </p>
+            <PieceGrid pieces={logic.unknowns?.pieces} empty="No unknowns." />
+          </section>
+        )}
       </div>
-
-      {col && (
-        <section aria-label="Totals" className="grid grid-cols-3 gap-3">
-          <Stat label="Pieces" value={col.pieces.toLocaleString()} />
-          <Stat label="Identified" value={col.identified.toLocaleString()} />
-          <Stat label="Unknown" value={col.unknown.toLocaleString()} />
-        </section>
-      )}
-
-      <nav className="flex gap-1 overflow-x-auto border-b border-border" aria-label="Views">
-        {TABS.filter((t) => t.id !== 'watch' || col?.live || tab === 'watch').map((t) => (
-          <NavLink
-            key={t.id}
-            to={t.id === 'live' ? `/c/${id}` : `/c/${id}/${t.id}`}
-            end
-            className={({ isActive }) =>
-              cn(
-                '-mb-px border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap',
-                isActive || t.id === tab
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
-              )
-            }
-          >
-            {t.label}
-            {t.id === 'unknowns' && col?.unknown ? ` (${col.unknown})` : ''}
-          </NavLink>
-        ))}
-      </nav>
-
-      {tab === 'live' && (
-        <section className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            {col?.sorting
-              ? 'The newest pieces, as they’re sorted. Our photo is on the left, the official picture on the right.'
-              : 'The newest pieces. This updates by itself while sorting is on.'}
-          </p>
-          <PieceGrid
-            pieces={logic.live}
-            freshId={logic.connected ? logic.live[0]?.id : undefined}
-            empty="No pieces yet."
-          />
-        </section>
-      )}
-      {tab === 'watch' && <WatchView watch={watch} live={Boolean(col?.live)} />}
-      {tab === 'plan' && <PlanView view={logic.plan} />}
-      {tab === 'parts' && <PartsView parts={logic.parts} />}
-      {tab === 'sets' && <SetsView sets={sets} />}
-      {tab === 'unknowns' && (
-        <section className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            Pieces the sorter couldn’t name. They usually go through again later for another try.
-          </p>
-          <PieceGrid pieces={logic.unknowns?.pieces} empty="No unknowns." />
-        </section>
-      )}
-    </div>
+    </PieceDialogProvider>
   );
 };
 

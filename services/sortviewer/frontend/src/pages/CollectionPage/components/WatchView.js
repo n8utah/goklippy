@@ -1,8 +1,13 @@
+import { Expand } from 'lucide-react';
+import { useState } from 'react';
+
 import { Badge } from '@/components/ui/badge';
 import { photoURL } from '@/helpers/api';
 import { cn } from '@/lib/utils';
 
 import { formatDuration, pieceBin, pieceName, WATCH_CAMERAS } from '../CollectionPage.logic';
+import CameraViewer from './CameraViewer';
+import { usePieceButton } from './PieceDialog';
 import { Pic } from './PieceTile';
 
 function Stat({ label, value, detail }) {
@@ -24,26 +29,32 @@ function MachineStatus({ state }) {
   return <Badge variant="running">Sorting</Badge>;
 }
 
-/** One camera: its newest picture, and what that part of the machine is doing. */
-function Camera({ camera, frameRef, doing, count, big }) {
+/** One camera: its newest picture (click to see it big), and what that part of the
+ * machine is doing. */
+function Camera({ camera, frameRef, doing, count, onOpen }) {
   return (
     <figure
       aria-label={`Camera over ${camera.label}`}
-      className={cn(
-        'flex flex-col overflow-hidden rounded-xl border border-border bg-card',
-        big && 'lg:col-span-2 lg:row-span-2',
-      )}
+      className="flex flex-col overflow-hidden rounded-xl border border-border bg-card"
     >
-      <div className="relative aspect-video bg-media">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="group relative aspect-video cursor-zoom-in bg-media"
+        aria-label={`See ${camera.label} big`}
+      >
         <img
-          ref={frameRef(camera.id)}
+          ref={frameRef(camera.id, 'tile')}
           alt=""
           className="absolute inset-0 size-full object-contain"
         />
         <span className="absolute top-2 left-2 rounded-md bg-black/60 px-2 py-0.5 font-mono text-xs text-white">
           {camera.label}
         </span>
-      </div>
+        <span className="absolute top-2 right-2 rounded-md bg-black/60 p-1 text-white opacity-70 group-hover:opacity-100">
+          <Expand className="size-4" />
+        </span>
+      </button>
       <figcaption className="flex flex-col gap-0.5 px-3 py-2">
         <span className="text-sm font-medium">
           {camera.name}
@@ -65,8 +76,12 @@ function Camera({ camera, frameRef, doing, count, big }) {
 /** A piece found lately: our photo once it's arrived, else the official picture. */
 function FoundPiece({ piece }) {
   const unknown = !piece.part_id;
+  const button = usePieceButton();
   return (
-    <li className="flex items-center gap-3 rounded-xl border border-border bg-card p-2">
+    <li
+      className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-2 hover:border-border-strong focus-visible:outline-2 focus-visible:outline-ring"
+      {...button(piece)}
+    >
       <Pic src={photoURL(piece.id)} alt="" className="size-14 shrink-0" />
       <Pic
         src={piece.part_img_url}
@@ -95,13 +110,14 @@ function FoundPiece({ piece }) {
 
 /** On the classification plate now: being photographed, then named. */
 function Aboard({ pieces }) {
+  const button = usePieceButton();
   if (!pieces.length) {
     return <p className="text-sm text-muted-foreground">Nothing on the plate this moment.</p>;
   }
   return (
     <ul className="flex flex-wrap gap-2">
       {pieces.map((p) => (
-        <li key={p.id}>
+        <li key={p.id} className="cursor-pointer rounded-md" {...button(p)}>
           <Badge variant={p.part_id ? 'running' : 'default'}>
             {p.part_id
               ? `${pieceName(p)}${p.color_name ? ` · ${p.color_name}` : ''}`
@@ -119,6 +135,7 @@ function Aboard({ pieces }) {
  */
 export default function WatchView({ watch, live }) {
   const { status, state, feed } = watch;
+  const [opened, setOpened] = useState(null); // the camera seen big
   if (!live || status === 'ended') {
     return (
       <section className="rounded-xl border border-border bg-card p-5">
@@ -166,7 +183,7 @@ export default function WatchView({ watch, live }) {
       )}
 
       <div className="grid gap-3 lg:grid-cols-3">
-        {[WATCH_CAMERAS[2], WATCH_CAMERAS[0], WATCH_CAMERAS[1]].map((cam) => (
+        {WATCH_CAMERAS.map((cam) => (
           <Camera
             key={cam.id}
             camera={cam}
@@ -175,10 +192,17 @@ export default function WatchView({ watch, live }) {
             count={
               cam.id === 'c4' ? (state?.aboard?.length ?? 0) : (state?.on_channel?.[cam.id] ?? 0)
             }
-            big={cam.id === 'c4'}
+            onOpen={() => setOpened(cam)}
           />
         ))}
       </div>
+      <CameraViewer
+        camera={opened}
+        cameras={WATCH_CAMERAS}
+        watch={watch}
+        onSwitch={setOpened}
+        onClose={() => setOpened(null)}
+      />
 
       <div className="flex flex-col gap-2">
         <h2 className="font-display text-lg font-semibold">On the plate now</h2>

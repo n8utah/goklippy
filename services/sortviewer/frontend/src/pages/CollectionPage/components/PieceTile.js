@@ -5,6 +5,7 @@ import { photoURL } from '@/helpers/api';
 import { cn } from '@/lib/utils';
 
 import { pieceBin, pieceName } from '../CollectionPage.logic';
+import { usePieceButton } from './PieceDialog';
 
 /** A picture that quietly gives way to an empty square when it can't load. */
 export function Pic({ src, alt, className }) {
@@ -27,12 +28,14 @@ export function Pic({ src, alt, className }) {
 /** One piece: our photo of it beside the official picture of the part, its name and colour. */
 export default function PieceTile({ piece, fresh }) {
   const unknown = !piece.part_id;
+  const button = usePieceButton();
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-xl border bg-card p-2 transition-colors',
+        'flex cursor-pointer flex-col gap-2 rounded-xl border bg-card p-2 transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-ring',
         fresh ? 'border-primary' : 'border-border',
       )}
+      {...button(piece)}
     >
       <div className="grid grid-cols-2 gap-1.5">
         <Pic

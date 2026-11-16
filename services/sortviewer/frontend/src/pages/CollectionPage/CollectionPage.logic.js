@@ -264,7 +264,8 @@ const FEED_SHOWN = 30;
  * The Watch tab: the sort as it happens, while the collection is being sorted. The page
  * watching is what makes the sorter send anything, so it stops watching while the tab
  * is hidden. Each camera's picture is fetched when the stream says there's a newer one
- * (one at a time, the last one shown let go), into the <img> registered for it.
+ * (one at a time, the last one shown let go), into every <img> registered for it: its
+ * tile, and the big view while it's open and not paused.
  */
 export function useWatch(id, live) {
   // watching once the stream has said anything; ended when it says sorting stopped
@@ -273,8 +274,8 @@ export function useWatch(id, live) {
   const [state, setState] = useState(null);
   const [feed, setFeed] = useState([]);
   const [hidden, setHidden] = useState(() => document.hidden);
-  const imgs = useRef({});
-  const loading = useRef({}); // channel: { busy, again, url }
+  const imgs = useRef({}); // channel: Map(key → <img>)
+  const loading = useRef({}); // channel: { busy, again, url, blob }
 
   useEffect(() => {
     const onVisibility = () => setHidden(document.hidden);
@@ -298,16 +299,15 @@ export function useWatch(id, live) {
           slot.again = false;
           const res = await fetch(liveFrameURL(id, channel), { cache: 'no-store' });
           if (!res.ok || stopped) break;
-          const url = URL.createObjectURL(await res.blob());
-          const img = imgs.current[channel];
-          if (!img || stopped) {
-            URL.revokeObjectURL(url);
-            break;
-          }
-          img.src = url;
-          await img.decode().catch(() => {});
+          const blob = await res.blob();
+          const targets = [...(imgs.current[channel]?.values() ?? [])];
+          if (!targets.length || stopped) break;
+          const url = URL.createObjectURL(blob);
+          for (const img of targets) img.src = url;
+          await Promise.all(targets.map((img) => img.decode().catch(() => {})));
           if (slot.url) URL.revokeObjectURL(slot.url);
           slot.url = url;
+          slot.blob = blob;
         } while (slot.again && !stopped);
       } catch {
         // the next frame tries again
@@ -348,9 +348,23 @@ export function useWatch(id, live) {
     status,
     state,
     feed,
-    /** Registers a camera's <img>: ref={watch.frameRef('c2')}. */
-    frameRef: (channel) => (el) => {
-      imgs.current[channel] = el;
+    /** Registers an <img> for a camera's pictures: ref={watch.frameRef('c2', 'tile')}. */
+    frameRef: (channel, key) => (el) => {
+      const targets = (imgs.current[channel] ??= new Map());
+      if (!el) {
+        targets.delete(key);
+        return;
+      }
+      // A new view starts with the picture showing now, not blank until the next.
+      if (!el.getAttribute('src') && loading.current[channel]?.url) {
+        el.src = loading.current[channel].url;
+      }
+      targets.set(key, el);
+    },
+    /** A still of a camera's newest picture, as an object URL the caller revokes. */
+    still: (channel) => {
+      const blob = loading.current[channel]?.blob;
+      return blob ? URL.createObjectURL(blob) : '';
     },
   };
 }
