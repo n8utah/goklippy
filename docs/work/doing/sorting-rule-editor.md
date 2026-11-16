@@ -43,24 +43,24 @@ change sorting rules on the sorter itself, and start them from lists that alread
   left as it is.
 
 ## Done when
-- [ ] A profile can be created from scratch or copied from any existing one, and its rules
+- [x] A profile can be created from scratch or copied from any existing one, and its rules
       added, edited, reordered, disabled and deleted on the sorter. A Hive upload can be
       edited in place or copied first.
-- [ ] Rules can match on part types (picked from a list, family or exact), sizes, part
+- [x] Rules can match on part types (picked from a list, family or exact), sizes, part
       numbers, colours, and set/list inventories (kits), and split by size, part type or colour;
       the leftover behaviour (misc / by part type / by colour) is chosen per profile.
-- [ ] Premade rules and starter profiles are offered in the editor and can be added, copied
+- [x] Premade rules and starter profiles are offered in the editor and can be added, copied
       and changed.
 - [ ] A set can be imported by set number and becomes a kit rule with the right BrickLink part
       and colour ids, minifigures and spare parts left out; one rule can take one set or
       several, and each set fills separately into its own bins.
-- [ ] Re-uploading a Hive profile that was edited here makes a second profile and leaves the
+- [x] Re-uploading a Hive profile that was edited here makes a second profile and leaves the
       edited one untouched.
-- [ ] The Rebrickable API key is set once per sorter in Settings; without one, set import says
+- [x] The Rebrickable API key is set once per sorter in Settings; without one, set import says
       so and points there.
 - [ ] The viewer site shows a shared collection's rules (name and description) alongside its
       categories.
-- [ ] The editor's "where would this go?" shows the matching rule for a part and colour.
+- [x] The editor's "where would this go?" shows the matching rule for a part and colour.
 - [ ] Edited profiles route on the machine exactly as the editor says, including kits filling
       up; editing a profile a collection is using follows the same "bins emptied / carry on"
       choice as changing a collection's profile.
@@ -171,3 +171,23 @@ Nate checks the UI.
   - Re-uploading a Hive profile that was edited in place makes a second profile.
   - The viewer shows each rule's name and description, not the part lists. So a rule has a
     description field.
+- 2026-11-15, progress (built, not yet committed when written):
+  - Backend: `profile/editor.go` (the editor document, matching, splits, set kits),
+    `sizes.go`, `presets.go` (16 premade rules, 2 starters, common colours),
+    `convert.go` (Hive programs, part maps and built-ins into editor rules, keeping their
+    category ids); `sorter/rule_editor.go` (create, copy, starter, save with the bins choice,
+    check, picker options), `sorter/rebrickable.go` (set lookup); `models/rule_editor_store.go`;
+    routes in `routes/sorter_rule_editor_routes.go`. Routing on the machine and the editor's
+    check use the same matcher; pieces now carry their part name, for sizes.
+  - Frontend: `pages/RuleEditorPage/` at `/rules/profiles/:id`; Profiles page has New
+    profile (blank or starter), Edit/See rules and Copy, and a "Made here" group;
+    System › Settings › Services has the Rebrickable key.
+  - Viewer: the plan carries each rule's name and description; the collection page lists them.
+  - A set rule has `kind: "sets"`, so one with no sets yet takes nothing (not everything).
+  - Dropped from the plan: the `updated_at` column (nothing needed it), and drag reordering
+    (rules move with up/down buttons).
+  - Tested: profile unit tests, Rebrickable client against a fake server, store tests for edit
+    in place / carry on / emptied / copies / starters, and API checks against the running
+    backend (test profiles deleted afterwards).
+  - Left: a real Rebrickable set (needs an API key in Settings), the viewer showing rules for a
+    shared collection, and a run on the machine with an edited profile.
