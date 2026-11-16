@@ -19,8 +19,9 @@ function RuleList({ logic }) {
   if (doc.rules.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-        No rules yet: every piece goes where the leftovers go. Add a premade rule and change it, or
-        start from a blank one.
+        {readOnly
+          ? 'No rules: every piece goes where the leftovers go.'
+          : 'No rules yet: every piece goes where the leftovers go. Add a premade rule and change it, or start from a blank one.'}
       </p>
     );
   }
@@ -170,7 +171,9 @@ const RuleEditorPage = () => {
         {data.profile.used_by?.length > 0 && (
           <p className="text-sm text-muted-foreground">
             Sorting {data.profile.used_by.map((c) => c.name).join(', ')}.
-            {data.in_bins && ' Its pieces are in the bins, so saving asks what’s in them.'}
+            {data.in_bins &&
+              !readOnly &&
+              ' Its pieces are in the bins, so saving asks what’s in them.'}
           </p>
         )}
         {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
@@ -194,20 +197,22 @@ const RuleEditorPage = () => {
         </section>
 
         <section className="flex flex-col gap-4">
-          <div className="rounded-xl border border-border bg-card px-5 py-4">
-            {logic.selected ? (
-              <RuleForm
-                key={logic.selected.id}
-                rule={logic.selected}
-                options={logic.options}
-                readOnly={readOnly}
-                onChange={(patch) => logic.updateRule(logic.selected.id, patch)}
-                onRemove={() => logic.removeRule(logic.selected.id)}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">Pick a rule to see what it takes.</p>
-            )}
-          </div>
+          {doc.rules.length > 0 && (
+            <div className="rounded-xl border border-border bg-card px-5 py-4">
+              {logic.selected ? (
+                <RuleForm
+                  key={logic.selected.id}
+                  rule={logic.selected}
+                  options={logic.options}
+                  readOnly={readOnly}
+                  onChange={(patch) => logic.updateRule(logic.selected.id, patch)}
+                  onRemove={() => logic.removeRule(logic.selected.id)}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">Pick a rule to see what it takes.</p>
+              )}
+            </div>
+          )}
           <div className="rounded-xl border border-border bg-card px-5 py-4">
             <h2 className="mb-1 font-display text-lg font-semibold">Where would this go?</h2>
             <p className="mb-3 text-sm text-muted-foreground">

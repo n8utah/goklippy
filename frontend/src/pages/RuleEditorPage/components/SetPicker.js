@@ -109,7 +109,7 @@ export default function SetPicker({ sets, onChange, disabled }) {
       )}
       {error && (
         <p className="text-sm text-destructive">
-          {error.message}{' '}
+          {error.needsKey ? 'No Rebrickable API key yet.' : error.message}{' '}
           {error.needsKey && (
             <Link
               to="/system/settings/services"

@@ -47,7 +47,7 @@ export default function WhereCheck({ doc, colors }) {
           value={part}
           onChange={(e) => setPart(e.target.value)}
           placeholder="Part number, like 3001"
-          className="w-40 font-mono"
+          className="w-full font-mono sm:w-56"
           aria-label="Part number"
         />
         <Select value={color} onValueChange={setColor}>

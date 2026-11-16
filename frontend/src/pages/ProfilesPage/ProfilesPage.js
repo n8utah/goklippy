@@ -1,4 +1,4 @@
-import { Copy, Pencil, Plus, Upload } from 'lucide-react';
+import { Copy, Eye, Pencil, Plus, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
@@ -90,7 +90,7 @@ function ProfileRow({ profile, busy, onDelete, onCopy }) {
       <div className="flex shrink-0 flex-wrap gap-1">
         <Button variant="outline" asChild>
           <Link to={`/rules/profiles/${profile.id}`}>
-            <Pencil />
+            {builtin ? <Eye /> : <Pencil />}
             {builtin ? 'See rules' : 'Edit rules'}
           </Link>
         </Button>

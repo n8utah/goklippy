@@ -73,7 +73,12 @@ export default function MultiPicker({
           }}
         >
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" disabled={disabled} aria-label={`Add ${label}`}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              aria-label={selected.length ? `Add ${label}` : `Pick ${label}`}
+            >
               <Plus />
               {selected.length ? 'Add' : `Pick ${label}`}
             </Button>

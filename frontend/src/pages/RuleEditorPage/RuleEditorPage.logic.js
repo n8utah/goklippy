@@ -55,7 +55,7 @@ export function describeRule(rule, colorName) {
   let text = bits.length ? bits.join(' · ') : 'Every piece';
   const split = SPLIT_OPTIONS.find((o) => o.value === (rule.split ?? ''));
   if (split && split.value) text += ` · a bin group ${split.label.toLowerCase()}`;
-  return text;
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**
