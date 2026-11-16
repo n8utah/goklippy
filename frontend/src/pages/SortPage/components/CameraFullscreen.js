@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import CameraView from '@/components/CameraView/CameraView';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogClose,
@@ -88,19 +89,24 @@ function Stage({ channel }) {
   );
 }
 
-/** The other cameras, small and live: one clicked is seen big instead. */
-function Others({ channels, current, onSwitch }) {
-  const others = channels.filter((ch) => ch.id !== current.id);
-  if (!others.length) return null;
+/** Every camera small and live, in order, the one seen big marked: another clicked is
+ * seen big instead. */
+function Thumbnails({ channels, current, onSwitch }) {
   return (
     <div className="flex justify-center gap-2 px-4 pb-3">
-      {others.map((ch) => (
+      {channels.map((ch) => (
         <button
           key={ch.id}
           type="button"
-          onClick={() => onSwitch(ch.id)}
-          className="relative w-32 overflow-hidden rounded-md ring-1 ring-white/20 hover:ring-white/60 sm:w-40"
-          aria-label={`See ${ch.label} big`}
+          onClick={() => ch.id !== current.id && onSwitch(ch.id)}
+          aria-current={ch.id === current.id}
+          className={cn(
+            'relative w-28 overflow-hidden rounded-md sm:w-40',
+            ch.id === current.id
+              ? 'ring-3 ring-primary'
+              : 'opacity-70 ring-1 ring-white/20 hover:opacity-100 hover:ring-white/60',
+          )}
+          aria-label={ch.id === current.id ? `${ch.label}, seen big` : `See ${ch.label} big`}
         >
           <CameraView channel={ch.id} compact showOverlay={false} />
           <span className="absolute top-1 left-1 rounded bg-black/60 px-1.5 font-mono text-xs text-white">
@@ -115,8 +121,8 @@ function Others({ channels, current, onSwitch }) {
 /**
  * One camera filling the screen, its zones and pieces still drawn: the wheel or a
  * pinch zooms (up to 8×), a drag pans, a double-click or double-tap zooms in there or
- * back out. The other cameras show small below it; clicking one switches to it. Esc or
- * × closes it.
+ * back out. Every camera shows small below it, in order, the one seen big marked;
+ * clicking another switches to it. Esc or × closes it.
  */
 export default function CameraFullscreen({ channel, channels = [], onSwitch, onClose }) {
   return (
@@ -149,7 +155,7 @@ export default function CameraFullscreen({ channel, channels = [], onSwitch, onC
             </DialogClose>
           </div>
           <Stage key={channel.id} channel={channel} />
-          {onSwitch && <Others channels={channels} current={channel} onSwitch={onSwitch} />}
+          {onSwitch && <Thumbnails channels={channels} current={channel} onSwitch={onSwitch} />}
         </DialogContent>
       )}
     </Dialog>

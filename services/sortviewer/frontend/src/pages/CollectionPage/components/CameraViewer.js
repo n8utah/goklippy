@@ -2,6 +2,7 @@ import { Maximize, Minus, Pause, Play, Plus, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogClose,
@@ -56,19 +57,24 @@ function Stage({ camera, watch, paused, still }) {
   );
 }
 
-/** The other cameras, small and live: one clicked is seen big instead. */
-function Others({ cameras, current, watch, onSwitch }) {
-  const others = cameras.filter((c) => c.id !== current.id);
-  if (!others.length) return null;
+/** Every camera small and live, in order, the one seen big marked: another clicked is
+ * seen big instead. */
+function Thumbnails({ cameras, current, watch, onSwitch }) {
   return (
     <div className="flex justify-center gap-2 px-4 pb-3">
-      {others.map((c) => (
+      {cameras.map((c) => (
         <button
           key={c.id}
           type="button"
-          onClick={() => onSwitch(c)}
-          className="relative aspect-video w-32 overflow-hidden rounded-md bg-media ring-1 ring-white/20 hover:ring-white/60 sm:w-40"
-          aria-label={`See ${c.label} big`}
+          onClick={() => c.id !== current.id && onSwitch(c)}
+          aria-current={c.id === current.id}
+          className={cn(
+            'relative aspect-video w-28 overflow-hidden rounded-md bg-media sm:w-40',
+            c.id === current.id
+              ? 'ring-3 ring-primary'
+              : 'opacity-70 ring-1 ring-white/20 hover:opacity-100 hover:ring-white/60',
+          )}
+          aria-label={c.id === current.id ? `${c.label}, seen big` : `See ${c.label} big`}
         >
           <img
             ref={watch.frameRef(c.id, 'thumb')}
@@ -116,8 +122,8 @@ function Controls({ zp }) {
 /**
  * One camera filling the screen: the wheel or a pinch zooms (up to 8×), a drag pans, a
  * double-click or double-tap zooms in there or back out; Pause holds the picture
- * (Space too) while the sort goes on. The other cameras show small below it; clicking
- * one switches to it. Esc or × closes it.
+ * (Space too) while the sort goes on. Every camera shows small below it, in order, the
+ * one seen big marked; clicking another switches to it. Esc or × closes it.
  */
 export default function CameraViewer({ camera, cameras = [], watch, onSwitch, onClose }) {
   // paused: the still of the picture showing then (an object URL), or '' while live.
@@ -215,7 +221,7 @@ export default function CameraViewer({ camera, cameras = [], watch, onSwitch, on
           </div>
           <Stage key={camera.id} camera={camera} watch={watch} paused={paused} still={still} />
           {onSwitch && (
-            <Others cameras={cameras} current={camera} watch={watch} onSwitch={switchTo} />
+            <Thumbnails cameras={cameras} current={camera} watch={watch} onSwitch={switchTo} />
           )}
         </DialogContent>
       )}
