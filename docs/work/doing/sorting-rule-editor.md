@@ -51,7 +51,7 @@ change sorting rules on the sorter itself, and start them from lists that alread
       the leftover behaviour (misc / by part type / by colour) is chosen per profile.
 - [x] Premade rules and starter profiles are offered in the editor and can be added, copied
       and changed.
-- [ ] A set can be imported by set number and becomes a kit rule with the right BrickLink part
+- [x] A set can be imported by set number and becomes a kit rule with the right BrickLink part
       and colour ids, minifigures and spare parts left out; one rule can take one set or
       several, and each set fills separately into its own bins.
 - [x] Re-uploading a Hive profile that was edited here makes a second profile and leaves the
@@ -197,5 +197,7 @@ Nate checks the UI.
   - Sets now come from the sort viewer site (its Rebrickable download catalogue, no key):
     viewer `GET /api/push/sets/:set`, sorter `viewer_sets.go`, colours mapped by name. The
     Rebrickable API key stays as the backup (1eb2af5, b7a41ba).
-  - Left: deploy the viewer (`mage deploy` in services/sortviewer), then add a real set; the
-    viewer showing rules for a shared collection; a run on the machine with an edited profile.
+  - Viewer deployed (347f37c, with a Rebrickable link on each set for instructions); 75192
+    came back from it: 667 lines, every colour mapped after adding more BrickLink colours.
+  - Left: the viewer showing rules for a shared collection; a run on the machine with an
+    edited profile.
