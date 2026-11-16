@@ -60,3 +60,13 @@ func (a *API) refreshSets(c *gin.Context) {
 	}
 	c.JSON(http.StatusAccepted, a.Svc.SetsStatus(c.Request.Context()))
 }
+
+// pushSet GET /api/push/sets/:set: a set's parts, for a sorter's set rule.
+func (a *API) pushSet(c *gin.Context) {
+	set, err := a.Svc.SetInventory(c.Request.Context(), c.Param("set"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, set)
+}

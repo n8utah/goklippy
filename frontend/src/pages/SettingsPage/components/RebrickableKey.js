@@ -5,7 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getRebrickable, putRebrickable } from '@/helpers/api';
 
-/** The sorter's Rebrickable API key, for set rules. The key itself is never shown. */
+/**
+ * The sorter's Rebrickable API key: the backup for set rules when the sort viewer site
+ * can't answer. The key itself is never shown.
+ */
 export default function RebrickableKey() {
   const [keySet, setKeySet] = useState(null);
   const [key, setKey] = useState('');
@@ -39,13 +42,13 @@ export default function RebrickableKey() {
   return (
     <div className="flex flex-col gap-3 py-5">
       <div>
-        <h3 className="font-medium">Rebrickable API key</h3>
+        <h3 className="font-medium">Rebrickable API key (backup)</h3>
         <p className="text-sm text-muted-foreground">
           {keySet === null
             ? 'Loading…'
             : keySet
               ? 'A key is saved. Paste a new one to replace it.'
-              : 'None yet. Make a free account on rebrickable.com, then copy the key from Settings › API.'}
+              : 'None, and none is needed while the sorter is connected to the sort viewer site. For a backup, make a free account on rebrickable.com and copy the key from Settings › API.'}
         </p>
       </div>
       <form

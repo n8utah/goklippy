@@ -51,6 +51,7 @@ func (a *API) Register(r *gin.Engine, ui gin.HandlerFunc) {
 	// The sorter, with an API key.
 	push := r.Group("/api/push", a.requireAPIKey)
 	push.GET("/ping", a.ping)
+	push.GET("/sets/:set", a.pushSet)
 	push.PUT("/collections/:id", a.pushCollection)
 	push.POST("/collections/:id/clear-unknowns", a.pushClearUnknowns)
 	push.PUT("/runs/:id", a.pushRun)

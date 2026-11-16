@@ -87,6 +87,8 @@ type RuleSet struct {
 	Parts    []KitLine `json:"parts"`
 	// Unmapped lists what couldn't be turned into BrickLink part and colour ids.
 	Unmapped []string `json:"unmapped,omitempty"`
+	// Source is where the parts came from: "viewer" or "rebrickable".
+	Source string `json:"source,omitempty"`
 }
 
 // IsSetRule reports whether the rule collects sets.

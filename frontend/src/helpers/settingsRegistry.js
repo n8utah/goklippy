@@ -909,7 +909,7 @@ export const SETTING_SECTIONS = [
     id: 'services',
     label: 'Services',
     about:
-      'Accounts on other sites the sorter uses. Rebrickable gives a set’s parts when a rule pulls out a set by number.',
+      'Accounts on other sites the sorter uses. A set rule gets each set’s parts from the sort viewer site; a Rebrickable API key is the backup for when the site can’t answer.',
     settings: [],
   },
 ];

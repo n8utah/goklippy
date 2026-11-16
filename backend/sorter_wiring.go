@@ -71,7 +71,6 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 
 	routes.InitSorter(machine, settings)
 	routes.InitSorting(sorting, identifier)
-	routes.InitRuleEditor(sorter.NewRebrickable(sortingStore))
 	routes.InitRecords(records)
 	collections, err := sorter.NewCollections(records, sorting, machine.SortingInto)
 	if err != nil {
@@ -84,6 +83,8 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 	share.AttachLive(sorter.LiveSource{Snapshot: machine.Snapshot, Frame: frames})
 	go share.RunLive(ctx)
 	routes.InitSharing(share)
+	// Set rules look sets up on the viewer site, with a Rebrickable key as the backup.
+	routes.InitRuleEditor(sorter.NewRebrickable(sortingStore).WithViewer(share))
 	slog.Info("sorter data folder", "path", dataDir)
 	return machine, nil
 }

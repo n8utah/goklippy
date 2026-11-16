@@ -93,3 +93,31 @@ func TestSetsForACollection(t *testing.T) {
 	_, body = admin.do("GET", "/api/collections/7/sets", nil)
 	assert.EqualValues(t, 1, body["total"], "still there after the rebuild")
 }
+
+func TestSorterGetsASet(t *testing.T) {
+	s := newSite(t)
+	sorter := s.sorter(s.key)
+	code, body := sorter.do("GET", "/api/push/sets/100-1", nil)
+	assert.Equal(t, http.StatusServiceUnavailable, code, "before the set data is built")
+	assert.Contains(t, body["error"], "isn't ready")
+
+	s.useSets()
+	require.NoError(t, s.svc.BuildSets(context.Background()))
+	code, body = sorter.do("GET", "/api/push/sets/100-1", nil)
+	require.Equal(t, 200, code)
+	assert.Equal(t, "Red House", body["name"])
+	assert.EqualValues(t, 2020, body["year"])
+	parts := body["parts"].([]any)
+	require.Len(t, parts, 2)
+	first := parts[0].(map[string]any)
+	assert.Equal(t, "3001", first["part_num"])
+	assert.Equal(t, "Red", first["color_name"])
+	assert.EqualValues(t, 2, first["need"])
+
+	code, _ = sorter.do("GET", "/api/push/sets/nope-1", nil)
+	assert.Equal(t, 404, code)
+	code, _ = s.sorter("wrong").do("GET", "/api/push/sets/100-1", nil)
+	assert.Equal(t, http.StatusUnauthorized, code)
+	code, _ = s.browser().do("GET", "/api/push/sets/100-1", nil)
+	assert.Equal(t, http.StatusUnauthorized, code)
+}

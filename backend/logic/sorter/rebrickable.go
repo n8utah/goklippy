@@ -18,14 +18,22 @@ import (
 	"goklippy/backend/logic/sorter/profile"
 )
 
-// A set rule's parts come from Rebrickable's API, once per set, when the set is added to
-// the rule. Rebrickable has its own part and colour ids; each part and colour carries
-// its BrickLink equivalents (external_ids), which is what Brickognize reports.
+// A set rule's parts are looked up once per set, when the set is added to the rule:
+// from the sort viewer site when the sorter is connected to it (viewer_sets.go), else,
+// or when that fails, from Rebrickable's API with the sorter's own key. Rebrickable has
+// its own part and colour ids; each part and colour carries its BrickLink equivalents
+// (external_ids), which is what Brickognize reports.
 
 var (
-	ErrRebrickableNoKey = errors.New("no Rebrickable API key yet: add one on System › Settings › Services")
-	ErrSetNotFound      = errors.New("Rebrickable doesn't know that set number")
+	// ErrNoSetSource is neither the viewer site nor a Rebrickable key being set up.
+	ErrNoSetSource = errors.New("sets come from the sort viewer site: connect the sorter to it under Run › Collections › Sharing (or add a Rebrickable API key on System › Settings › Services)")
+	ErrSetNotFound = errors.New("no set has that number")
 )
+
+// SetSource looks a set up by its full number ("75192-1").
+type SetSource interface {
+	LookupSet(ctx context.Context, number string) (profile.RuleSet, error)
+}
 
 // RebrickableStore keeps the sorter's Rebrickable API key.
 type RebrickableStore interface {
@@ -36,6 +44,7 @@ type RebrickableStore interface {
 // Rebrickable looks sets up.
 type Rebrickable struct {
 	store   RebrickableStore
+	viewer  SetSource
 	client  *http.Client
 	baseURL string
 }
@@ -49,6 +58,12 @@ func NewRebrickable(store RebrickableStore) *Rebrickable {
 // WithBaseURL points it elsewhere (tests).
 func (r *Rebrickable) WithBaseURL(u string) *Rebrickable {
 	r.baseURL = strings.TrimRight(u, "/")
+	return r
+}
+
+// WithViewer asks the viewer site first.
+func (r *Rebrickable) WithViewer(v SetSource) *Rebrickable {
+	r.viewer = v
 	return r
 }
 
@@ -104,27 +119,46 @@ type rbSetPart struct {
 	IsSpare  bool `json:"is_spare"`
 }
 
-// LookupSet fetches a set and its parts as BrickLink ids, without spare parts or
-// minifigures. Parts Rebrickable gives no BrickLink number for keep Rebrickable's (they
-// are usually the same); colours it can't map are listed in Unmapped and the line takes
-// any colour.
+// LookupSet fetches a set and its parts, without spare parts or minifigures: from the
+// viewer site, then from Rebrickable's API if that fails and a key is saved.
 func (r *Rebrickable) LookupSet(ctx context.Context, number string) (profile.RuleSet, error) {
 	number, err := NormalizeSetNumber(number)
 	if err != nil {
 		return profile.RuleSet{}, err
+	}
+	var viewerErr error
+	if r.viewer != nil {
+		set, err := r.viewer.LookupSet(ctx, number)
+		if err == nil {
+			return set, nil
+		}
+		viewerErr = err
 	}
 	key, err := r.store.RebrickableKey(ctx)
 	if err != nil {
 		return profile.RuleSet{}, err
 	}
 	if key == "" {
-		return profile.RuleSet{}, ErrRebrickableNoKey
+		if viewerErr == nil || errors.Is(viewerErr, ErrSharingNotSetUp) {
+			return profile.RuleSet{}, ErrNoSetSource
+		}
+		return profile.RuleSet{}, viewerErr
 	}
+	if viewerErr != nil && !errors.Is(viewerErr, ErrSharingNotSetUp) {
+		slog.Info("viewer site set lookup failed; asking Rebrickable", "set", number, "error", viewerErr)
+	}
+	return r.lookupAPI(ctx, key, number)
+}
+
+// lookupAPI fetches a set from Rebrickable's API, as BrickLink ids. Parts Rebrickable gives no BrickLink number for keep Rebrickable's (they
+// are usually the same); colours it can't map are listed in Unmapped and the line takes
+// any colour.
+func (r *Rebrickable) lookupAPI(ctx context.Context, key, number string) (profile.RuleSet, error) {
 	var set rbSet
 	if err := r.get(ctx, key, r.baseURL+"/lego/sets/"+url.PathEscape(number)+"/", &set); err != nil {
 		return profile.RuleSet{}, err
 	}
-	out := profile.RuleSet{Number: set.SetNum, Name: set.Name, Year: set.Year, ImageURL: set.ImageURL}
+	out := profile.RuleSet{Number: set.SetNum, Name: set.Name, Year: set.Year, ImageURL: set.ImageURL, Source: "rebrickable"}
 	merged := map[[2]string]int{}
 	unmapped := map[string]bool{}
 	next := r.baseURL + "/lego/sets/" + url.PathEscape(number) + "/parts/?page_size=1000&inc_part_details=1"
@@ -157,18 +191,7 @@ func (r *Rebrickable) LookupSet(ctx context.Context, number string) (profile.Rul
 			next = *page.Next
 		}
 	}
-	for k, need := range merged {
-		out.Parts = append(out.Parts, profile.KitLine{Part: k[0], Color: k[1], Need: need})
-	}
-	sort.Slice(out.Parts, func(i, j int) bool {
-		if out.Parts[i].Part != out.Parts[j].Part {
-			return out.Parts[i].Part < out.Parts[j].Part
-		}
-		return out.Parts[i].Color < out.Parts[j].Color
-	})
-	if out.Parts == nil {
-		out.Parts = []profile.KitLine{}
-	}
+	out.Parts = kitLines(merged)
 	for u := range unmapped {
 		out.Unmapped = append(out.Unmapped, u)
 	}

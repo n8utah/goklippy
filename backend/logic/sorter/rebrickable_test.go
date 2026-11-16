@@ -52,7 +52,7 @@ func TestRebrickableLookupSet(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := rb.LookupSet(ctx, "1234")
-	assert.ErrorIs(t, err, ErrRebrickableNoKey)
+	assert.ErrorIs(t, err, ErrNoSetSource)
 
 	require.NoError(t, rb.SaveKey(ctx, " secret "))
 	set, err := rb.LookupSet(ctx, "1234")

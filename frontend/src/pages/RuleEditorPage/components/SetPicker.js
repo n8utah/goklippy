@@ -7,13 +7,14 @@ import { Input } from '@/components/ui/input';
 import { lookupSorterSet } from '@/helpers/api';
 
 /**
- * A set rule's sets: type a LEGO set number and its parts come from Rebrickable
- * (minifigures and spare parts left out). Each set fills its own bins.
+ * A set rule's sets: type a LEGO set number and its parts come from the sort viewer
+ * site, or Rebrickable's API as the backup (minifigures and spare parts left out). Each
+ * set fills its own bins.
  */
 export default function SetPicker({ sets, onChange, disabled }) {
   const [number, setNumber] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null); // { message, needsKey }
+  const [error, setError] = useState(null); // { message, needsSource }
 
   const add = async () => {
     const n = number.trim();
@@ -29,7 +30,7 @@ export default function SetPicker({ sets, onChange, disabled }) {
         setNumber('');
       }
     } catch (err) {
-      setError({ message: err.message, needsKey: Boolean(err.body?.needs_key) });
+      setError({ message: err.message, needsSource: Boolean(err.body?.needs_source) });
     } finally {
       setBusy(false);
     }
@@ -61,6 +62,7 @@ export default function SetPicker({ sets, onChange, disabled }) {
                   </span>
                   <span className="block text-sm text-muted-foreground">
                     {s.year ? `${s.year} · ` : ''}
+                    {s.source === 'rebrickable' ? 'from Rebrickable · ' : ''}
                     <span className="font-mono">{pieces.toLocaleString()}</span> pieces in{' '}
                     <span className="font-mono">{s.parts.length}</span> part and colour lines
                     {s.unmapped?.length > 0 && (
@@ -109,14 +111,23 @@ export default function SetPicker({ sets, onChange, disabled }) {
       )}
       {error && (
         <p className="text-sm text-destructive">
-          {error.needsKey ? 'No Rebrickable API key yet.' : error.message}{' '}
-          {error.needsKey && (
-            <Link
-              to="/system/settings/services"
-              className="font-medium text-primary-text hover:underline"
-            >
-              Add the key
-            </Link>
+          {error.needsSource ? (
+            <>
+              Sets come from the sort viewer site, and the sorter isn’t connected to it.{' '}
+              <Link to="/run/collections" className="font-medium text-primary-text hover:underline">
+                Connect it under Sharing
+              </Link>
+              , or add a{' '}
+              <Link
+                to="/system/settings/services"
+                className="font-medium text-primary-text hover:underline"
+              >
+                Rebrickable API key
+              </Link>{' '}
+              as the backup.
+            </>
+          ) : (
+            error.message
           )}
         </p>
       )}
