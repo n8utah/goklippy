@@ -658,3 +658,57 @@ func TestSortingKitsAndFullBins(t *testing.T) {
 	require.NoError(t, svc3.AttachCounts(ctx, records))
 	assert.Equal(t, 0, svc3.Bins().Layers[0].Sections[0].Bins[second.Choice.Bin.Bin-1].Count, "emptied stays emptied")
 }
+
+// Time paused is kept with the run as blocked, so per-minute figures leave it out; a
+// pause still going on when the run is stopped counts too.
+func TestSortRunKeepsBlockedTime(t *testing.T) {
+	db := openTestDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	settings := fastSettings
+	hw := sorter.NewSimHardware(settings)
+	world := sorter.NewSimWorld(hw, settings, nil)
+	sorting := sorter.NewSortingService(ctx, NewSortingStore(db), settings)
+	pickCollection(t, db, sorting, "Test")
+	p, err := sorting.Import(ctx, []byte(bricksProfile))
+	require.NoError(t, err)
+	useProfile(t, sorting, p.ID)
+	store := NewRecordsStore(db)
+	records := sorter.NewRecords(store, t.TempDir())
+	go records.Run(ctx)
+
+	m := sorter.NewMachine(hw, settings, 2*time.Millisecond)
+	m.AttachSorting(sorter.SortDeps{Vision: world, Identifier: world, Sorting: sorting, Records: records})
+	go m.Run(ctx)
+	_, err = m.Do(ctx, sorter.CommandHome)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return m.Snapshot().State == sorter.StateReady }, 5*time.Second, 5*time.Millisecond)
+
+	run := func() sorter.Run {
+		runs, err := store.ListRuns(ctx, 0, 1)
+		require.NoError(t, err)
+		require.Len(t, runs, 1)
+		return runs[0]
+	}
+	for _, cmd := range []sorter.Command{sorter.CommandStart, sorter.CommandPause} {
+		_, err = m.Do(ctx, cmd)
+		require.NoError(t, err)
+	}
+	require.NotNil(t, run().BlockedSince, "paused: blocked from now")
+	time.Sleep(60 * time.Millisecond)
+	_, err = m.Do(ctx, sorter.CommandResume)
+	require.NoError(t, err)
+	r := run()
+	assert.Nil(t, r.BlockedSince)
+	assert.GreaterOrEqual(t, r.BlockedMs, int64(50))
+
+	_, err = m.Do(ctx, sorter.CommandPause)
+	require.NoError(t, err)
+	time.Sleep(60 * time.Millisecond)
+	_, err = m.Do(ctx, sorter.CommandStop)
+	require.NoError(t, err)
+	r = run()
+	assert.Nil(t, r.BlockedSince)
+	assert.GreaterOrEqual(t, r.BlockedMs, int64(100), "the pause it was stopped in counts")
+}

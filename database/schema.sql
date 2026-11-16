@@ -86,7 +86,12 @@ CREATE TABLE IF NOT EXISTS sort_runs (
   profile_id INTEGER NULL REFERENCES sorting_profiles(id) ON DELETE SET NULL,
   profile_name TEXT NOT NULL DEFAULT '',
   started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  ended_at DATETIME NULL
+  ended_at DATETIME NULL,
+  -- Time the run stood blocked: paused, or stopped for an incident until someone fixed
+  -- it. blocked_since is when the block going on now began (NULL when none); blocked_ms
+  -- is the blocks before it. Per-minute figures leave it out.
+  blocked_ms INTEGER NOT NULL DEFAULT 0,
+  blocked_since DATETIME NULL
 );
 
 -- Every piece the machine saw. id is a UUID made when the piece first appears.

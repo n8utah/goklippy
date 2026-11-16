@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/table';
 
 import {
+  blockedMs,
   formatDuration,
   perMinuteText,
   SHORT_RUN_MS,
@@ -69,6 +70,7 @@ const RecordsPage = () => {
                 <TableHead className="text-right">Pieces</TableHead>
                 <TableHead className="text-right">Sorted</TableHead>
                 <TableHead className="hidden text-right lg:table-cell">Sorting time</TableHead>
+                <TableHead className="hidden text-right lg:table-cell">Blocked</TableHead>
                 <TableHead className="pr-5 text-right">Per min</TableHead>
               </TableRow>
             </TableHeader>
@@ -98,9 +100,15 @@ const RecordsPage = () => {
                   <TableCell className="text-right font-mono">{r.distributed}</TableCell>
                   <TableCell
                     className="hidden text-right font-mono lg:table-cell"
-                    title="From the start to its last piece sorted"
+                    title="From the start to its last piece sorted, less the time blocked"
                   >
                     {r.last_piece_at ? formatDuration(sortingMs(r)) : '—'}
+                  </TableCell>
+                  <TableCell
+                    className="hidden text-right font-mono lg:table-cell"
+                    title="Paused, or stopped for an incident until it was fixed: left out of per minute"
+                  >
+                    {blockedMs(r) >= 1000 ? formatDuration(blockedMs(r)) : '—'}
                   </TableCell>
                   <TableCell
                     className="pr-5 text-right font-mono"

@@ -214,7 +214,7 @@ const SortPage = () => {
             run && !run.distributed
               ? 'Nothing sorted yet'
               : run
-                ? `Over ${formatDuration(numbers.sortingMs)} of sorting${run.ended_at || !numbers.current ? ', to the last piece' : ''}${numbers.perMinuteText.endsWith('*') ? ' · * under a minute: not a steady rate yet' : ''}`
+                ? `Over ${formatDuration(numbers.sortingMs)} of sorting${run.ended_at || !numbers.current ? ', to the last piece' : ''}${numbers.blockedMs >= 1000 ? ` · ${formatDuration(numbers.blockedMs)} blocked${numbers.blockedNow ? ' (now)' : ''}, left out` : ''}${numbers.perMinuteText.endsWith('*') ? ' · * under a minute: not a steady rate yet' : ''}`
                 : 'No runs yet'
           }
         />

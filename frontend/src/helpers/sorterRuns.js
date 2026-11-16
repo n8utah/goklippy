@@ -4,6 +4,19 @@
 // stopped: time after that was C1 turning an empty hopper, or the machine left running,
 // and would drag the rate down. While a run is on, it's sorting until now, except once
 // it's finishing on its own (C2 empty a while), when the last piece is the end too.
+//
+// Time the run stood blocked (paused, or stopped for an incident until someone fixed
+// it) isn't sorting either, and is left out.
+
+/** How long the run stood blocked, in ms, counting a block going on now. */
+export function blockedMs(run, now = Date.now()) {
+  if (!run) return 0;
+  let ms = run.blocked_ms ?? 0;
+  if (run.blocked_since && !run.ended_at) {
+    ms += Math.max(0, now - new Date(run.blocked_since).getTime());
+  }
+  return ms;
+}
 
 /** The run's sorting time in ms; finishing: the run is finishing on its own now. */
 export function sortingMs(run, finishing = false, now = Date.now()) {
@@ -15,7 +28,7 @@ export function sortingMs(run, finishing = false, now = Date.now()) {
   } else {
     end = now;
   }
-  return Math.max(0, end - start);
+  return Math.max(0, end - start - blockedMs(run, Math.min(now, end)));
 }
 
 /** Pieces sorted per minute of sorting. */

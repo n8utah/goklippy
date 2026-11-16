@@ -14,7 +14,7 @@ import {
   shakeSorterChannel,
   sorterCommand,
 } from '../../helpers/api';
-import { perMinute, perMinuteText, sortingMs } from '../../helpers/sorterRuns';
+import { blockedMs, perMinute, perMinuteText, sortingMs } from '../../helpers/sorterRuns';
 import { useMachineSettings } from '../../helpers/sorterSettings';
 import { useSorterState } from '../../helpers/sorterState';
 
@@ -66,6 +66,10 @@ function useRunNumbers(runId, finishing) {
     perMinuteText: perMinuteText(run, current && finishing),
     /** How long it really sorted (to its last piece once done or finishing). */
     sortingMs: sortingMs(run, current && finishing),
+    /** How long it stood blocked (paused, or waiting on a fix), left out of the rate. */
+    blockedMs: blockedMs(run),
+    /** Blocked right now. */
+    blockedNow: Boolean(current && run?.blocked_since),
     binsFull: allBins.filter((b) => b.full).length,
     binsTotal: allBins.length,
     profile: bins?.profile ?? null,

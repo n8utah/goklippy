@@ -36,6 +36,9 @@ type sortStations struct {
 	runStart   time.Time
 	finish     *finishing
 	lastFinish *FinishStatus
+	// blockedSince: when the run began standing blocked, paused or waiting on an
+	// incident (zero when it isn't); kept with the run so per-minute figures leave it out.
+	blockedSince time.Time
 }
 
 // ChannelSummary is one camera channel's state for the dashboard.
@@ -106,6 +109,7 @@ func (m *Machine) startRun(now time.Time) error {
 	}
 	st.runID = runID
 	st.runStart, st.finish, st.lastFinish = now, nil, nil
+	st.blockedSince = time.Time{}
 	st.feeder.Reset()
 	st.platter.Reset(now)
 	st.spent = newTimeSpent()
@@ -168,6 +172,7 @@ func (m *Machine) endRun(now time.Time) {
 	st.platter.Reset(now)
 	st.feeder.Reset()
 	st.finish = nil
+	m.unblockRun(now)
 	runID := st.runID
 	st.runID = 0
 	if err := st.deps.Records.Store().EndRun(context.Background(), runID, now); err != nil {
@@ -267,6 +272,42 @@ func (m *Machine) stepSorting(now time.Time) {
 		}
 	}
 	m.stepFinish(now, settings)
+}
+
+// trackBlocked keeps the run's blocked time: while it's paused, or stopped for an
+// incident until someone fixes it, the run isn't sorting, and the time shouldn't drag
+// its pieces per minute down. Called on every turn of the loop.
+func (m *Machine) trackBlocked(now time.Time) {
+	st := m.sort
+	if st == nil || st.runID == 0 || st.deps.Records == nil {
+		return
+	}
+	blocked := m.state == StatePaused || m.incident != nil
+	switch {
+	case blocked && st.blockedSince.IsZero():
+		st.blockedSince = now.UTC()
+		if err := st.deps.Records.Store().BlockRun(context.Background(), st.runID, st.blockedSince); err != nil {
+			slog.Warn("noting the run blocked failed", "run", st.runID, "error", err)
+		}
+		m.changed = true
+	case !blocked && !st.blockedSince.IsZero():
+		m.unblockRun(now)
+	}
+}
+
+// unblockRun ends the run's block going on now, if any, adding it to the run's total.
+func (m *Machine) unblockRun(now time.Time) {
+	st := m.sort
+	if st == nil || st.runID == 0 || st.blockedSince.IsZero() || st.deps.Records == nil {
+		return
+	}
+	d := now.Sub(st.blockedSince)
+	st.blockedSince = time.Time{}
+	if err := st.deps.Records.Store().UnblockRun(context.Background(), st.runID, d); err != nil {
+		slog.Warn("noting the run unblocked failed", "run", st.runID, "error", err)
+	}
+	slog.Info("sort run unblocked", "run", st.runID, "blocked_for", d.Round(time.Second))
+	m.changed = true
 }
 
 // raiseIncident stops the sort until the operator resolves it.

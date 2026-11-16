@@ -208,6 +208,7 @@ func (m *Machine) Run(ctx context.Context) {
 		case req := <-m.requests:
 			// Publish before replying, so a caller sees what its request changed.
 			err := m.handle(req)
+			m.trackBlocked(time.Now())
 			m.publish()
 			req.reply <- err
 			continue
@@ -224,6 +225,7 @@ func (m *Machine) Run(ctx context.Context) {
 			m.step()
 			m.releaseIdleMotors(time.Now())
 		}
+		m.trackBlocked(time.Now())
 		m.publish()
 	}
 }

@@ -42,12 +42,32 @@ func (s *RecordsStore) EndRun(ctx context.Context, id int64, at time.Time) error
 	return err
 }
 
+// BlockRun notes the run stood blocked from since (paused, or waiting on an incident).
+func (s *RecordsStore) BlockRun(ctx context.Context, id int64, since time.Time) error {
+	if s.db == nil {
+		return ErrDBNotConfigured
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE sort_runs SET blocked_since = ? WHERE id = ?`, since.UTC(), id)
+	return err
+}
+
+// UnblockRun ends the run's block going on now, adding its length to the blocked time.
+func (s *RecordsStore) UnblockRun(ctx context.Context, id int64, blocked time.Duration) error {
+	if s.db == nil {
+		return ErrDBNotConfigured
+	}
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE sort_runs SET blocked_ms = blocked_ms + ?, blocked_since = NULL WHERE id = ?`, max(0, blocked.Milliseconds()), id)
+	return err
+}
+
 func (s *RecordsStore) ListRuns(ctx context.Context, collectionID int64, limit int) ([]sorter.Run, error) {
 	if s.db == nil {
 		return nil, ErrDBNotConfigured
 	}
 	const query = `
 SELECT r.id, r.collection_id, c.name AS collection_name, r.profile_id, r.profile_name, r.started_at, r.ended_at,
+  r.blocked_ms, r.blocked_since,
   (SELECT COUNT(*) FROM pieces p WHERE p.run_id = r.id) AS pieces,
   (SELECT COUNT(*) FROM pieces p WHERE p.run_id = r.id AND p.status = 'distributed') AS distributed,
   (SELECT p.distributed_at FROM pieces p WHERE p.run_id = r.id AND p.distributed_at IS NOT NULL
@@ -65,6 +85,8 @@ LIMIT ?
 		ProfileName    string        `db:"profile_name"`
 		StartedAt      time.Time     `db:"started_at"`
 		EndedAt        sql.NullTime  `db:"ended_at"`
+		BlockedMs      int64         `db:"blocked_ms"`
+		BlockedSince   sql.NullTime  `db:"blocked_since"`
 		Pieces         int           `db:"pieces"`
 		Distributed    int           `db:"distributed"`
 		LastPieceAt    any           `db:"last_piece_at"` // a subquery's column: time or text
@@ -75,7 +97,12 @@ LIMIT ?
 	out := make([]sorter.Run, 0, len(rows))
 	for _, r := range rows {
 		run := sorter.Run{ID: r.ID, CollectionID: r.CollectionID, CollectionName: r.CollectionName,
-			ProfileName: r.ProfileName, StartedAt: r.StartedAt, Pieces: r.Pieces, Distributed: r.Distributed}
+			ProfileName: r.ProfileName, StartedAt: r.StartedAt, Pieces: r.Pieces, Distributed: r.Distributed,
+			BlockedMs: r.BlockedMs}
+		if r.BlockedSince.Valid && !r.EndedAt.Valid {
+			t := r.BlockedSince.Time
+			run.BlockedSince = &t
+		}
 		if t, ok := timeOf(r.LastPieceAt); ok {
 			run.LastPieceAt = &t
 		}

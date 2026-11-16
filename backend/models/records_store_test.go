@@ -137,3 +137,28 @@ func TestPieceReviews(t *testing.T) {
 	assert.ErrorIs(t, store.SaveReview(ctx, "missing", sorter.PieceReview{ReviewedAt: time.Now()}), sorter.ErrPieceNotFound)
 	assert.ErrorIs(t, sorter.PieceReview{Issues: []string{"sticky"}}.Check(), sorter.ErrBadReview)
 }
+
+func TestRunBlockedTime(t *testing.T) {
+	store := NewRecordsStore(openTestDB(t))
+	ctx := context.Background()
+	start := time.Now().UTC().Truncate(time.Second)
+	runID, err := store.StartRun(ctx, newCollection(t, store, "Test"), nil, "", start)
+	require.NoError(t, err)
+
+	// One block over, a second going on now.
+	require.NoError(t, store.BlockRun(ctx, runID, start.Add(time.Minute)))
+	require.NoError(t, store.UnblockRun(ctx, runID, 90*time.Second))
+	require.NoError(t, store.BlockRun(ctx, runID, start.Add(5*time.Minute)))
+	runs, err := store.ListRuns(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	assert.EqualValues(t, 90_000, runs[0].BlockedMs)
+	require.NotNil(t, runs[0].BlockedSince)
+	assert.True(t, runs[0].BlockedSince.Equal(start.Add(5*time.Minute)))
+
+	require.NoError(t, store.UnblockRun(ctx, runID, 30*time.Second))
+	runs, err = store.ListRuns(ctx, 0, 10)
+	require.NoError(t, err)
+	assert.EqualValues(t, 120_000, runs[0].BlockedMs)
+	assert.Nil(t, runs[0].BlockedSince)
+}

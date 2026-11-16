@@ -142,6 +142,11 @@ type Run struct {
 	// LastPieceAt is when its last piece was sorted: where its sorting really ended,
 	// whatever ran on after (an empty hopper turning until it was stopped).
 	LastPieceAt *time.Time `json:"last_piece_at,omitempty"`
+	// BlockedMs is how long it stood blocked (paused, or stopped for an incident until
+	// it was fixed), not counting the block going on now, which began at BlockedSince.
+	// Per-minute figures leave it out.
+	BlockedMs    int64      `json:"blocked_ms"`
+	BlockedSince *time.Time `json:"blocked_since,omitempty"`
 }
 
 type Incident struct {
@@ -187,6 +192,10 @@ type Stats struct {
 type RecordsStore interface {
 	StartRun(ctx context.Context, collectionID int64, profileID *int64, profileName string, at time.Time) (int64, error)
 	EndRun(ctx context.Context, id int64, at time.Time) error
+	// BlockRun and UnblockRun keep the time a run stands blocked (paused or waiting on
+	// an incident): one begins at since, and ends adding blocked to the run's total.
+	BlockRun(ctx context.Context, id int64, since time.Time) error
+	UnblockRun(ctx context.Context, id int64, blocked time.Duration) error
 	// ListRuns is the newest runs; collectionID 0 means every collection's.
 	ListRuns(ctx context.Context, collectionID int64, limit int) ([]Run, error)
 	SavePiece(ctx context.Context, p Piece) error
