@@ -164,4 +164,10 @@ var CommonColors = map[string]string{
 	"68": "Dark Orange", "69": "Dark Tan", "80": "Dark Green", "85": "Dark Bluish Gray",
 	"86": "Light Bluish Gray", "88": "Reddish Brown", "103": "Bright Light Yellow",
 	"110": "Bright Light Orange", "120": "Dark Brown", "153": "Dark Azure", "156": "Medium Azure",
+	"9": "Light Gray", "10": "Dark Gray", "14": "Trans-Dark Blue", "15": "Trans-Light Blue",
+	"19": "Trans-Yellow", "20": "Trans-Green", "28": "Nougat", "39": "Dark Turquoise", "47": "Dark Pink",
+	"48": "Sand Green", "55": "Sand Blue", "71": "Magenta", "89": "Dark Purple", "95": "Flat Silver",
+	"98": "Trans-Orange", "104": "Bright Pink", "115": "Pearl Gold", "150": "Medium Nougat",
+	"152": "Light Aqua", "154": "Lavender", "155": "Olive Green", "157": "Medium Lavender",
+	"158": "Yellowish Green",
 }
