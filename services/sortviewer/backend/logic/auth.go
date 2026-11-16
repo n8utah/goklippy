@@ -94,13 +94,31 @@ func (s *Service) EndAdminSessions(ctx context.Context, email, sid string) error
 	return s.store.DeleteAdminSessions(ctx, email, sid)
 }
 
-// CheckAPIKey reports whether key is a live push key.
+// CheckAPIKey reports whether key is a live push key. A key that checked out is
+// trusted for apiKeyTrust without asking the database again: while someone watches a
+// sort live the sorter calls a dozen times a second, and each check notes the key
+// used. Revoking a key forgets them all.
 func (s *Service) CheckAPIKey(ctx context.Context, key string) (bool, error) {
 	if !strings.HasPrefix(key, apiKeyPrefix) {
 		return false, nil
 	}
-	return s.store.UseAPIKey(ctx, HashToken(key), s.now())
+	hash := HashToken(key)
+	s.keysMu.Lock()
+	at, ok := s.keysOK[hash]
+	s.keysMu.Unlock()
+	if ok && s.now().Sub(at) < apiKeyTrust {
+		return true, nil
+	}
+	valid, err := s.store.UseAPIKey(ctx, hash, s.now())
+	if valid && err == nil {
+		s.keysMu.Lock()
+		s.keysOK[hash] = s.now()
+		s.keysMu.Unlock()
+	}
+	return valid, err
 }
+
+const apiKeyTrust = 30 * time.Second
 
 const apiKeyPrefix = "sv_"
 
@@ -213,7 +231,11 @@ func (s *Service) CreateAPIKey(ctx context.Context, name string) (string, error)
 }
 
 func (s *Service) RevokeAPIKey(ctx context.Context, id int64) error {
-	return s.store.RevokeAPIKey(ctx, id, s.now())
+	err := s.store.RevokeAPIKey(ctx, id, s.now())
+	s.keysMu.Lock()
+	s.keysOK = map[string]time.Time{}
+	s.keysMu.Unlock()
+	return err
 }
 
 // Admin: clearing out.

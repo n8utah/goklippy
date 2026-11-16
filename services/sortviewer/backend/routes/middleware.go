@@ -125,8 +125,10 @@ func (a *API) setSessionCookie(c *gin.Context, token string, maxAge int) {
 func fail(c *gin.Context, err error) {
 	status := http.StatusInternalServerError
 	switch {
-	case errors.Is(err, logic.ErrNotFound):
+	case errors.Is(err, logic.ErrNotFound), errors.Is(err, logic.ErrLiveChannel):
 		status = http.StatusNotFound
+	case errors.Is(err, logic.ErrNotLive):
+		status = http.StatusConflict
 	case errors.Is(err, logic.ErrBadInput), errors.Is(err, logic.ErrEmailTaken):
 		status = http.StatusBadRequest
 	case errors.Is(err, logic.ErrBadLogin), errors.Is(err, logic.ErrLoginExpired):

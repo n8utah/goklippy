@@ -85,6 +85,10 @@ type SharingStatus struct {
 	Connected bool       `json:"connected"` // the last send (or test) worked
 	LastError string     `json:"last_error,omitempty"`
 	LastSent  *time.Time `json:"last_sent,omitempty"`
+	// LiveWatchers: people watching the sort live on the site now (sharing_live.go);
+	// LiveError: why the site can't be told what's sorting, when it can't.
+	LiveWatchers int    `json:"live_watchers"`
+	LiveError    string `json:"live_error,omitempty"`
 }
 
 // Sharing marks changes and sends them.
@@ -98,6 +102,7 @@ type Sharing struct {
 
 	client *http.Client
 	wake   chan struct{}
+	live   *liveView // set by AttachLive
 
 	mu        sync.Mutex
 	connected bool
@@ -186,10 +191,16 @@ func (s *Sharing) Status(ctx context.Context) (SharingStatus, error) {
 	if err != nil {
 		return SharingStatus{}, err
 	}
+	st := SharingStatus{URL: set.URL, KeySet: set.APIKey != "", Waiting: n}
+	if s.live != nil {
+		s.live.mu.Lock()
+		st.LiveWatchers, st.LiveError = s.live.watchers, s.live.lastErr
+		s.live.mu.Unlock()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return SharingStatus{URL: set.URL, KeySet: set.APIKey != "", Waiting: n,
-		Connected: s.connected, LastError: s.lastError, LastSent: s.lastSent}, nil
+	st.Connected, st.LastError, st.LastSent = s.connected, s.lastError, s.lastSent
+	return st, nil
 }
 
 // SaveSettings sets the site and key. An empty key keeps the one saved.

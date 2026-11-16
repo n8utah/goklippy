@@ -51,6 +51,30 @@ export function watchCollection(id, onEvent) {
   return () => source.close();
 }
 
+/**
+ * Watching a collection sort live: server-sent events while it sorts, each { type:
+ * 'state' | 'frame' | 'ended', state, channel }. onClosed is called if the stream can't
+ * be opened or stays shut (not sorting now, or signed out); a dropped connection is
+ * reopened by the browser.
+ */
+export function watchLive(id, onEvent, onClosed) {
+  const source = new EventSource(`/api/collections/${id}/live`);
+  source.onmessage = (e) => {
+    try {
+      onEvent(JSON.parse(e.data));
+    } catch {
+      // a malformed event is skipped
+    }
+  };
+  source.onerror = () => {
+    if (source.readyState === EventSource.CLOSED) onClosed?.();
+  };
+  return () => source.close();
+}
+
+/** A camera's newest picture of a collection sorting now. */
+export const liveFrameURL = (id, channel) => `/api/collections/${id}/live/frames/${channel}`;
+
 /** Sets a collection could build, best covered first. { q, min, any, limit } */
 export function listSets(id, { q, min, any, limit } = {}) {
   const params = new URLSearchParams();

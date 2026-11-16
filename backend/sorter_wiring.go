@@ -40,6 +40,7 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 	go records.Run(ctx)
 
 	var hw sorter.Hardware
+	var frames func(sorter.Channel) ([]byte, time.Time, bool) // each camera's newest picture
 	deps := sorter.SortDeps{Sorting: sorting, Records: records}
 	var identifier sorter.Identifier = brickognize.NewClient()
 	journeys := sorter.NewJourneyRecorder(filepath.Join(dataDir, "journeys"), machineSettings)
@@ -51,6 +52,7 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 		world.Random = true
 		hw, deps.Vision, deps.Identifier = sim, world, world
 		routes.InitCameras(sorter.SimFeed{World: world}, nil)
+		frames = sorter.SimFeed{World: world}.JPEG
 		go sorter.RunSimCameras(ctx, world, journeys, simCameraInterval)
 		slog.Info("sorter running on simulated hardware with pretend LEGO")
 	} else {
@@ -60,6 +62,7 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 		go perception.Run(ctx)
 		deps.Vision, deps.Identifier = perception, identifier
 		routes.InitCameras(perception, perception)
+		frames = perception.JPEG
 	}
 
 	machine := sorter.NewMachine(hw, machineSettings, 0)
@@ -76,6 +79,9 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 	routes.InitCollections(collections)
 	share.Attach(records.Store(), collections, records.ImagePath, sortingStore.ColorNames)
 	go share.Run(ctx)
+	// Watching live on the site: the cameras and the sort, only while someone watches.
+	share.AttachLive(sorter.LiveSource{Snapshot: machine.Snapshot, Frame: frames})
+	go share.RunLive(ctx)
 	routes.InitSharing(share)
 	slog.Info("sorter data folder", "path", dataDir)
 	return machine, nil

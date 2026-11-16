@@ -113,6 +113,31 @@ Each bin's piece count is worked out here from the pieces sorted since `bins_sta
 Errors: 400 for a bad body, 401 for a missing or revoked key, 404 for a photo of a piece not
 pushed yet.
 
+## Live
+
+While a shared collection is sorting, the people who can see it can watch the sort as it
+happens on its **Watch** tab: the three cameras, the pieces on the classification plate, each
+piece as it's found, and the run's numbers. It's only streamed while someone is watching, and
+nothing of it is stored: the newest state and picture of each camera are kept in memory.
+
+The site can't reach the sorter, so the sorter keeps asking (a long poll), and sends more only
+when told someone's watching. With the same key as the push API:
+
+| Call | Body | |
+|---|---|---|
+| `POST /api/push/live` | `{collection_id, watchers}` | What's sorting now (`0`: nothing shared) and how many watchers the sorter last heard of (`-1` at first). Answers `{watchers}`, held up to 20 s while that's still the number. |
+| `PUT /api/push/live/:collection/state` | the sorter's state (JSON) | Passed on to the pages as it is: `{state, incident, doing, on_channel, aboard, recent, run}`. |
+| `PUT /api/push/live/:collection/frames/:channel` | JPEG | A camera's newest picture: `c2`, `c3` or `c4`. |
+
+Both `PUT`s answer 409 unless that collection is the one sorting. The sorter sends each
+camera at most 4 times a second, 640 px on its longest side, and the state every second.
+
+A collection is watchable while the sorter's last report (within 45 s) names it. Pages open
+`GET /api/collections/:id/live` (server-sent events: `state`, `frame` with the channel to
+fetch from `.../live/frames/:channel`, and `ended`); it answers 409 when the collection
+isn't sorting, 404 to anyone who can't see it. A page stops watching while it's hidden, so a
+forgotten tab doesn't keep the sorter streaming.
+
 ```sh
 curl -X PUT https://lego.n8p.xyz/api/push/collections/1 -H "Authorization: Bearer $KEY" \
   -H 'Content-Type: application/json' -d '{"name":"Sam’s LEGO"}'

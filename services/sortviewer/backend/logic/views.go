@@ -29,20 +29,46 @@ func (s *Service) Access(ctx context.Context, sess Session, collectionID int64) 
 
 // Collections are the ones the session may see.
 func (s *Service) Collections(ctx context.Context, sess Session) ([]Collection, error) {
-	if sess.Admin() {
-		return s.store.ListCollections(ctx, 0)
-	}
-	if sess.ViewerID == 0 {
+	var cols []Collection
+	var err error
+	switch {
+	case sess.Admin():
+		cols, err = s.store.ListCollections(ctx, 0)
+	case sess.ViewerID == 0:
 		return []Collection{}, nil
+	default:
+		cols, err = s.store.ListCollections(ctx, sess.ViewerID)
 	}
-	return s.store.ListCollections(ctx, sess.ViewerID)
+	for i := range cols {
+		cols[i].Live = s.Live.IsLive(cols[i].ID)
+	}
+	return cols, err
 }
 
 func (s *Service) Collection(ctx context.Context, sess Session, id int64) (Collection, error) {
 	if err := s.Access(ctx, sess, id); err != nil {
 		return Collection{}, err
 	}
-	return s.store.GetCollection(ctx, id)
+	col, err := s.store.GetCollection(ctx, id)
+	col.Live = err == nil && s.Live.IsLive(id)
+	return col, err
+}
+
+// WatchLive starts a page watching a collection sort, if the session may see it and
+// it's being sorted now (live.go).
+func (s *Service) WatchLive(ctx context.Context, sess Session, id int64) (<-chan LiveEvent, func(), error) {
+	if err := s.Access(ctx, sess, id); err != nil {
+		return nil, nil, err
+	}
+	return s.Live.Watch(id)
+}
+
+// LiveFrame is a camera's newest picture of a collection sorting now.
+func (s *Service) LiveFrame(ctx context.Context, sess Session, id int64, channel string) ([]byte, error) {
+	if err := s.Access(ctx, sess, id); err != nil {
+		return nil, err
+	}
+	return s.Live.Frame(id, channel)
 }
 
 // PlanView is a collection's sorting plan with each bin's pieces so far.

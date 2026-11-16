@@ -29,7 +29,9 @@ type Collection struct {
 	Identified int             `json:"identified"`
 	Unknown    int             `json:"unknown"`
 	// Sorting: a run into it is on now.
-	Sorting     bool       `json:"sorting"`
+	Sorting bool `json:"sorting"`
+	// Live: it's sorting now and the sorter is in touch, so it can be watched.
+	Live        bool       `json:"live"`
 	LastPieceAt *time.Time `json:"last_piece_at,omitempty"`
 }
 

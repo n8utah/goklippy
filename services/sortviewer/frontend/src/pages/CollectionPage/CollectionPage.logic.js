@@ -8,11 +8,14 @@ import {
   listParts,
   listPieces,
   listSets,
+  liveFrameURL,
   watchCollection,
+  watchLive,
 } from '@/helpers/api';
 
 export const TABS = [
   { id: 'live', label: 'Live' },
+  { id: 'watch', label: 'Watch' },
   { id: 'plan', label: 'Plan' },
   { id: 'parts', label: 'Parts' },
   { id: 'unknowns', label: 'Unknowns' },
@@ -247,4 +250,116 @@ export function coverText(set, any) {
     );
   }
   return parts.join(' · ');
+}
+
+/** The cameras on the Watch tab, in the order pieces go through them. */
+export const WATCH_CAMERAS = [
+  { id: 'c2', label: 'C2', name: 'Spreading them out' },
+  { id: 'c3', label: 'C3', name: 'Lining them up' },
+  { id: 'c4', label: 'C4', name: 'Photographed and named' },
+];
+const FEED_SHOWN = 30;
+
+/**
+ * The Watch tab: the sort as it happens, while the collection is being sorted. The page
+ * watching is what makes the sorter send anything, so it stops watching while the tab
+ * is hidden. Each camera's picture is fetched when the stream says there's a newer one
+ * (one at a time, the last one shown let go), into the <img> registered for it.
+ */
+export function useWatch(id, live) {
+  // watching once the stream has said anything; ended when it says sorting stopped
+  // (until it says something again).
+  const [status, setStatus] = useState('connecting');
+  const [state, setState] = useState(null);
+  const [feed, setFeed] = useState([]);
+  const [hidden, setHidden] = useState(() => document.hidden);
+  const imgs = useRef({});
+  const loading = useRef({}); // channel: { busy, again, url }
+
+  useEffect(() => {
+    const onVisibility = () => setHidden(document.hidden);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  useEffect(() => {
+    if (!live || hidden) return undefined;
+    let stopped = false;
+    const slots = loading.current;
+    const load = async (channel) => {
+      const slot = (slots[channel] ??= {});
+      if (slot.busy) {
+        slot.again = true;
+        return;
+      }
+      slot.busy = true;
+      try {
+        do {
+          slot.again = false;
+          const res = await fetch(liveFrameURL(id, channel), { cache: 'no-store' });
+          if (!res.ok || stopped) break;
+          const url = URL.createObjectURL(await res.blob());
+          const img = imgs.current[channel];
+          if (!img || stopped) {
+            URL.revokeObjectURL(url);
+            break;
+          }
+          img.src = url;
+          await img.decode().catch(() => {});
+          if (slot.url) URL.revokeObjectURL(slot.url);
+          slot.url = url;
+        } while (slot.again && !stopped);
+      } catch {
+        // the next frame tries again
+      }
+      slot.busy = false;
+    };
+    const stop = watchLive(
+      id,
+      (e) => {
+        if (e.type === 'state' && e.state) {
+          setStatus('watching');
+          setState(e.state);
+          setFeed((list) => {
+            const fresh = (e.state.recent ?? []).filter((p) => !list.some((q) => q.id === p.id));
+            return fresh.length ? [...fresh, ...list].slice(0, FEED_SHOWN) : list;
+          });
+        } else if (e.type === 'frame' && e.channel) {
+          setStatus('watching');
+          load(e.channel);
+        } else if (e.type === 'ended') {
+          setStatus('ended');
+          stop();
+        }
+      },
+      () => setStatus('ended'),
+    );
+    return () => {
+      stopped = true;
+      stop();
+      for (const slot of Object.values(slots)) {
+        if (slot.url) URL.revokeObjectURL(slot.url);
+      }
+      loading.current = {};
+    };
+  }, [id, live, hidden]);
+
+  return {
+    status,
+    state,
+    feed,
+    /** Registers a camera's <img>: ref={watch.frameRef('c2')}. */
+    frameRef: (channel) => (el) => {
+      imgs.current[channel] = el;
+    },
+  };
+}
+
+/** A duration for people: "45 s", "2.2 min", "1 h 05 min". */
+export function formatDuration(ms) {
+  const s = ms / 1000;
+  if (s < 90) return `${Math.round(s)} s`;
+  if (s < 3600) return `${(s / 60).toFixed(1)} min`;
+  const h = Math.floor(s / 3600);
+  return `${h} h ${String(Math.round((s % 3600) / 60)).padStart(2, '0')} min`;
 }

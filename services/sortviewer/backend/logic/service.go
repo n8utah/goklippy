@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -55,14 +56,24 @@ type Service struct {
 	store   Store
 	dataDir string
 	Events  *Hub
+	Live    *Live // the sort as it happens, while someone watches (live.go)
 	logins  *loginLimiter
 	now     func() time.Time
 	sets    *sets // nil until UseSets
+
+	keysMu sync.Mutex
+	keysOK map[string]time.Time // push keys that checked out, and when (CheckAPIKey)
 }
 
 // NewService keeps photos under dataDir/photos.
 func NewService(store Store, dataDir string) *Service {
-	return &Service{store: store, dataDir: dataDir, Events: NewHub(), logins: newLoginLimiter(), now: time.Now}
+	s := &Service{store: store, dataDir: dataDir, Events: NewHub(), logins: newLoginLimiter(), now: time.Now,
+		keysOK: map[string]time.Time{}}
+	// Pages showing a collection hear when it starts or stops being watchable.
+	s.Live = NewLive(func() time.Time { return s.now() }, func(id int64) {
+		s.Events.Publish(Event{Type: "live", CollectionID: id})
+	})
+	return s
 }
 
 // PhotoPath is a stored photo's file, refusing paths outside the photos folder.

@@ -31,6 +31,8 @@ func (a *API) Register(r *gin.Engine, ui gin.HandlerFunc) {
 	view.GET("/collections/:id/sets/:set", a.getSet)
 	view.GET("/collections/:id/events", a.events)
 	view.GET("/photos/:piece", a.photo)
+	view.GET("/collections/:id/live", a.watchLive)
+	view.GET("/collections/:id/live/frames/:channel", a.liveFrame)
 
 	admin := r.Group("/api/admin", a.requireSession, a.requireAdmin)
 	admin.GET("/viewers", a.listViewers)
@@ -54,6 +56,9 @@ func (a *API) Register(r *gin.Engine, ui gin.HandlerFunc) {
 	push.PUT("/runs/:id", a.pushRun)
 	push.PUT("/pieces/:id", a.pushPiece)
 	push.PUT("/pieces/:id/photo", a.pushPhoto)
+	push.POST("/live", a.pushLiveReport)
+	push.PUT("/live/:collection/state", a.pushLiveState)
+	push.PUT("/live/:collection/frames/:channel", a.pushLiveFrame)
 
 	r.NoRoute(ui)
 }

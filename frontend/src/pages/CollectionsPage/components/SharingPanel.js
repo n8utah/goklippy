@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Share2 } from 'lucide-react';
+import { CircleAlert, CircleCheck, Eye, Share2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -37,11 +37,30 @@ export function SharingStatus({ status }) {
     );
   }
   return (
-    <span className="flex items-center gap-1.5 text-running-text">
-      <CircleCheck className="size-4" />
-      Up to date{status.last_sent ? ` · last sent ${ago(status.last_sent)}` : ''}
+    <span className="flex flex-col gap-0.5">
+      <span className="flex items-center gap-1.5 text-running-text">
+        <CircleCheck className="size-4" />
+        Up to date{status.last_sent ? ` · last sent ${ago(status.last_sent)}` : ''}
+      </span>
+      <LiveLine status={status} />
     </span>
   );
+}
+
+/** Who's watching the sort live on the site, or why the site can't be told. */
+function LiveLine({ status }) {
+  if (status.live_error) {
+    return <span className="text-muted-foreground">Live watching: {status.live_error}</span>;
+  }
+  if (status.live_watchers > 0) {
+    return (
+      <span className="flex items-center gap-1.5 text-running-text">
+        <Eye className="size-4" />
+        {status.live_watchers === 1 ? '1 person' : `${status.live_watchers} people`} watching live
+      </span>
+    );
+  }
+  return null;
 }
 
 /**

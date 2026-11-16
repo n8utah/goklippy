@@ -5,11 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/helpers/session';
 import { cn } from '@/lib/utils';
 
-import { TABS, useCollectionPage, useSets } from './CollectionPage.logic';
+import { TABS, useCollectionPage, useSets, useWatch } from './CollectionPage.logic';
 import PartsView from './components/PartsView';
 import PieceTile from './components/PieceTile';
 import PlanView from './components/PlanView';
 import SetsView from './components/SetsView';
+import WatchView from './components/WatchView';
 
 function Stat({ label, value }) {
   return (
@@ -41,6 +42,7 @@ const CollectionPage = () => {
   const logic = useCollectionPage(id, tab);
   const sets = useSets(id, tab === 'sets');
   const col = logic.collection;
+  const watch = useWatch(id, tab === 'watch' && Boolean(col?.live));
 
   if (!TABS.some((t) => t.id === tab)) return <Navigate to={`/c/${id}`} replace />;
   if (logic.error === 'notfound') {
@@ -68,6 +70,14 @@ const CollectionPage = () => {
         <h1 className="flex flex-wrap items-center gap-2 font-display text-2xl font-semibold">
           {col?.name ?? '…'}
           {col?.sorting && <Badge variant="running">Sorting now</Badge>}
+          {col?.live && tab !== 'watch' && (
+            <Link
+              to={`/c/${id}/watch`}
+              className="rounded-md bg-primary px-2.5 py-1 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Watch it live
+            </Link>
+          )}
         </h1>
         {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
       </div>
@@ -81,7 +91,7 @@ const CollectionPage = () => {
       )}
 
       <nav className="flex gap-1 overflow-x-auto border-b border-border" aria-label="Views">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.id !== 'watch' || col?.live || tab === 'watch').map((t) => (
           <NavLink
             key={t.id}
             to={t.id === 'live' ? `/c/${id}` : `/c/${id}/${t.id}`}
@@ -115,6 +125,7 @@ const CollectionPage = () => {
           />
         </section>
       )}
+      {tab === 'watch' && <WatchView watch={watch} live={Boolean(col?.live)} />}
       {tab === 'plan' && <PlanView view={logic.plan} />}
       {tab === 'parts' && <PartsView parts={logic.parts} />}
       {tab === 'sets' && <SetsView sets={sets} />}
