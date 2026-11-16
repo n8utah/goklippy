@@ -529,8 +529,9 @@ export function getSorterCameraPreviewStatus(device) {
   return getJSON(`/api/v1/sorter/cameras/preview/status?device=${encodeURIComponent(device)}`);
 }
 
-export function sorterCameraStreamURL(channel) {
-  return `${API_BASE_URL}/api/v1/sorter/cameras/${channel}/stream`;
+/** The channel's newest camera frame, a JPEG. */
+export function sorterCameraFrameURL(channel) {
+  return `${API_BASE_URL}/api/v1/sorter/cameras/${channel}/frame`;
 }
 
 export function listSorterShakes() {

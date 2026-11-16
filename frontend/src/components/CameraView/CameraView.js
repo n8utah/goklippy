@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { getSorterCameraObservation, sorterCameraStreamURL } from '@/helpers/api';
+import { getSorterCameraObservation } from '@/helpers/api';
 import { useWake } from '@/helpers/wake';
 import { cn } from '@/lib/utils';
 
 import styles from './CameraView.module.css';
 import { dragTo, handles, hitTest, wheel as wheelZones } from './ringEdit';
+import { useCameraFrames } from './useCameraFrames';
 
 const OVERLAY_POLL_MS = 250;
 const STREAM_RETRY_MS = 3000;
@@ -74,38 +75,31 @@ const CameraView = ({
     return () => clearTimeout(timer);
   }, [failed]);
 
-  // A live stream fires load once, so a size changed mid-stream (a new camera size)
-  // is caught by looking again every second.
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const img = imgRef.current;
-      if (!img?.naturalWidth) return;
-      setSize((cur) =>
-        cur?.w === img.naturalWidth && cur?.h === img.naturalHeight
-          ? cur
-          : { w: img.naturalWidth, h: img.naturalHeight },
-      );
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  useCameraFrames(imgRef, channel, { enabled: !failed, attempt, onFail: () => setFailed(true) });
 
+  // What perception sees, asked for again once the last answer is in (never two at
+  // once, so a slow server can't pile requests up), and not while the page is hidden.
   useEffect(() => {
     if (!showOverlay) return undefined;
     let cancelled = false;
-    const poll = () =>
-      getSorterCameraObservation(channel).then(
-        (data) => {
+    let timer;
+    const poll = async () => {
+      if (!document.hidden) {
+        try {
+          const data = await getSorterCameraObservation(channel);
           if (cancelled) return;
           setObservation(data.observation);
           setSavedZones(data.zones ?? null);
-        },
-        () => {},
-      );
+        } catch {
+          // Tried again next time.
+        }
+      }
+      if (!cancelled) timer = setTimeout(poll, OVERLAY_POLL_MS);
+    };
     poll();
-    const timer = setInterval(poll, OVERLAY_POLL_MS);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
   }, [channel, showOverlay]);
 
@@ -259,16 +253,15 @@ const CameraView = ({
       onPointerLeave={() => !drag && setHover(null)}
       onDoubleClick={onDoubleClick}
     >
+      {/* Frames are put in by useCameraFrames; each new one may be a new size. */}
       <img
-        key={attempt}
         ref={imgRef}
-        src={`${sorterCameraStreamURL(channel)}${attempt ? `?n=${attempt}` : ''}`}
         alt={`Camera over ${channel}`}
         className={styles.stream}
-        onLoad={(e) =>
-          setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
-        }
-        onError={() => setFailed(true)}
+        onLoad={(e) => {
+          const { naturalWidth: fw, naturalHeight: fh } = e.currentTarget;
+          setSize((cur) => (cur?.w === fw && cur?.h === fh ? cur : { w: fw, h: fh }));
+        }}
       />
       {showOverlay && (
         <svg viewBox={`0 0 ${w} ${h}`} className={styles.overlay} preserveAspectRatio="none">
