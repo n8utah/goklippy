@@ -4,6 +4,7 @@ Priority: high
 Added: 2026-11-14 by Nate
 Owner: Nate + Claude
 Started: 2026-11-14
+Finished: 2026-11-15
 
 ## Why
 On a short run (2026-11-14, run 1) about half of C4's drops were several pieces at once
@@ -41,10 +42,13 @@ Three causes in the feeder:
 - [x] Blobs of several pieces are shaken at the precise zone (Settings: how many shakes,
       how far), then nudged off with the careful exit pulse.
 - [x] Feeder tests cover the above.
-- [ ] Tried on the machine: fewer doubles into C4.
+- [x] Tried on the machine: fewer doubles into C4.
 
 ## Notes
 - 2026-11-14, Nate: do A, B and C now; test on the machine, then decide on D.
 - 2026-11-14, progress: built in `7eb9e1a`; `exitClearDeg.c3` set to 3 on the machine (the
   settings before are in the session scratchpad). Fresh reloaded the backend. Left: a run on
   the machine, counting doubles into C4 as before (C4 journeys starting together).
+- 2026-11-15, done: Nate confirmed it on the machine. Built in `7eb9e1a` (A–C) and `457ca27`
+  (go by a blob's front, nudge long blobs off carefully). D (turning C3 while C2 drops) was not
+  needed for now; add it as its own item if doubles come back.
