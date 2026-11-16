@@ -2,6 +2,8 @@
 
 Priority: medium
 Added: 2026-11-13 by Nate
+Owner: Nate + Claude
+Started: 2026-11-15
 
 ## Why
 The only ways to get a sorting profile are the two built-ins (by part type, by colour) or a
@@ -29,7 +31,7 @@ change sorting rules on the sorter itself, and start them from lists that alread
   each set still fills separately, into its own bins. Uses a Rebrickable API key entered once
   per sorter in Settings.
 - Other imports (BrickLink/BrickStore files, Rebrickable CSVs, from a collection) and JSON
-  export/import are in [sorting-rule-imports](sorting-rule-imports.md).
+  export/import are in [sorting-rule-imports](../todo/sorting-rule-imports.md).
 - The viewer site shows a shared collection's rules as well as its categories: each rule's
   name and description, not its part lists.
 - Uploading a Hive profile that was edited here makes a second profile; the edited one is
