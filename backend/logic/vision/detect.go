@@ -24,6 +24,10 @@ type BackgroundDetector struct {
 	Threshold int
 	// MinArea is the smallest piece, in full-resolution pixels.
 	MinArea int
+	// MinSide is the thinnest a piece can be, in full-resolution pixels: a blob
+	// narrower than this across is an edge of the machine a few pixels off from the
+	// empty-channel picture (a rim, a spoke), not a piece. 0 keeps every blob.
+	MinSide int
 	// Step samples every Step-th pixel in x and y (1 = every pixel).
 	Step int
 	// Learn blends this share of each unchanged pixel into the background per
@@ -45,7 +49,7 @@ type BackgroundDetector struct {
 
 // NewBackgroundDetector has defaults for a 640×480 camera.
 func NewBackgroundDetector() *BackgroundDetector {
-	return &BackgroundDetector{Threshold: 90, MinArea: 120, Step: 2, Learn: 0.01, lastView: -1}
+	return &BackgroundDetector{Threshold: 90, MinArea: 120, MinSide: 6, Step: 2, Learn: 0.01, lastView: -1}
 }
 
 // HasBackground reports whether an empty-channel picture (or a set of them all the
@@ -158,6 +162,9 @@ func (d *BackgroundDetector) blobs(changed []bool, step int, origin image.Point)
 		}
 		if cells < minCells {
 			continue
+		}
+		if thin := min(x2-x1+1, y2-y1+1) * step; thin < d.MinSide {
+			continue // a line, not a piece
 		}
 		out = append(out, Box{
 			X1: origin.X + x1*step, Y1: origin.Y + y1*step,

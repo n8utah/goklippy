@@ -172,3 +172,39 @@ func TestTrackerColorGateKeepsIdsApart(t *testing.T) {
 	tr.Update(z, &obs, [][3]float64{{0.5, 0.5, 0.5}})
 	assert.NotEqual(t, first, obs.Pieces[0].TrackID)
 }
+
+// A machine edge a few pixels off from the empty-channel picture shows as a thin line
+// of change; however long, it isn't a piece (C4's rim at the frame's edge once raised
+// an incident for a piece that wasn't there).
+func TestBackgroundDetectorSkipsThinLines(t *testing.T) {
+	z := testZones()
+	d := NewBackgroundDetector()
+	d.SetBackground(blankFrame())
+	frame := blankFrame()
+	c := at(250, 4)
+	cx, cy := (c.X1+c.X2)/2, (c.Y1+c.Y2)/2
+	paint(frame, Box{cx - 30, cy - 2, cx + 30, cy + 2}, red) // 60 x 4: a line
+	paint(frame, at(300, 24), red)                           // a piece
+	boxes, err := d.Detect(frame, z)
+	require.NoError(t, err)
+	require.Len(t, boxes, 1)
+	assert.InDelta(t, 300, Observe(z, boxes, 4, time.Now()).Pieces[0].Angle, 3)
+}
+
+// A box stretched along the ring reaches the exit well before its middle does.
+func TestObserveFrontOfALongBox(t *testing.T) {
+	z := testZones() // exit from 330°
+	short := at(300, 20)
+	a, b := at(280, 20), at(310, 20)
+	long := Box{min(a.X1, b.X1), min(a.Y1, b.Y1), max(a.X2, b.X2), max(a.Y2, b.Y2)}
+	obs := Observe(z, []Box{short}, 4, time.Now())
+	require.Len(t, obs.Pieces, 1)
+	assert.Less(t, obs.Pieces[0].AheadDeg, 6.0, "a small piece: front and middle about alike")
+
+	obs = Observe(z, []Box{long}, 4, time.Now())
+	require.Len(t, obs.Pieces, 1)
+	p := obs.Pieces[0]
+	assert.InDelta(t, 35, p.ForwardToExit, 3, "its middle near 295°")
+	assert.Greater(t, p.AheadDeg, 15.0, "its front reaches 310° or so")
+	assert.Less(t, p.FrontToExit(), 20.0)
+}

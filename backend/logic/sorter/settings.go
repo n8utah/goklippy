@@ -218,6 +218,12 @@ type FeederSettings struct {
 	// rotor) before it's nudged off carefully. 0 doesn't shake.
 	ClumpShakes   int     `json:"clumpShakes"`
 	ClumpShakeDeg float64 `json:"clumpShakeDeg"`
+	// LongAheadDeg: a blob whose front is more than this far ahead of its middle round
+	// the ring is long for one piece, and often two or three touching in a line (seen
+	// as one). Like a clump it's nudged off the exit a careful pulse at a time rather
+	// than taken to the fall point in one move, which sent the ones behind off with
+	// the front one. 0: off.
+	LongAheadDeg float64 `json:"longAheadDeg"`
 	// ExitAccel: exit pulses, C1's nudges and back-offs ramp up and down at this many
 	// rpm per second (0 starts them at full speed): smooth moves carry pieces, jerky
 	// ones make them slide.
@@ -459,7 +465,7 @@ func DefaultMachineSettings() MachineSettings {
 		Feeder: FeederSettings{
 			DropPauseMs:  100,
 			ExitPulseDeg: 2, ExitPauseMs: 100, ExitAccel: 30,
-			ClumpShakes: 3, ClumpShakeDeg: 8,
+			ClumpShakes: 3, ClumpShakeDeg: 8, LongAheadDeg: 10,
 			// On for C3 too: with it off, a piece riding close behind C3's lead went onto
 			// C4 with it about half the time (2026-11-14).
 			ExitClearDeg:      map[string]float64{"c2": 2, "c3": 3},

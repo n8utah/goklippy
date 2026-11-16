@@ -104,7 +104,10 @@ type feederChannel struct {
 	doing string
 	// odometer: how far the channel has turned forward; watch: its leading piece
 	// against it, to tell a piece the channel can't move (feeder_held.go).
-	odometer  float64
+	odometer float64
+	// travel: how far it has really got round, back moves taken off: a shake (back,
+	// then as far forward) leaves it where it was.
+	travel    float64
 	watch     heldWatch
 	landWatch heldWatch // the newest piece where pieces land, when not the lead
 	stuck     bool
@@ -191,11 +194,12 @@ func (f *Feeder) BackedUp(ch Channel) bool {
 
 // noteWaiting updates a channel's back-pressure from its newest observation; canGo is
 // whether its exit may push now. It returns whether the channel is backed up.
-func (f *Feeder) noteWaiting(ch Channel, obs vision.Observation, canGo bool, now time.Time, fs FeederSettings) bool {
+func (f *Feeder) noteWaiting(ch Channel, obs vision.Observation, canGo bool, now time.Time, settings MachineSettings) bool {
+	fs := settings.Feeder
 	c := f.channels[ch]
 	waiting := c.stuck
 	if !waiting && obs.Valid && !canGo {
-		if lead, ok := obs.Leading(); ok && (lead.Zone == vision.ZonePrecise || lead.Zone == vision.ZoneExit) {
+		if lead, ok := obs.Leading(); ok && atExit(lead, settings, ch) {
 			waiting = true
 		}
 	}
@@ -237,6 +241,7 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 		if deg > 0 {
 			c.odometer += deg
 		}
+		c.travel += deg
 		moves = append(moves, FeederMove{Channel: ch, Degrees: deg, Rpm: rpm, Accel: accel, Kind: kind})
 	}
 	// add moves at the channel's own speed (exit pulses, careful); carry at its carry
@@ -260,12 +265,12 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 
 	// Back-pressure, downstream first: C3 waits on the platter, C2 on C3, C1 on C2.
 	// The short hold after a fall is pacing, not a hold-up, so it doesn't count.
-	c3BackedUp := f.noteWaiting(ChannelC3, in.C3, in.PlatterReady, in.Now, fs)
+	c3BackedUp := f.noteWaiting(ChannelC3, in.C3, in.PlatterReady, in.Now, settings)
 	// C3 can take pieces: seen lately, its drop zone clear, not backed up. (Mid-move
 	// or holding after a fall it's busy, not held up.)
 	c3Accepting := in.C3.Valid && in.Now.Sub(in.C3.At) <= stale(fs) && (!in.C3.InDrop || c3Hanging) && !c3BackedUp &&
 		!full(fs, ChannelC3, in.C3)
-	c2BackedUp := f.noteWaiting(ChannelC2, in.C2, c3Accepting, in.Now, fs)
+	c2BackedUp := f.noteWaiting(ChannelC2, in.C2, c3Accepting, in.Now, settings)
 
 	// C3 into the platter, then C2 into C3.
 	c3Ready := c3Accepting && f.fresh(in.C3, ChannelC3, in.Now, fs) &&
@@ -322,7 +327,7 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 			// would push C3's own lead onto a platter that can't take it.
 			set(TimeBusy, "a piece hangs on the exit: turning C3 to pull it off")
 			c3Lead, c3Has := in.C3.Leading()
-			c3AtExit := c3Has && (c3Lead.Zone == vision.ZonePrecise || c3Lead.Zone == vision.ZoneExit)
+			c3AtExit := c3Has && atExit(c3Lead, settings, ChannelC3)
 			if !in.Now.Before(f.channels[ChannelC3].busyUntil) && (!c3AtExit || in.PlatterReady) {
 				add(ChannelC3, "free", freeTurnDeg, fs.ExitPauseMs)
 				c.watch.turns++
@@ -353,7 +358,7 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 			set(TimeMoving, f.exitMove(step.ch, c, step.obs, lead, settings, add, jerk))
 			continue
 		}
-		if lead.Zone == vision.ZonePrecise || lead.Zone == vision.ZoneExit {
+		if atExit(lead, settings, step.ch) {
 			switch {
 			case in.Now.Before(c.holdUntil):
 				set(TimeBusy, "a piece just dropped: letting it land")
@@ -369,11 +374,14 @@ func (f *Feeder) Step(in FeederInput, settings MachineSettings) []FeederMove {
 			}
 			continue
 		}
-		// Short of the exit: stop the leading piece at the precise zone's start, in one
-		// move at the carry speed (however far). A piece already just short of it creeps
-		// in by an exit pulse, so it can't be left needing a move too small to make.
-		// While the platter is busy C3 stops it further back.
-		clearance := lead.ForwardToExit - preciseWidth(settings, step.ch)
+		// Short of the exit: stop the leading piece's front edge at the precise zone's
+		// start, in one move at the carry speed (however far). Its front, not its middle:
+		// several pieces in a line round the ring are seen as one long blob, and carrying
+		// its middle there ran the front of the line over the exit, dropping a handful at
+		// once. From there the exit takes them a pulse at a time. A piece already just
+		// short of it creeps in by an exit pulse, so it can't be left needing a move too
+		// small to make. While the platter is busy C3 stops it further back.
+		clearance := lead.FrontToExit() - preciseWidth(settings, step.ch)
 		if step.ch == ChannelC3 && in.PlatterBusy && fs.C3BusyStandoffDeg > 0 {
 			clearance -= fs.C3BusyStandoffDeg
 			if clearance <= 0 {
@@ -446,10 +454,13 @@ func (f *Feeder) noteLanding(ch Channel, obs vision.Observation, now time.Time) 
 		return false
 	}
 	if c.dropSince.IsZero() || p.TrackID != c.dropID || math.Abs(p.ForwardToExit-c.dropGap) >= heldMovedDeg {
-		c.dropSince, c.dropOdo, c.dropID, c.dropGap = now, c.odometer, p.TrackID, p.ForwardToExit
+		c.dropSince, c.dropOdo, c.dropID, c.dropGap = now, c.travel, p.TrackID, p.ForwardToExit
 		return false
 	}
-	return now.Sub(c.dropSince) >= hangingAfter && c.odometer-c.dropOdo >= hangingAfterDeg
+	// By how far it has really got round: shaking a clump at the exit back and forth
+	// turns it plenty without moving anything on, and a piece backed up into the
+	// landing area behind it isn't hanging.
+	return now.Sub(c.dropSince) >= hangingAfter && c.travel-c.dropOdo >= hangingAfterDeg
 }
 
 // Doing is what ch is doing now, in a few words ("carrying a piece to the exit",
@@ -495,7 +506,7 @@ func (f *Feeder) noteFall(ch Channel, c *feederChannel, obs vision.Observation, 
 	}
 	c.exitPending = false
 	lead, ok := obs.Leading()
-	left := atExitCount(obs)
+	left := atExitCount(obs, settings, ch)
 	fell := left < c.atExit || !ok || lead.ForwardToExit > c.leadForward+fallBackDeg
 	if c.pushDeg > 0 {
 		f.learnFall(ch, settings, c.pushDeg-c.leadForward, c.pushAimed, fell)
@@ -537,7 +548,7 @@ func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, 
 	settings MachineSettings, add, jerk func(Channel, string, float64, int)) string {
 	fs := settings.Feeder
 	push := func(deg float64, aimed bool) {
-		c.atExit, c.leadForward, c.exitPending = atExitCount(obs), lead.ForwardToExit, true
+		c.atExit, c.leadForward, c.exitPending = atExitCount(obs, settings, ch), lead.ForwardToExit, true
 		c.pushDeg, c.pushAimed = deg, aimed
 		add(ch, "exit", deg, fs.ExitPauseMs)
 	}
@@ -560,10 +571,11 @@ func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, 
 	}
 	next, hasNext := 0.0, len(obs.Pieces) > 1
 	if hasNext {
-		next = obs.Pieces[1].ForwardToExit
+		next = obs.Pieces[1].FrontToExit() // its front is what comes too close
 	}
 	full, aimed := fs.ExitPulseDeg, false
-	if !obs.Several(lead) {
+	long := fs.LongAheadDeg > 0 && lead.AheadDeg > fs.LongAheadDeg
+	if !obs.Several(lead) && !long {
 		if aim := lead.ForwardToExit + f.fallPoint(ch, settings); aim > fs.ExitPulseDeg {
 			full, aimed = aim, true
 		}
@@ -585,6 +597,8 @@ func (f *Feeder) exitMove(ch Channel, c *feederChannel, obs vision.Observation, 
 	switch {
 	case obs.Several(lead):
 		return "several pieces together: nudging them off one at a time"
+	case long:
+		return "a long piece, or several in a line: nudging it off carefully"
 	case aimed && st.deg == full:
 		return "taking a piece to where pieces fall off"
 	case lead.ForwardToExit > 0:
@@ -604,14 +618,23 @@ func (f *Feeder) TakeSeveralFell(ch Channel) bool {
 	return true
 }
 
-func atExitCount(obs vision.Observation) int {
+func atExitCount(obs vision.Observation, settings MachineSettings, ch Channel) int {
 	n := 0
 	for _, p := range obs.Pieces {
-		if p.Zone == vision.ZonePrecise || p.Zone == vision.ZoneExit {
+		if atExit(p, settings, ch) {
 			n++
 		}
 	}
 	return n
+}
+
+// atExit reports a piece at ch's exit: in its precise zone or the opening. By its front
+// edge, so a long blob (often several pieces in a line) is handled by the exit, a
+// pulse at a time and only when the channel ahead can take it, as soon as its front
+// gets there, not once its middle does.
+func atExit(p vision.PieceObs, settings MachineSettings, ch Channel) bool {
+	return p.Zone == vision.ZonePrecise || p.Zone == vision.ZoneExit ||
+		p.FrontToExit() <= preciseWidth(settings, ch)
 }
 
 // preciseWidth is the channel's precise zone width; the feeder only knows zones

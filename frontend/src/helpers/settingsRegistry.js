@@ -88,6 +88,16 @@ export const SETTING_SECTIONS = [
         keywords: 'clump together several double separate shake',
       },
       {
+        key: 'feeder.longAheadDeg',
+        label: 'Long blob at the exit',
+        unit: '°',
+        step: 1,
+        min: 0,
+        max: 90,
+        help: 'Two or three pieces touching in a line look like one long piece. A blob whose front is more than this far ahead of its middle round the ring is nudged off the exit carefully, like a clump, so the front piece can go alone, instead of being taken to where pieces fall in one move. Lower catches shorter lines but slows long single pieces. 0: off.',
+        keywords: 'long line touching several double exit careful',
+      },
+      {
         key: 'feeder.exitPauseMs',
         label: 'Pause after an exit pulse',
         unit: 'ms',

@@ -172,3 +172,18 @@ func TestC3StandsOffWhileThePlatterIsBusy(t *testing.T) {
 	in.C3, in.PlatterBusy = obs(now, piece(vision.ZoneNone, 40)), true
 	assert.InDelta(t, 19, movesByChannel(NewFeeder().Step(in, s))[ChannelC3].Degrees, 1e-9, "carried to the stand-off")
 }
+
+// A piece in the landing area that stays put while the channel shakes a clump at its
+// exit back and forth hasn't been turned under: it's backed up there, not hanging off
+// the channel above, so that one mustn't drop another onto it.
+func TestShakingIsNotTurningUnderALandedPiece(t *testing.T) {
+	f := NewFeeder()
+	now := time.Now()
+	landed := obs(now, vision.PieceObs{Zone: vision.ZoneDrop, ForwardToExit: 200, TrackID: 7})
+	c := f.channels[ChannelC3]
+	assert.False(t, f.noteLanding(ChannelC3, landed, now))
+	c.odometer += 24 // three 8° shakes: forward halves only
+	assert.False(t, f.noteLanding(ChannelC3, landed, now.Add(4*time.Second)), "shaken, not turned on")
+	c.travel += 24
+	assert.True(t, f.noteLanding(ChannelC3, landed, now.Add(5*time.Second)), "turned 24° on under it: hanging")
+}

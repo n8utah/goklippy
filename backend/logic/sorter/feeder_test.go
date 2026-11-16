@@ -274,3 +274,44 @@ func TestFeederShakesC1WhenC2StaysEmpty(t *testing.T) {
 	step(now, obs(now))
 	assert.Equal(t, "bulk", step(later, obs(later))[ChannelC1].Kind, "off: nudges only")
 }
+
+// Several pieces in a line round the ring are seen as one long blob, its middle far
+// behind its front. It's carried until its front, not its middle, reaches the precise
+// zone, and from there the exit takes it: a pulse at a time, only when the channel
+// ahead can take a piece.
+func TestFeederCarriesALongLineByItsFront(t *testing.T) {
+	now := time.Now()
+	line := vision.PieceObs{Zone: vision.ZoneDrop, ForwardToExit: 185, AheadDeg: 60, Parts: 2}
+	moves := movesByChannel(NewFeeder().Step(FeederInput{Now: now, C2: obs(now, line), C3: obs(now)}, feederSettings()))
+	assert.Equal(t, "drop", moves[ChannelC2].Kind)
+	assert.InDelta(t, 110, moves[ChannelC2].Degrees, 1e-9, "its front 125° short, less the 15° precise zone; not its middle's 170°")
+
+	// Its front there: at the exit, though its middle is far back.
+	there := vision.PieceObs{Zone: vision.ZoneNone, ForwardToExit: 75, AheadDeg: 60, Parts: 2}
+	moves = movesByChannel(NewFeeder().Step(FeederInput{Now: now, C2: obs(now, there), C3: obs(now, piece(vision.ZoneDrop, 90))}, feederSettings()))
+	assert.Equal(t, "back", moves[ChannelC2].Kind, "C3's drop zone is busy: rather than carrying the line in, it's shaken apart while it waits")
+	assert.Less(t, moves[ChannelC2].Degrees, 0.0)
+	s := feederSettings()
+	s.Feeder.ClumpShakes = 0
+	moves = movesByChannel(NewFeeder().Step(FeederInput{Now: now, C2: obs(now, there), C3: obs(now)}, s))
+	assert.Equal(t, FeederMove{Channel: ChannelC2, Degrees: 2, Rpm: moves[ChannelC2].Rpm, Kind: "exit"}, moves[ChannelC2],
+		"several together: an exit pulse, so they come off one at a time")
+}
+
+// Two or three pieces touching in a line are one blob, not flagged as several. Long for
+// one piece, it's nudged off a careful pulse at a time rather than taken to the fall
+// point, which sent the ones behind off with the front one.
+func TestFeederNudgesALongBlobOffCarefully(t *testing.T) {
+	s := withExit(feederSettings())
+	at := time.Now()
+	line := vision.PieceObs{Zone: vision.ZonePrecise, ForwardToExit: 12, AheadDeg: 14}
+	assert.InDelta(t, 2, c3Step(NewFeeder(), s, at, line).Degrees, 1e-9)
+	f := NewFeeder()
+	c3Step(f, s, at, line)
+	assert.Contains(t, f.Doing(ChannelC3), "in a line")
+
+	short := vision.PieceObs{Zone: vision.ZonePrecise, ForwardToExit: 12, AheadDeg: 6}
+	assert.InDelta(t, 22, c3Step(NewFeeder(), s, at, short).Degrees, 1e-9, "one piece: to the fall point")
+	s.Feeder.LongAheadDeg = 0
+	assert.InDelta(t, 22, c3Step(NewFeeder(), s, at, line).Degrees, 1e-9, "off: as before")
+}

@@ -13,6 +13,11 @@ type PieceObs struct {
 	Zone  Zone    `json:"zone"`  // the zone its center is in
 	// ForwardToExit is how far its center is short of the exit (≤ 0: in it).
 	ForwardToExit float64 `json:"forward_to_exit"`
+	// AheadDeg is how far its front edge, the part of its box furthest forward, is
+	// ahead of its center round the ring: a lot for a long piece, or several lying in
+	// a line along the ring, which reach the exit long before their middle does. Taken
+	// from the box, so it errs long. 0: front and center alike.
+	AheadDeg float64 `json:"ahead_deg,omitempty"`
 	// TrackID is the tracker's id for it, steady across frames; 0 until tracked.
 	TrackID int `json:"track_id,omitempty"`
 	// Parts is how many of the detector's boxes it was joined from (Merged): more than
@@ -119,13 +124,33 @@ func Observe(z ChannelZones, boxes []Box, mergeGap int, at time.Time) Observatio
 			}
 		}
 		angle := z.AngleOf(center)
+		forward := z.ForwardToExit(angle)
 		obs.Pieces = append(obs.Pieces, PieceObs{
-			Box: m.Box, Angle: angle, Zone: z.ZoneAt(angle), ForwardToExit: z.ForwardToExit(angle),
-			Parts: len(m.Parts),
+			Box: m.Box, Angle: angle, Zone: z.ZoneAt(angle), ForwardToExit: forward,
+			AheadDeg: aheadOfCenter(z, m.Box, angle), Parts: len(m.Parts),
 		})
 	}
 	sort.SliceStable(obs.Pieces, func(i, j int) bool { return obs.Pieces[i].ForwardToExit < obs.Pieces[j].ForwardToExit })
 	return obs
+}
+
+// FrontToExit is how far its front edge is short of the exit (≤ 0: in it).
+func (p PieceObs) FrontToExit() float64 { return p.ForwardToExit - p.AheadDeg }
+
+// aheadOfCenter is how far forward of its center (angle) a box reaches round the ring:
+// the most any of its sample points on the channel is ahead.
+func aheadOfCenter(z ChannelZones, b Box, angle float64) float64 {
+	ahead := 0.0
+	for _, p := range b.samples() {
+		if !z.OnChannel(p) {
+			continue
+		}
+		// Under 180° forward is ahead; more is a point behind the center.
+		if d := ForwardDeg(angle, z.AngleOf(p)); d < 180 {
+			ahead = max(ahead, d)
+		}
+	}
+	return ahead
 }
 
 // MergeBoxes joins boxes that overlap or sit within gap pixels of each other

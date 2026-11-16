@@ -226,6 +226,7 @@ func (p *Perception) reconcile(ctx context.Context) {
 		if cur != nil && cur.cfg == want {
 			// Same frame size, so the step (which the background was sampled at) stays.
 			cur.detector.Threshold, cur.detector.MinArea, _ = detectorParams(cs, dw, dh)
+			cur.detector.MinSide = detectorMinSide(dw)
 			continue
 		}
 		if cur != nil {
@@ -239,6 +240,7 @@ func (p *Perception) reconcile(ctx context.Context) {
 		cctx, cancel := context.WithCancel(ctx)
 		pc := &perceptionChannel{cfg: want, cam: p.pool.acquire(want), cancel: cancel, detector: vision.NewBackgroundDetector(), tracker: vision.NewTracker()}
 		pc.detector.Threshold, pc.detector.MinArea, pc.detector.Step = detectorParams(cs, dw, dh)
+		pc.detector.MinSide = detectorMinSide(dw)
 		if views, spacing, err := p.loadViews(ch); err == nil && len(views) > 0 {
 			if err := pc.detector.SetViews(views, spacing); err != nil {
 				slog.Warn("saved empty-channel pictures not used", "channel", ch, "error", err)
@@ -281,6 +283,17 @@ func detectorParams(cs CameraSettings, w, h int) (threshold, minArea, step int) 
 		minArea = cs.MinArea
 	}
 	return threshold, minArea, step
+}
+
+// detectorMinSide is the thinnest piece for a w-wide tracked frame, scaled by width
+// from the 640x480 default: 12 px at 1280, about 2.5 mm on C4, where the smallest
+// piece (a 1x1 round plate) is some 40 px across.
+func detectorMinSide(w int) int {
+	d := vision.NewBackgroundDetector()
+	if w <= 0 {
+		return d.MinSide
+	}
+	return max(1, d.MinSide*w/detectorBaseW)
 }
 
 // mergeGap joins detections this close (pixels): one piece in two colors.

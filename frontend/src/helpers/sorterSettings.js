@@ -57,6 +57,7 @@ export const DEFAULT_SORTER_SETTINGS = {
     exitPauseMs: 100,
     clumpShakes: 3,
     clumpShakeDeg: 8,
+    longAheadDeg: 10,
     exitAccel: 30,
     exitClearDeg: { c2: 2, c3: 3 },
     c3BusyStandoffDeg: 6,
