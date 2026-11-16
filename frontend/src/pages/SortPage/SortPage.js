@@ -249,7 +249,12 @@ const SortPage = () => {
           />
         ))}
       </section>
-      <CameraFullscreen channel={logic.fullscreen} onClose={logic.closeFullscreen} />
+      <CameraFullscreen
+        channel={logic.fullscreen}
+        channels={CAMERA_CHANNELS}
+        onSwitch={logic.openFullscreen}
+        onClose={logic.closeFullscreen}
+      />
 
       <TimeSpent
         timeMs={state?.time_ms}

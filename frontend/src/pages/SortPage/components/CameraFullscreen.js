@@ -60,7 +60,7 @@ function Stage({ channel }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-2 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-3">
         <Button
           variant="secondary"
           size="icon"
@@ -88,12 +88,37 @@ function Stage({ channel }) {
   );
 }
 
+/** The other cameras, small and live: one clicked is seen big instead. */
+function Others({ channels, current, onSwitch }) {
+  const others = channels.filter((ch) => ch.id !== current.id);
+  if (!others.length) return null;
+  return (
+    <div className="flex justify-center gap-2 px-4 pb-3">
+      {others.map((ch) => (
+        <button
+          key={ch.id}
+          type="button"
+          onClick={() => onSwitch(ch.id)}
+          className="relative w-32 overflow-hidden rounded-md ring-1 ring-white/20 hover:ring-white/60 sm:w-40"
+          aria-label={`See ${ch.label} big`}
+        >
+          <CameraView channel={ch.id} compact showOverlay={false} />
+          <span className="absolute top-1 left-1 rounded bg-black/60 px-1.5 font-mono text-xs text-white">
+            {ch.label}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
  * One camera filling the screen, its zones and pieces still drawn: the wheel or a
  * pinch zooms (up to 8×), a drag pans, a double-click or double-tap zooms in there or
- * back out. Esc or × closes it.
+ * back out. The other cameras show small below it; clicking one switches to it. Esc or
+ * × closes it.
  */
-export default function CameraFullscreen({ channel, onClose }) {
+export default function CameraFullscreen({ channel, channels = [], onSwitch, onClose }) {
   return (
     <Dialog open={Boolean(channel)} onOpenChange={(open) => !open && onClose()}>
       {channel && (
@@ -123,7 +148,8 @@ export default function CameraFullscreen({ channel, onClose }) {
               </Button>
             </DialogClose>
           </div>
-          <Stage channel={channel} />
+          <Stage key={channel.id} channel={channel} />
+          {onSwitch && <Others channels={channels} current={channel} onSwitch={onSwitch} />}
         </DialogContent>
       )}
     </Dialog>
