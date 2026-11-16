@@ -41,8 +41,14 @@ func fakeViewer(t *testing.T, ready bool) *httptest.Server {
 			  {"part_num": "x99", "color_name": "Odd Glitter Mauve", "need": 1},
 			  {"part_num": "x100", "color_name": "[Unknown]", "need": 3}
 			]}`))
+		case r.URL.Path == "/api/push/sets/old-1": // a site from before set lookups
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "no such endpoint"}`))
+		case r.URL.Path == "/api/push/sets/older-1":
+			http.NotFound(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "not found"}`))
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -80,6 +86,10 @@ func TestViewerLookupSet(t *testing.T) {
 
 	_, err = share.LookupSet(ctx, "9999-1")
 	assert.ErrorIs(t, err, ErrSetNotFound)
+	_, err = share.LookupSet(ctx, "old-1")
+	assert.ErrorIs(t, err, ErrViewerTooOld)
+	_, err = share.LookupSet(ctx, "older-1")
+	assert.ErrorIs(t, err, ErrViewerTooOld)
 
 	_, err = NewSharing(&settingsOnlyShareStore{}).LookupSet(ctx, "1234-1")
 	assert.ErrorIs(t, err, ErrSharingNotSetUp)

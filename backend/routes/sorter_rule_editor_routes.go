@@ -192,7 +192,7 @@ func ruleEditorError(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, sorter.ErrNoSetSource):
 		c.JSON(http.StatusPreconditionFailed, gin.H{"error": err.Error(), "needs_source": true})
-	case errors.Is(err, sorter.ErrViewerSetsNotReady):
+	case errors.Is(err, sorter.ErrViewerSetsNotReady), errors.Is(err, sorter.ErrViewerTooOld):
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 	case errors.Is(err, sorter.ErrSetNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

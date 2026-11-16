@@ -24,6 +24,9 @@ import (
 // ErrViewerSetsNotReady is the site still downloading its set data.
 var ErrViewerSetsNotReady = errors.New("the viewer site's set data isn't ready yet; try again in a few minutes")
 
+// ErrViewerTooOld is a site from before set lookups.
+var ErrViewerTooOld = errors.New("the viewer site doesn't look sets up yet: deploy the newer sort viewer")
+
 type viewerSet struct {
 	SetNum string `json:"set_num"`
 	Name   string `json:"name"`
@@ -62,6 +65,13 @@ func (s *Sharing) LookupSet(ctx context.Context, number string) (profile.RuleSet
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotFound:
+		// A site too old to look sets up answers "no such endpoint" (or a bare 404).
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) != nil || e.Error == "" || e.Error == "no such endpoint" {
+			return profile.RuleSet{}, ErrViewerTooOld
+		}
 		return profile.RuleSet{}, ErrSetNotFound
 	case http.StatusServiceUnavailable:
 		return profile.RuleSet{}, ErrViewerSetsNotReady
