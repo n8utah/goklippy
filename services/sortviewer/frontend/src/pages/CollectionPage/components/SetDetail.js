@@ -1,3 +1,4 @@
+import { ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
@@ -91,6 +92,15 @@ export default function SetDetail({ open, detail, any, onClose }) {
                 </p>
                 <SetCover set={set} />
                 <p className="text-sm text-muted-foreground">{coverText(set, any)}</p>
+                <a
+                  href={`https://rebrickable.com/sets/${encodeURIComponent(set.set_num)}/`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex w-fit items-center gap-1 text-sm font-medium text-primary-text hover:underline"
+                >
+                  Instructions on Rebrickable{' '}
+                  <ExternalLink className="size-3.5" aria-hidden="true" />
+                </a>
               </div>
             </div>
             <div className="flex items-center gap-2">
