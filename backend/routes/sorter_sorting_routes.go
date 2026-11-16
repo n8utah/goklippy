@@ -176,6 +176,7 @@ type routeRequest struct {
 	PartID       string  `json:"part_id" binding:"required"`
 	ColorID      string  `json:"color_id"`
 	PartCategory string  `json:"part_category"`
+	PartName     string  `json:"part_name"`
 	PieceMm      float64 `json:"piece_mm"`
 }
 
@@ -187,7 +188,11 @@ func RouteSorterPiece(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "part_id is required"})
 		return
 	}
-	piece := profile.Piece{Part: req.PartID, Color: req.ColorID, PartCategory: req.PartCategory}
+	piece := profile.Piece{Part: req.PartID, Color: req.ColorID, PartCategory: req.PartCategory, PartName: req.PartName}
+	if _, err := sorterSorting.FillPartInfo(c.Request.Context(), &piece); err != nil {
+		sortingError(c, err)
+		return
+	}
 	res, err := sorterSorting.Route(c.Request.Context(), piece, req.PieceMm, false)
 	if err != nil {
 		sortingError(c, err)

@@ -50,7 +50,7 @@ func IdentifyAndRoute(ctx context.Context, id Identifier, sorting *SortingServic
 		out.RouteError = "Brickognize found no part in the photos."
 		return out, nil
 	}
-	piece := profile.Piece{Part: item.ID, PartCategory: item.Category}
+	piece := profile.Piece{Part: item.ID, PartCategory: item.Category, PartName: item.Name}
 	if color != nil {
 		piece.Color, piece.ColorName = color.ID, color.Name
 	}

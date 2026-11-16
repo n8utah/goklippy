@@ -21,7 +21,10 @@ async function parseJSON(response) {
       (response.status >= 500
         ? `Server error (${response.status}) — check backend logs`
         : 'Request failed');
-    throw new Error(message);
+    const err = new Error(message);
+    err.status = response.status;
+    err.body = body; // flags such as needs_bins, needs_key
+    throw err;
   }
   return body;
 }
@@ -227,6 +230,49 @@ export async function deleteSortingProfile(id) {
     method: 'DELETE',
   });
   return parseJSON(response);
+}
+
+/** The rule editor's pickers: { families, types, sizes, colors, presets, starters }. */
+export function getProfileEditorOptions() {
+  return getJSON('/api/v1/sorter/profile-editor');
+}
+
+/** A new editor profile: { name } plus one of copy_of (id), starter (key), document. */
+export function createEditorProfile(body) {
+  return postJSON('/api/v1/sorter/profiles/new', body);
+}
+
+/** A profile as editor rules: { profile, document, read_only, converted, in_bins }. */
+export function getEditorProfile(id) {
+  return getJSON(`/api/v1/sorter/profiles/${id}/rules`);
+}
+
+/** Saves edited rules; bins ('emptied' | 'continue') when the bins sort by it. */
+export function saveEditorProfile(id, document, bins = '') {
+  return putJSON(`/api/v1/sorter/profiles/${id}/rules`, { document, bins });
+}
+
+/** Which rule of an unsaved document takes a part in a colour. */
+export function checkEditorPiece(document, partId, colorId) {
+  return postJSON('/api/v1/sorter/profiles/check', {
+    document,
+    part_id: partId,
+    color_id: colorId,
+  });
+}
+
+/** A set's parts from Rebrickable, as BrickLink ids, ready for a set rule. */
+export function lookupSorterSet(number) {
+  return postJSON('/api/v1/sorter/sets/lookup', { number });
+}
+
+/** { key_set } for the Rebrickable API key. */
+export function getRebrickable() {
+  return getJSON('/api/v1/sorter/rebrickable');
+}
+
+export function putRebrickable(apiKey) {
+  return putJSON('/api/v1/sorter/rebrickable', { api_key: apiKey });
 }
 
 export function getSorterBins() {

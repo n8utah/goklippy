@@ -111,3 +111,20 @@ func (s sharingPlans) SetBinCategories(ctx context.Context, collectionID, profil
 	}
 	return err
 }
+
+// UpdateProfile marks every collection that sorts by the profile: its rules may have
+// changed.
+func (s sharingPlans) UpdateProfile(ctx context.Context, p sorter.StoredProfile, data []byte) error {
+	err := s.SortingStore.UpdateProfile(ctx, p, data)
+	if err != nil {
+		return err
+	}
+	ids, err := s.SortingStore.ProfileCollections(ctx, p.ID)
+	if err != nil {
+		return nil // saved; the viewer catches up on the next change
+	}
+	for _, id := range ids {
+		s.share.CollectionChanged(ctx, id)
+	}
+	return nil
+}

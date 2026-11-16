@@ -1,4 +1,4 @@
-import { Upload } from 'lucide-react';
+import { Copy, Pencil, Plus, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
@@ -12,7 +12,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import NewProfileDialog from './components/NewProfileDialog';
 import { useProfilesPageLogic } from './ProfilesPage.logic';
+
+const LEFTOVER_TEXT = {
+  misc: 'the rest to misc',
+  part_type: 'the rest by part type',
+  color: 'the rest by colour',
+};
 
 /** What a profile sorts by, in a line. */
 function describe(summary) {
@@ -20,6 +27,16 @@ function describe(summary) {
     return summary.builtin === 'color'
       ? 'One category per colour, made as colours arrive'
       : `${summary.categories.length} usual part types, plus any other as it arrives`;
+  }
+  if (summary.format === 'editor') {
+    const rules = summary.rules ?? [];
+    return (
+      <>
+        <span className="font-mono">{rules.length}</span> rule{rules.length === 1 ? '' : 's'}
+        {rules.length > 0 && `: ${rules.map((r) => r.name).join(', ')}`} ·{' '}
+        {LEFTOVER_TEXT[summary.leftover] ?? LEFTOVER_TEXT.misc}
+      </>
+    );
   }
   return (
     <>
@@ -31,7 +48,7 @@ function describe(summary) {
   );
 }
 
-function ProfileRow({ profile, busy, onDelete }) {
+function ProfileRow({ profile, busy, onDelete, onCopy }) {
   const { summary } = profile;
   const builtin = profile.source === 'builtin';
   const used = profile.used_by ?? [];
@@ -70,28 +87,48 @@ function ProfileRow({ profile, busy, onDelete }) {
           )}
         </p>
       </div>
-      {!builtin && (
-        <Button
-          variant="ghost"
-          className="shrink-0 text-destructive"
-          disabled={busy || used.length > 0}
-          title={used.length > 0 ? 'Give its collections another profile first' : undefined}
-          onClick={() => onDelete(profile)}
-        >
-          Delete
+      <div className="flex shrink-0 flex-wrap gap-1">
+        <Button variant="outline" asChild>
+          <Link to={`/rules/profiles/${profile.id}`}>
+            <Pencil />
+            {builtin ? 'See rules' : 'Edit rules'}
+          </Link>
         </Button>
-      )}
+        <Button variant="ghost" disabled={busy} onClick={() => onCopy(profile)}>
+          <Copy /> Copy
+        </Button>
+        {!builtin && (
+          <Button
+            variant="ghost"
+            className="text-destructive"
+            disabled={busy || used.length > 0}
+            title={used.length > 0 ? 'Give its collections another profile first' : undefined}
+            onClick={() => onDelete(profile)}
+          >
+            Delete
+          </Button>
+        )}
+      </div>
     </li>
   );
 }
 
 /**
- * Rules › Profiles: the built-in profiles and those uploaded from Hive. Each collection
+ * Rules › Profiles: the built-in profiles, those made here, and those uploaded from Hive. Each collection
  * picks the one it sorts by (Run › Collections).
  */
 const ProfilesPage = () => {
   const logic = useProfilesPageLogic();
   const [deleting, setDeleting] = useState(null);
+  const [making, setMaking] = useState(false);
+  const copy = (p) => logic.create({ copy_of: p.id });
+  const rows = (list, label) => (
+    <ul className="flex flex-col gap-3" aria-label={label}>
+      {list.map((p) => (
+        <ProfileRow key={p.id} profile={p} busy={logic.busy} onDelete={setDeleting} onCopy={copy} />
+      ))}
+    </ul>
+  );
 
   return (
     <div className="ds flex flex-col gap-4">
@@ -106,26 +143,31 @@ const ProfilesPage = () => {
           <Link to="/run/collections" className="font-medium text-primary-text hover:underline">
             Run › Collections
           </Link>
-          . The built-in ones need nothing; for finer rules, upload a{' '}
+          . Make your own from premade rules, copy any profile and change it, or upload a{' '}
           <code className="font-mono">sorting_profile.json</code> built in Hive.
         </p>
-        <Button asChild disabled={logic.busy} className="shrink-0">
-          <label className="cursor-pointer">
-            <Upload />
-            {logic.busy ? 'Working…' : 'Upload a profile'}
-            <input
-              type="file"
-              accept=".json,application/json"
-              className="sr-only"
-              disabled={logic.busy}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = '';
-                if (file) logic.upload(file);
-              }}
-            />
-          </label>
-        </Button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button disabled={logic.busy} onClick={() => setMaking(true)}>
+            <Plus /> New profile
+          </Button>
+          <Button asChild variant="outline" disabled={logic.busy}>
+            <label className="cursor-pointer">
+              <Upload />
+              {logic.busy ? 'Working…' : 'Upload a profile'}
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="sr-only"
+                disabled={logic.busy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) logic.upload(file);
+                }}
+              />
+            </label>
+          </Button>
+        </div>
       </section>
 
       {logic.error && <p className="text-sm text-destructive">{logic.error}</p>}
@@ -139,22 +181,32 @@ const ProfilesPage = () => {
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
-          <ul className="flex flex-col gap-3" aria-label="Built-in profiles">
-            {logic.builtins.map((p) => (
-              <ProfileRow key={p.id} profile={p} busy={logic.busy} onDelete={setDeleting} />
-            ))}
-          </ul>
+          {rows(logic.builtins, 'Built-in profiles')}
+          <h2 className="mt-2 font-display text-lg font-semibold">Made here</h2>
+          {logic.made.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              None yet. Make one with New profile, or copy one above.
+            </p>
+          ) : (
+            rows(logic.made, 'Profiles made here')
+          )}
           <h2 className="mt-2 font-display text-lg font-semibold">Uploaded from Hive</h2>
           {logic.uploads.length === 0 ? (
             <p className="text-sm text-muted-foreground">None uploaded.</p>
           ) : (
-            <ul className="flex flex-col gap-3" aria-label="Uploaded profiles">
-              {logic.uploads.map((p) => (
-                <ProfileRow key={p.id} profile={p} busy={logic.busy} onDelete={setDeleting} />
-              ))}
-            </ul>
+            rows(logic.uploads, 'Uploaded profiles')
           )}
         </>
+      )}
+
+      {making && (
+        <NewProfileDialog
+          open
+          starters={logic.starters}
+          busy={logic.busy}
+          onCancel={() => setMaking(false)}
+          onCreate={(body) => logic.create(body)}
+        />
       )}
 
       <Dialog open={Boolean(deleting)} onOpenChange={(o) => !o && setDeleting(null)}>
@@ -162,8 +214,7 @@ const ProfilesPage = () => {
           <DialogHeader>
             <DialogTitle className="font-display">Delete “{deleting?.name}”?</DialogTitle>
             <DialogDescription>
-              It can’t be undone; upload the file again to get it back. Pieces already sorted keep
-              their records.
+              It can’t be undone. Pieces already sorted keep their records.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

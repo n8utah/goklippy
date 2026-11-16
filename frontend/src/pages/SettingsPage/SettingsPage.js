@@ -4,6 +4,7 @@ import SettingField from '@/components/SettingField/SettingField';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
+import RebrickableKey from './components/RebrickableKey';
 import { useSettingsPageLogic } from './SettingsPage.logic';
 
 /**
@@ -40,6 +41,7 @@ const SettingsPage = () => {
             )}
           </div>
           <div className="divide-y divide-border">
+            {section.id === 'services' && <RebrickableKey />}
             {logic.settings.map((s) => (
               <SettingField key={s.key} settingKey={s.key} />
             ))}

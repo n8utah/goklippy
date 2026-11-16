@@ -905,6 +905,13 @@ export const SETTING_SECTIONS = [
       },
     ],
   },
+  {
+    id: 'services',
+    label: 'Services',
+    about:
+      'Accounts on other sites the sorter uses. Rebrickable gives a set’s parts when a rule pulls out a set by number.',
+    settings: [],
+  },
 ];
 
 /** Reads a dotted path ("feeder.exitPulseDeg") from an object. */

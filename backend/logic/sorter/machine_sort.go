@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"goklippy/backend/logic/sorter/profile"
 	"goklippy/backend/logic/vision"
 )
 
@@ -152,6 +153,28 @@ func (m *Machine) ChangeCollectionProfile(ctx context.Context, collectionID, pro
 		m.changed = true
 		return nil
 	}})
+}
+
+// SaveEditorProfile saves an edited profile (SortingService.SaveEditorProfile), refused
+// while a run sorts by it.
+func (m *Machine) SaveEditorProfile(ctx context.Context, id int64, doc profile.Document, bins string) (StoredProfile, error) {
+	var saved StoredProfile
+	err := m.send(ctx, request{do: func() error {
+		if m.sort == nil {
+			return ErrNoCollection
+		}
+		sorting := m.sort.deps.Sorting
+		if active := sorting.Active(); m.sort.runID != 0 && active != nil && active.ID == id {
+			return fmt.Errorf("%w: stop the run before changing the profile it sorts by", ErrInvalidTransition)
+		}
+		var err error
+		saved, err = sorting.SaveEditorProfile(ctx, id, doc, bins)
+		if err == nil {
+			m.changed = true
+		}
+		return err
+	}})
+	return saved, err
 }
 
 // SortingInto is the collection a run is sorting into now, or 0.

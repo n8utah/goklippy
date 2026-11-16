@@ -101,6 +101,9 @@ func (p *Profile) Accepts(category string) bool {
 	if p.builtin == BuiltinPartType {
 		return true
 	}
+	if p.editor != nil && p.editor.accepts(category) {
+		return true
+	}
 	for _, c := range p.summary.Categories {
 		if c.ID == category {
 			return true

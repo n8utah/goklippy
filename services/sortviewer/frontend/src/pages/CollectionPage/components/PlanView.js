@@ -1,7 +1,8 @@
 /**
  * The sorting plan: each bin is a group the collection comes back in, with what it
  * takes and how many pieces it has so far. `view` is { plan, counts } from the server;
- * the plan is the sorter's: { profile: { name }, bins: [{ layer, bin, categories }] }.
+ * the plan is the sorter's: { profile: { name, rules: [{ name, description }] },
+ * bins: [{ layer, bin, categories }] }.
  */
 export default function PlanView({ view }) {
   if (!view) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -9,6 +10,7 @@ export default function PlanView({ view }) {
   const counts = new Map((view.counts ?? []).map((c) => [`${c.layer}-${c.bin}`, c.pieces]));
   const bins = [...(plan.bins ?? [])].sort((a, b) => a.layer - b.layer || a.bin - b.bin);
   const bucket = counts.get('0-0') ?? 0;
+  const rules = plan.profile?.rules ?? [];
 
   if (bins.length === 0) {
     return (
@@ -23,6 +25,22 @@ export default function PlanView({ view }) {
         {plan.profile?.name ? `Sorted by ${plan.profile.name}. ` : ''}
         Each bin below is a group you’ll get back.
       </p>
+      {rules.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h3 className="text-sm font-medium">The rules, in order</h3>
+          <p className="text-sm text-muted-foreground">
+            Each piece goes to the first rule that takes it.
+          </p>
+          <ol className="mt-2 flex list-decimal flex-col gap-1 pl-5 text-sm">
+            {rules.map((r, i) => (
+              <li key={i}>
+                <span className="font-medium">{r.name}</span>
+                {r.description && <span className="text-muted-foreground"> · {r.description}</span>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {bins.map((b) => {
           const names = (b.categories ?? []).map((c) => c.name || c.id);

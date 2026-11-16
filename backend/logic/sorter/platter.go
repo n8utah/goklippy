@@ -837,7 +837,7 @@ func (p *Platter) prepareExit(now time.Time, settings MachineSettings) {
 	var res RouteResult
 	var err error
 	if s.piece.Status == PieceIdentified {
-		piece := profile.Piece{Part: s.piece.PartID, Color: s.piece.ColorID, PartCategory: s.piece.PartCategory, ColorName: s.piece.ColorName}
+		piece := profile.Piece{Part: s.piece.PartID, Color: s.piece.ColorID, PartCategory: s.piece.PartCategory, PartName: s.piece.PartName, ColorName: s.piece.ColorName}
 		res, err = p.deps.Sorting.Route(ctx, piece, s.piece.PieceMm, true)
 	} else {
 		res, err = p.deps.Sorting.RouteCategory(ctx, profile.Misc, s.piece.PieceMm, true)

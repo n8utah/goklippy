@@ -56,6 +56,15 @@ type SortingStore interface {
 	SetBinCategories(ctx context.Context, collectionID, profileID int64, bin BinKey, categories []string) error
 	// ColorNames is every colour identified so far: id -> name.
 	ColorNames(ctx context.Context) (map[string]string, error)
+
+	// For the rule editor.
+	// UpdateProfile replaces a profile's name, source, summary and contents.
+	UpdateProfile(ctx context.Context, p StoredProfile, data []byte) error
+	// CatalogPartInfo is a part's name and type from the catalog; ok is false when it
+	// hasn't been seen.
+	CatalogPartInfo(ctx context.Context, partID string) (name, category string, ok bool, err error)
+	// CatalogPartKinds is every part name and type seen, with how many pieces.
+	CatalogPartKinds(ctx context.Context) ([]PartKind, error)
 }
 
 // SortingService answers where pieces go under the current collection's profile and
@@ -407,6 +416,12 @@ func (s *SortingService) categoryNameLocked(id string) string {
 func namer(p *profile.Profile, names map[string]string) func(string) string {
 	return func(id string) string {
 		name := p.CategoryName(id)
+		if color, ok := profile.SplitColorOf(id); ok {
+			if names[color] != "" {
+				return strings.TrimSuffix(name, "Color "+color) + names[color]
+			}
+			return name
+		}
 		if name != id && !strings.HasPrefix(name, "Color ") {
 			return name
 		}

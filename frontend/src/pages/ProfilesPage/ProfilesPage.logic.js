@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 
-import { deleteSortingProfile, importSortingProfile, listSortingProfiles } from '../../helpers/api';
+import {
+  createEditorProfile,
+  deleteSortingProfile,
+  getProfileEditorOptions,
+  importSortingProfile,
+  listSortingProfiles,
+} from '../../helpers/api';
 
 export function useProfilesPageLogic() {
+  const navigate = useNavigate();
   const [profiles, setProfiles] = useState([]);
+  const [starters, setStarters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -28,6 +37,13 @@ export function useProfilesPageLogic() {
       cancelled = true;
     };
   }, [reloadCount]);
+
+  useEffect(() => {
+    getProfileEditorOptions().then(
+      (o) => setStarters(o.starters ?? []),
+      () => {},
+    );
+  }, []);
 
   const run = useCallback(async (fn, done) => {
     setError('');
@@ -54,14 +70,24 @@ export function useProfilesPageLogic() {
   const remove = (profile) =>
     run(() => deleteSortingProfile(profile.id), `Deleted “${profile.name}”.`);
 
+  /** body: { name, starter? } or { copy_of }; opens the new profile in the editor. */
+  const create = (body) =>
+    run(async () => {
+      const saved = await createEditorProfile(body);
+      navigate(`/rules/profiles/${saved.id}`);
+    });
+
   return {
     builtins: profiles.filter((p) => p.source === 'builtin'),
-    uploads: profiles.filter((p) => p.source !== 'builtin'),
+    made: profiles.filter((p) => p.source === 'editor'),
+    uploads: profiles.filter((p) => p.source === 'upload'),
+    starters,
     loading,
     busy,
     error,
     notice,
     upload,
     remove,
+    create,
   };
 }

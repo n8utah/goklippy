@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select';
 import { listSortingProfiles } from '@/helpers/api';
 
-/** The saved sorting profiles: built-ins first, then uploads. */
+/** The saved sorting profiles: built-ins first, then those made here, then uploads. */
 export function useSortingProfiles() {
   const [profiles, setProfiles] = useState(null);
   const [error, setError] = useState('');
@@ -34,7 +34,8 @@ export function useSortingProfiles() {
  */
 export default function ProfileSelect({ id, profiles, value, onChange, disabled, className }) {
   const builtins = (profiles ?? []).filter((p) => p.source === 'builtin');
-  const uploads = (profiles ?? []).filter((p) => p.source !== 'builtin');
+  const made = (profiles ?? []).filter((p) => p.source === 'editor');
+  const uploads = (profiles ?? []).filter((p) => p.source === 'upload');
   return (
     <Select
       value={value ? String(value) : ''}
@@ -53,6 +54,16 @@ export default function ProfileSelect({ id, profiles, value, onChange, disabled,
             </SelectItem>
           ))}
         </SelectGroup>
+        {made.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>Made here</SelectLabel>
+            {made.map((p) => (
+              <SelectItem key={p.id} value={String(p.id)}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        )}
         {uploads.length > 0 && (
           <SelectGroup>
             <SelectLabel>Uploaded from Hive</SelectLabel>

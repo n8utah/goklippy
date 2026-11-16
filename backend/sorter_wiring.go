@@ -71,6 +71,7 @@ func startSorter(ctx context.Context, cfg config.SorterConfig, db *sqlx.DB) (*so
 
 	routes.InitSorter(machine, settings)
 	routes.InitSorting(sorting, identifier)
+	routes.InitRuleEditor(sorter.NewRebrickable(sortingStore))
 	routes.InitRecords(records)
 	collections, err := sorter.NewCollections(records, sorting, machine.SortingInto)
 	if err != nil {

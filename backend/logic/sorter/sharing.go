@@ -356,6 +356,13 @@ type sharePlan struct {
 
 type shareProfile struct {
 	Name string `json:"name"`
+	// Rules are each rule's name and description, in order; not what they match.
+	Rules []shareRule `json:"rules,omitempty"`
+}
+
+type shareRule struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 type sharePlanBin struct {
@@ -382,6 +389,9 @@ func (s *Sharing) sendCollection(ctx context.Context, ref string) error {
 	}{Name: plan.Collection.Name, Plan: sharePlan{Bins: []sharePlanBin{}, BinsStartedAt: plan.Collection.BinsStartedAt}}
 	if plan.Profile != nil {
 		body.Plan.Profile = &shareProfile{Name: plan.Profile.Name}
+		for _, r := range plan.Profile.Summary.Rules {
+			body.Plan.Profile.Rules = append(body.Plan.Profile.Rules, shareRule{Name: r.Name, Description: r.Description})
+		}
 	}
 	for _, b := range plan.Bins {
 		if len(b.Categories) > 0 {

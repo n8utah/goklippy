@@ -52,6 +52,18 @@ type Summary struct {
 	FallbackColor bool       `json:"fallback_by_color,omitempty"`
 	// Builtin is the built-in kind (part_type, color); empty for an uploaded profile.
 	Builtin string `json:"builtin,omitempty"`
+	// Leftover is an editor profile's choice for pieces no rule takes.
+	Leftover string `json:"leftover,omitempty"`
+	// Rules are the rules in order, by name, without what they match (for the viewer
+	// site and the Profiles page).
+	Rules []RuleInfo `json:"rules,omitempty"`
+}
+
+// RuleInfo is a rule's name and description.
+type RuleInfo struct {
+	ID          string `json:"id,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 // Piece is what's known about a piece when it's routed. Hive profiles use the part and
@@ -60,6 +72,7 @@ type Piece struct {
 	Part         string
 	Color        string // "" or AnyColor when unknown
 	PartCategory string // Brickognize's category of the part ("Plate, Round")
+	PartName     string // its name ("Plate 2 x 4"), for sizes
 	ColorName    string // the colour's name, to name colour categories; not used to route
 }
 
@@ -76,6 +89,7 @@ type Profile struct {
 	partMap map[string]string // flat format: "{color}-{part}" -> category
 	kits    map[string][]KitLine
 	builtin string
+	editor  *editorProfile
 }
 
 // file is the on-disk shape, only the parts the sorter uses.
@@ -93,12 +107,14 @@ type file struct {
 	ProfileType    string                     `json:"profile_type"`
 	SetInventories map[string]json.RawMessage `json:"set_inventories"`
 	Builtin        string                     `json:"builtin"`
+	Editor         int                        `json:"editor"`
 }
 
 type fileRule struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Disabled bool   `json:"disabled"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Disabled    bool   `json:"disabled"`
 }
 
 type fileCategory struct {
@@ -154,6 +170,9 @@ func Parse(data []byte) (*Profile, error) {
 	if f.Builtin != "" {
 		return parseBuiltin(f.Builtin)
 	}
+	if f.Editor > 0 {
+		return parseEditor(data)
+	}
 	if f.Program == nil && f.PartToCategory == nil {
 		return nil, fmt.Errorf("%w: it has neither a program nor a part_to_category map", ErrInvalid)
 	}
@@ -204,6 +223,11 @@ func Parse(data []byte) (*Profile, error) {
 		p.summary.PartCount = len(f.PartToCategory)
 	}
 	p.summary.Categories = p.categoryList(f)
+	for _, r := range f.Rules {
+		if !r.Disabled && r.Name != "" {
+			p.summary.Rules = append(p.summary.Rules, RuleInfo{ID: r.ID, Name: r.Name, Description: r.Description})
+		}
+	}
 	return p, nil
 }
 
@@ -272,6 +296,11 @@ func (p *Profile) CategoryName(id string) string {
 	if id == Misc {
 		return "Misc"
 	}
+	if p.editor != nil {
+		if name, ok := p.editorCategoryName(id); ok {
+			return name
+		}
+	}
 	if color, ok := strings.CutPrefix(id, "color_"); ok {
 		return "Color " + color
 	}
@@ -288,6 +317,9 @@ func (p *Profile) Builtin() string {
 func (p *Profile) Route(piece Piece, kitFull KitFull) string {
 	if p.builtin != "" {
 		return p.routeBuiltin(piece)
+	}
+	if p.editor != nil {
+		return p.editor.match(piece, kitFull).Category
 	}
 	part, color := piece.Part, piece.Color
 	if color == AnyColor {
