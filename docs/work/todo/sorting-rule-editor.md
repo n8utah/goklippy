@@ -1,4 +1,4 @@
-# Sorting rule editor and imports
+# Sorting rule editor
 
 Priority: medium
 Added: 2026-11-13 by Nate
@@ -24,19 +24,12 @@ change sorting rules on the sorter itself, and start them from lists that alread
 - What's left over goes to misc, or is sorted by part type or by colour (a choice on the profile).
 - A "where would this go?" check in the editor: type or pick a part and colour, see which rule
   takes it (reuses the dry run).
-- **Imports** that turn an outside list into a rule (or a set of kit rules). Set by number is
-  built first; the rest follow:
-  - a LEGO set by number (`75192-1`): its inventory becomes a kit rule, without its
-    minifigures or spare parts. A rule can hold one set or several; each set still fills
-    separately, into its own bins. Uses a Rebrickable API key entered once per sorter in
-    Settings;
-  - a BrickLink wanted list / set inventory XML, or a BrickStore `.bsx` file (already BrickLink
-    part and colour ids, which is what Brickognize gives us);
-  - a Rebrickable part list or MOC parts CSV;
-  - the parts already seen in one of our collections (e.g. "pull out everything we found last
-    time");
-  - Hive profiles, as today.
-- Profiles made here can be exported as JSON and imported on another sorter.
+- **Set by number** is one kind of rule: type a LEGO set number (`75192-1`) and its inventory
+  becomes a kit, without its minifigures or spare parts. A rule can hold one set or several;
+  each set still fills separately, into its own bins. Uses a Rebrickable API key entered once
+  per sorter in Settings.
+- Other imports (BrickLink/BrickStore files, Rebrickable CSVs, from a collection) and JSON
+  export/import are in [sorting-rule-imports](sorting-rule-imports.md).
 - The viewer site shows a shared collection's rules as well as its categories: each rule's
   name and description, not its part lists.
 - Uploading a Hive profile that was edited here makes a second profile; the edited one is
@@ -57,13 +50,10 @@ change sorting rules on the sorter itself, and start them from lists that alread
       so and points there.
 - [ ] The viewer site shows a shared collection's rules (name and description) alongside its
       categories.
-- [ ] BrickLink XML / BrickStore and Rebrickable CSV part lists import as rules.
-- [ ] A rule can be built from the parts seen in a collection.
 - [ ] The editor's "where would this go?" shows the matching rule for a part and colour.
 - [ ] Edited profiles route on the machine exactly as the editor says, including kits filling
       up; editing a profile a collection is using follows the same "bins emptied / carry on"
       choice as changing a collection's profile.
-- [ ] Profiles export and import as JSON; Hive uploads still work unchanged.
 
 ## Plan
 Filled in when the item is claimed.
