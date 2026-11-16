@@ -191,3 +191,11 @@ Nate checks the UI.
     backend (test profiles deleted afterwards).
   - Left: a real Rebrickable set (needs an API key in Settings), the viewer showing rules for a
     shared collection, and a run on the machine with an edited profile.
+- 2026-11-16, UI check and set source:
+  - UI driven in headless Chromium (new profile, premade rules, pickers, where-would-this-go,
+    built-in read-only, copy, settings key, phone width); small fixes in 8988325.
+  - Sets now come from the sort viewer site (its Rebrickable download catalogue, no key):
+    viewer `GET /api/push/sets/:set`, sorter `viewer_sets.go`, colours mapped by name. The
+    Rebrickable API key stays as the backup (1eb2af5, b7a41ba).
+  - Left: deploy the viewer (`mage deploy` in services/sortviewer), then add a real set; the
+    viewer showing rules for a shared collection; a run on the machine with an edited profile.
