@@ -156,6 +156,14 @@ func (f *Feeder) C2SeenAt() time.Time { return f.c2SeenAt }
 // is refilled, C1 feeds as usual (not the harder starving nudges straight away).
 func (f *Feeder) FeedAgain(now time.Time) { f.c2SeenAt = now }
 
+// HoldIdle moves C2's idle clock on by d: time the run stood paused or held isn't time
+// C2 went without a piece.
+func (f *Feeder) HoldIdle(d time.Duration) {
+	if !f.c2SeenAt.IsZero() {
+		f.c2SeenAt = f.c2SeenAt.Add(d)
+	}
+}
+
 // Stuck lists channels whose leading piece won't ride; they stop pulsing until
 // Unstick.
 func (f *Feeder) Stuck() []Channel {

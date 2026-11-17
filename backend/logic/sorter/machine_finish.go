@@ -69,9 +69,21 @@ const finishQuiet = 2 * time.Second
 // sweepDeg: how far C2 and C3 each turn while sweeping.
 const sweepDeg = 360.0
 
+// idleTickGap: a longer gap between sorting ticks than this is the run held, not idle.
+const idleTickGap = 2 * time.Second
+
 // checkAutoStop starts finishing once C2 has gone without a piece for AutoStopSec.
 func (m *Machine) checkAutoStop(now time.Time, fs FeederSettings) {
 	st := m.sort
+	// The idle clock only runs while the run is sorting: a pause (or an incident, or a
+	// recovery) stops the ticks reaching here, and that gap isn't C2 going without.
+	if !st.idleCheckAt.IsZero() {
+		if gap := now.Sub(st.idleCheckAt); gap > idleTickGap {
+			st.feeder.HoldIdle(gap)
+			st.runStart = st.runStart.Add(gap)
+		}
+	}
+	st.idleCheckAt = now
 	if st.finish != nil || st.runID == 0 || fs.AutoStopSec <= 0 {
 		return
 	}

@@ -35,7 +35,9 @@ type sortStations struct {
 	// finish: the run finishing on its own (machine_finish.go); lastFinish: how the last
 	// run did, shown until the next starts.
 	runStart   time.Time
-	finish     *finishing
+	// idleCheckAt: the last sorting tick that checked the idle clock (zero: none yet).
+	idleCheckAt time.Time
+	finish      *finishing
 	lastFinish *FinishStatus
 	// blockedSince: when the run began standing blocked, paused or waiting on an
 	// incident (zero when it isn't); kept with the run so per-minute figures leave it out.
@@ -110,6 +112,7 @@ func (m *Machine) startRun(now time.Time) error {
 	}
 	st.runID = runID
 	st.runStart, st.finish, st.lastFinish = now, nil, nil
+	st.idleCheckAt = time.Time{}
 	st.blockedSince = time.Time{}
 	st.feeder.Reset()
 	st.platter.Reset(now)
