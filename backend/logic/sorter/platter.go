@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/jpeg"
 	"log/slog"
 	"math"
+	"slices"
 	"time"
 
 	"goklippy/backend/logic/brickognize"
@@ -525,7 +528,7 @@ func (p *Platter) capture(now time.Time, obs vision.Observation, ps PlatterSetti
 		return
 	}
 	s.lastFrame = at
-	shot := platterShot{frame: frame, box: s.box, at: at}
+	shot := platterShot{frame: frame, box: s.box, at: at, ring: p.c4Ring(frame)}
 	if hr, ok := p.deps.Vision.(hiResSource); ok {
 		// The camera's full-size frame from the same moment, when it has one.
 		if jpg, fullAt, scale, ok := hr.HiRes(ChannelC4); ok && scale > 1 && absDuration(fullAt.Sub(at)) <= photoSkew {
@@ -566,6 +569,9 @@ type platterShot struct {
 	full  []byte
 	scale float64
 	at    time.Time
+	// ring is C4's ring in the tracked frame (zero: unknown); past its outer edge the
+	// camera sees other things (C3's gear and exit), blanked out of the photo.
+	ring vision.Ring
 }
 
 // crop is the piece cut out of the full-size frame, or else the tracked one.
@@ -578,13 +584,21 @@ func (sh platterShot) crop() ([]byte, error) {
 				X1: int(float64(sh.box.X1) * s), Y1: int(float64(sh.box.Y1) * s),
 				X2: int(float64(sh.box.X2)*s + 0.5), Y2: int(float64(sh.box.Y2)*s + 0.5),
 			}
-			if jpg, err := cropJPEG(img, box); err == nil {
+			if jpg, err := cropJPEG(img, box, scaleRing(sh.ring, s)); err == nil {
 				return jpg, nil
 			}
 		}
 		slog.Warn("the full-size photo couldn't be used; cropping the tracked one", "error", err)
 	}
-	return cropJPEG(sh.frame, sh.box)
+	return cropJPEG(sh.frame, sh.box, sh.ring)
+}
+
+// scaleRing is a ring for a frame s times larger.
+func scaleRing(r vision.Ring, s float64) vision.Ring {
+	return vision.Ring{
+		Center:      vision.Point{X: r.Center.X * s, Y: r.Center.Y * s},
+		InnerRadius: r.InnerRadius * s, OuterRadius: r.OuterRadius * s, ExitRadius: r.ExitRadius * s,
+	}
 }
 
 // dropPieces are the pieces seen in the drop sector.
@@ -718,7 +732,7 @@ func (p *Platter) snapDouble(id string, box vision.Box) {
 	if !ok {
 		return
 	}
-	jpg, err := cropJPEG(frame, box)
+	jpg, err := cropJPEG(frame, box, p.c4Ring(frame))
 	if err != nil {
 		return
 	}
@@ -740,8 +754,28 @@ func (p *Platter) ExpectSeveral(now time.Time) {
 // expectSeveralFor: how long after C3 drops several at once a landing counts as them.
 const expectSeveralFor = 3 * time.Second
 
-// cropJPEG cuts the box (with a margin) out of the frame.
-func cropJPEG(frame image.Image, box vision.Box) ([]byte, error) {
+// c4Ring is C4's ring in a frame of this size (zero when its zones aren't set).
+func (p *Platter) c4Ring(frame image.Image) vision.Ring {
+	if p.deps.Settings == nil || frame == nil {
+		return vision.Ring{}
+	}
+	z, ok := p.deps.Settings().Cameras.Zones[string(ChannelC4)]
+	if !ok || !z.Valid() {
+		return vision.Ring{}
+	}
+	b := frame.Bounds()
+	return z.ScaledTo(b.Dx(), b.Dy()).Ring
+}
+
+// ringMargin: how far past the ring's outer edge the photo still shows, as a share of
+// its radius, so a measuring error doesn't clip a piece against the wall.
+const ringMargin = 0.01
+
+// cropJPEG cuts the box (with a margin) out of the frame. With the channel's ring,
+// what lies past its outer edge (the wall's top, C3's gear and exit beside C4) is
+// painted the channel's own background colour: Brickognize would take it for part of
+// the piece.
+func cropJPEG(frame image.Image, box vision.Box, ring vision.Ring) ([]byte, error) {
 	w, h := box.X2-box.X1, box.Y2-box.Y1
 	mx, my := int(float64(w)*cropMargin)+4, int(float64(h)*cropMargin)+4
 	r := image.Rect(box.X1-mx, box.Y1-my, box.X2+mx, box.Y2+my).Intersect(frame.Bounds())
@@ -754,11 +788,63 @@ func cropJPEG(frame image.Image, box vision.Box) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("can't crop %T", frame)
 	}
+	img := sub.SubImage(r)
+	if ring.OuterRadius > 0 {
+		img = blankPastRing(img, ring)
+	}
 	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, sub.SubImage(r), &jpeg.Options{Quality: 90}); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// blankPastRing copies img with every pixel past the ring's outer edge painted the
+// channel's background: the median of the crop's on-channel border pixels, which are
+// almost all channel rather than piece. Unchanged when nothing lies past the edge.
+func blankPastRing(img image.Image, ring vision.Ring) image.Image {
+	b := img.Bounds()
+	limit := ring.OuterRadius * (1 + ringMargin)
+	past := func(x, y int) bool {
+		return math.Hypot(float64(x)+0.5-ring.Center.X, float64(y)+0.5-ring.Center.Y) > limit
+	}
+	var rs, gs, bs []uint8
+	beyond := false
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if past(x, y) {
+				beyond = true
+				continue
+			}
+			if x == b.Min.X || x == b.Max.X-1 || y == b.Min.Y || y == b.Max.Y-1 {
+				cr, cg, cb, _ := img.At(x, y).RGBA()
+				rs, gs, bs = append(rs, uint8(cr>>8)), append(gs, uint8(cg>>8)), append(bs, uint8(cb>>8))
+			}
+		}
+	}
+	if !beyond {
+		return img
+	}
+	fill := color.RGBA{R: 200, G: 200, B: 200, A: 255} // a light grey, with no border to go by
+	if len(rs) > 0 {
+		fill = color.RGBA{R: median(rs), G: median(gs), B: median(bs), A: 255}
+	}
+	out := image.NewRGBA(b)
+	draw.Draw(out, b, img, b.Min, draw.Src)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if past(x, y) {
+				out.SetRGBA(x, y, fill)
+			}
+		}
+	}
+	return out
+}
+
+func median(v []uint8) uint8 {
+	s := slices.Clone(v)
+	slices.Sort(s)
+	return s[len(s)/2]
 }
 
 // drainIdents takes Brickognize's answers for pieces still aboard.
